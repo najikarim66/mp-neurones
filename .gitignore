@@ -1,0 +1,7 @@
+node_modules/
+.vs/
+local.settings.json
+*.log
+.DS_Store
+.env
+*.backup-*

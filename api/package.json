@@ -1,0 +1,9 @@
+{
+  "name": "mp-neurones-api",
+  "version": "1.0.0",
+  "description": "API Marchés Publics Neurones",
+  "main": "index.js",
+  "dependencies": {
+    "@azure/cosmos": "^4.1.1"
+  }
+}
