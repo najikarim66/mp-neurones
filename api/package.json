@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "description": "API Marches Publics Neurones",
   "main": "index.js",
+  "type": "commonjs",
   "engines": {
     "node": ">=18"
   },
