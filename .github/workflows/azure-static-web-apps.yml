@@ -39,4 +39,4 @@ jobs:
           app_location: "public"
           api_location: "api"
           output_location: ""
-          skip_api_build: true
+          api_build_command: "echo 'API already built'"
