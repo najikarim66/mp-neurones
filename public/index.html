@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MP Manager v3</title>
+<title>MP Manager v3.2 (Cosmos)</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,400;0,9..144,600;1,9..144,300&family=IBM+Plex+Sans:wght@300;400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap');
 
@@ -260,61 +260,126 @@ var SMM={en_cours:{l:'En cours',c:'bi'},termine:{l:'Termine',c:'bs'},suspendu:{l
 var SMC={active:{l:'Active',c:'bs'},expiree:{l:'Expiree',c:'bd'},liberee:{l:'Liberee',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
 var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Rejete',c:'bd'},en_cours:{l:'En cours',c:'bi'}};
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
-var LSKEY='mp_v3';
+/* === Phase B : Full Cosmos API === */
+var API_BASE='/api/data';
+var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements'};
 
 /* ES5 polyfills */
 function objVals(o){return Object.keys(o).map(function(k){return o[k];});}
 function objEnts(o){return Object.keys(o).map(function(k){return [k,o[k]];});}
 function uniqueArr(a){var s={},r=[];a.forEach(function(v){if(!s[v]){s[v]=1;r.push(v);}});return r;}
 
-var DEMO_AO=[
-  {id:1,ref:'AO-2024-001',objet:'Construction ecole primaire Hay Riad',maitre_ouvrage:'Commune Hay Riad',type:'travaux',budget_estime:13000000,date_lancement:'2024-02-01',date_limite:'2024-03-10',statut:'attribue',marche_id:1,caution_prov:{banque:'Attijariwafa Bank',num:'ATW-2024-PROV-01',montant:130000,date_emission:'2024-02-05',date_expiration:'2024-04-10',statut:'liberee'},notes:'Ouverture des plis le 11/03/2024'},
-  {id:2,ref:'AO-2024-002',objet:'Fourniture equipements informatiques MEN',maitre_ouvrage:'Ministere Education Nationale',type:'fournitures',budget_estime:4000000,date_lancement:'2024-04-01',date_limite:'2024-04-28',statut:'attribue',marche_id:2,caution_prov:{banque:'CIH Bank',num:'CIH-2024-PROV-02',montant:80000,date_emission:'2024-04-05',date_expiration:'2024-06-28',statut:'liberee'},notes:''},
-  {id:3,ref:'AO-2024-005',objet:'Amenagement parc urbain - Lot 1',maitre_ouvrage:'Commune de Temara',type:'travaux',budget_estime:6500000,date_lancement:'2024-11-01',date_limite:'2024-12-15',statut:'en_cours',marche_id:null,caution_prov:null,notes:'Resultats attendus mi-janvier 2025'},
-  {id:4,ref:'AO-2024-006',objet:'Maintenance climatisation batiments',maitre_ouvrage:'Direction Regionale Sante',type:'services',budget_estime:850000,date_lancement:'2024-10-15',date_limite:'2024-11-20',statut:'infructueux',marche_id:null,caution_prov:null,notes:'Relancement prevu Q1 2025'}
-];
-var DEMO_M=[
-  {id:1,ref:'MRC-2024-001',titre:'Construction ecole primaire Hay Riad',maitre_ouvrage:'Commune Hay Riad',objet:'Construction de 12 classes + administration',montant:12500000,type:'travaux',statut:'en_cours',date_attribution:'2024-03-15',date_commencement:'2024-04-01',delai_execution:540,date_fin_calculee:'2025-10-23',date_reception_provisoire:null,date_reception_definitive:null,avancement:32,garantie:5,ordres_service:[{id:101,type:'arret',date:'2024-07-10',motif:'Intemperies'},{id:102,type:'reprise',date:'2024-07-25',motif:'Fin des intemperies'}]},
-  {id:2,ref:'MRC-2024-002',titre:'Fourniture equipements informatiques',maitre_ouvrage:'Ministere Education Nationale',objet:'500 ordinateurs et peripheriques',montant:3800000,type:'fournitures',statut:'en_cours',date_attribution:'2024-05-01',date_commencement:'2024-05-15',delai_execution:230,date_fin_calculee:'2024-12-31',date_reception_provisoire:null,date_reception_definitive:null,avancement:75,garantie:5,ordres_service:[]},
-  {id:3,ref:'MRC-2023-018',titre:'Rehabilitation reseau eau potable',maitre_ouvrage:'ONEE Branche Eau',objet:'Remplacement 15 km de canalisations',montant:8200000,type:'travaux',statut:'termine',date_attribution:'2023-06-10',date_commencement:'2023-07-01',delai_execution:365,date_fin_calculee:'2024-07-01',date_reception_provisoire:'2024-07-05',date_reception_definitive:'2025-07-05',avancement:100,garantie:5,ordres_service:[]},
-  {id:4,ref:'MRC-2024-004',titre:'Construction route communale RC-12',maitre_ouvrage:'Province de Sale',objet:'8 km de route bitumee',montant:18700000,type:'travaux',statut:'en_cours',date_attribution:'2024-09-01',date_commencement:'2024-10-01',delai_execution:520,date_fin_calculee:'2026-03-05',date_reception_provisoire:null,date_reception_definitive:null,avancement:8,garantie:5,ordres_service:[]}
-];
-var DEMO_C=[
-  {id:1,marche_id:1,type:'bonne_execution',montant:625000,banque:'Attijariwafa Bank',num:'ATW-2024-1234',date_emission:'2024-03-20',date_expiration:'2025-10-15',statut:'active'},
-  {id:2,marche_id:1,type:'retenue_garantie',montant:312500,banque:'Attijariwafa Bank',num:'ATW-2024-1235',date_emission:'2024-03-20',date_expiration:'2026-09-15',statut:'active'},
-  {id:3,marche_id:2,type:'bonne_execution',montant:190000,banque:'CIH Bank',num:'CIH-2024-5678',date_emission:'2024-05-05',date_expiration:'2025-06-30',statut:'active'},
-  {id:4,marche_id:3,type:'bonne_execution',montant:410000,banque:'BMCE Bank',num:'BMCE-2023-0921',date_emission:'2023-06-15',date_expiration:'2024-11-10',statut:'liberee'},
-  {id:5,marche_id:3,type:'retenue_garantie',montant:205000,banque:'BMCE Bank',num:'BMCE-2023-0922',date_emission:'2023-06-15',date_expiration:'2025-08-10',statut:'liberee'},
-  {id:6,marche_id:4,type:'bonne_execution',montant:935000,banque:'Attijariwafa Bank',num:'ATW-2024-9901',date_emission:'2024-09-05',date_expiration:'2026-04-01',statut:'active'}
-];
-var DEMO_P=[
-  {id:1,marche_id:1,numero:'D-001/1',type:'provisoire',montant_brut:2500000,retenue:125000,net:2375000,mode_retenue:'deduction',caution_rg_id:null,date_depot:'2024-06-01',date_paiement:'2024-07-15',statut:'paye'},
-  {id:2,marche_id:1,numero:'D-001/2',type:'provisoire',montant_brut:1500000,retenue:0,net:1500000,mode_retenue:'caution',caution_rg_id:2,date_depot:'2024-08-15',date_paiement:'2024-09-30',statut:'paye'},
-  {id:3,marche_id:1,numero:'D-001/3',type:'provisoire',montant_brut:800000,retenue:40000,net:760000,mode_retenue:'deduction',caution_rg_id:null,date_depot:'2024-10-01',date_paiement:null,statut:'en_attente'},
-  {id:4,marche_id:2,numero:'D-002/1',type:'provisoire',montant_brut:1900000,retenue:95000,net:1805000,mode_retenue:'deduction',caution_rg_id:null,date_depot:'2024-07-15',date_paiement:'2024-08-30',statut:'paye'},
-  {id:5,marche_id:2,numero:'D-002/2',type:'provisoire',montant_brut:1500000,retenue:0,net:1500000,mode_retenue:'caution',caution_rg_id:3,date_depot:'2024-10-15',date_paiement:null,statut:'en_cours'},
-  {id:6,marche_id:3,numero:'D-003/DEF',type:'definitif',montant_brut:1700000,retenue:0,net:1700000,mode_retenue:'aucune',caution_rg_id:null,date_depot:'2024-09-01',date_paiement:null,statut:'en_attente'}
-];
-
-var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',_id:700,aos:[],marches:[],cautions:[],paiements:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[]};
+var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',aos:[],marches:[],cautions:[],paiements:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[],_loaded:false};
 
 function cp(o){return JSON.parse(JSON.stringify(o));}
-function lsLoad(){
-  try{
-    var raw=localStorage.getItem(LSKEY);
-    if(raw){var d=JSON.parse(raw);S.aos=d.aos||[];S.marches=d.marches||[];S.cautions=d.cautions||[];S.paiements=d.paiements||[];S._id=d._id||700;}
-    else{S.aos=cp(DEMO_AO);S.marches=cp(DEMO_M);S.cautions=cp(DEMO_C);S.paiements=cp(DEMO_P);lsSave();}
-  }catch(e){S.aos=cp(DEMO_AO);S.marches=cp(DEMO_M);S.cautions=cp(DEMO_C);S.paiements=cp(DEMO_P);}
-  sbStats();
-}
-function lsSave(){
-  try{localStorage.setItem(LSKEY,JSON.stringify({aos:S.aos,marches:S.marches,cautions:S.cautions,paiements:S.paiements,_id:S._id}));setStatus('Sauvegarde: '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));}
-  catch(e){setStatus('Erreur sauvegarde');}
-}
 function setStatus(m){var el=document.getElementById('save-status');if(el)el.textContent=m;}
-function persist(){lsSave();sbStats();render();}
 
-function nid(){return++S._id;}
+/* === Generation d'IDs (timestamps + prefix) === */
+function nidStr(prefix){return prefix+'_'+Date.now()+'_'+Math.floor(Math.random()*1000);}
+function nid(){return nidStr('n');} /* compat pour _osTemp */
+
+/* === Conversion marche_id <-> marcheId pour cautions/paiements === */
+function toCosmos(ckey, item){
+  var c=cp(item);
+  if(ckey==='cautions' || ckey==='paiements'){
+    if(c.marche_id!=null) c.marcheId=String(c.marche_id);
+    delete c.marche_id;
+  }
+  if(c.id!=null) c.id=String(c.id);
+  return c;
+}
+function fromCosmos(ckey, item){
+  var c={};
+  Object.keys(item).forEach(function(k){if(k[0]!=='_') c[k]=item[k];});
+  if(ckey==='cautions' || ckey==='paiements'){
+    if(c.marcheId!=null) c.marche_id=c.marcheId;
+    delete c.marcheId;
+  }
+  return c;
+}
+
+/* === Appels API === */
+function apiFetch(url, opts){
+  opts=opts||{};
+  return fetch(url, opts).then(function(r){
+    if(!r.ok) return r.text().then(function(t){throw new Error('HTTP '+r.status+': '+t);});
+    if(r.status===204) return null;
+    return r.json();
+  });
+}
+function apiList(ckey){
+  return apiFetch(API_BASE+'/'+CONTAINERS[ckey]).then(function(items){
+    return items.map(function(it){return fromCosmos(ckey, it);});
+  });
+}
+function apiUpsert(ckey, item){
+  var cosmos=toCosmos(ckey, item);
+  return apiFetch(API_BASE+'/'+CONTAINERS[ckey], {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(cosmos)
+  }).then(function(r){return fromCosmos(ckey, r);});
+}
+function apiDelete(ckey, id, pkValue){
+  var pk=pkValue!=null?String(pkValue):String(id);
+  var url=API_BASE+'/'+CONTAINERS[ckey]+'/'+encodeURIComponent(id)+'?pk='+encodeURIComponent(pk);
+  return apiFetch(url, {method:'DELETE'});
+}
+
+/* === Load initial === */
+function apiLoadAll(){
+  setStatus('Chargement...');
+  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements')])
+  .then(function(res){
+    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3];
+    S._loaded=true;
+    setStatus('Synchronise '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    sbStats();
+  }).catch(function(e){
+    console.error('apiLoadAll error:', e);
+    setStatus('Erreur chargement');
+    toast('Erreur chargement donnees: '+e.message);
+    throw e;
+  });
+}
+
+/* === Mutations wrappers === */
+function saveItem(ckey, item){
+  return apiUpsert(ckey, item).then(function(saved){
+    var arr=S[ckey];
+    var idx=arr.findIndex(function(x){return String(x.id)===String(saved.id);});
+    if(idx>=0) arr[idx]=saved; else arr.push(saved);
+    setStatus('Sauvegarde '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+    return saved;
+  }).catch(function(e){
+    console.error('saveItem error:', e);
+    toast('Erreur sauvegarde: '+e.message);
+    throw e;
+  });
+}
+function deleteItem(ckey, id, pkValue){
+  return apiDelete(ckey, id, pkValue).then(function(){
+    S[ckey]=S[ckey].filter(function(x){return String(x.id)!==String(id);});
+    setStatus('Supprime '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
+  }).catch(function(e){
+    console.error('deleteItem error:', e);
+    toast('Erreur suppression: '+e.message);
+    throw e;
+  });
+}
+function saveMany(ckey, items){
+  return Promise.all(items.map(function(it){return apiUpsert(ckey, it);})).then(function(saved){
+    saved.forEach(function(s){
+      var idx=S[ckey].findIndex(function(x){return String(x.id)===String(s.id);});
+      if(idx>=0) S[ckey][idx]=s; else S[ckey].push(s);
+    });
+    return saved;
+  });
+}
+
+/* === Compat === */
+function persist(){sbStats();render();}
+function lsSave(){/* no-op */}
 function gm(id){return S.marches.find(function(m){return m.id==id;})||{ref:'?',titre:'-',montant:0};}
 function gc(id){return S.cautions.find(function(c){return c.id==id;})||null;}
 function days(d){return Math.round((new Date(d)-Date.now())/86400000);}
@@ -335,7 +400,7 @@ function toggleDrop(btn){btn.nextElementSibling.classList.toggle('show');}
 document.addEventListener('click',function(e){if(!e.target.closest('.drop'))document.querySelectorAll('.drop-menu').forEach(function(m){m.classList.remove('show');});});
 
 function exportJSON(){
-  var data={version:'3.0',date:new Date().toISOString(),aos:S.aos,marches:S.marches,cautions:S.cautions,paiements:S.paiements,_id:S._id};
+  var data={version:'3.2-cosmos',date:new Date().toISOString(),aos:S.aos,marches:S.marches,cautions:S.cautions,paiements:S.paiements};
   dlFile('mp_sauvegarde_'+new Date().toISOString().slice(0,10)+'.json',JSON.stringify(data,null,2),'application/json');
   toast('Sauvegarde exportee');
 }
@@ -347,8 +412,8 @@ function handleImport(e){
     try{var d=JSON.parse(ev.target.result);
       if(!d.marches)throw new Error('Format invalide');
       if(!confirm('Restaurer cette sauvegarde?'))return;
-      S.aos=d.aos||[];S.marches=d.marches||[];S.cautions=d.cautions||[];S.paiements=d.paiements||[];S._id=d._id||700;
-      lsSave();sbStats();render();toast('Sauvegarde restauree');
+      var iA=d.aos||[], iM=d.marches||[], iC=d.cautions||[], iP=d.paiements||[];
+      Promise.all([saveMany('aos',iA), saveMany('marches',iM), saveMany('cautions',iC), saveMany('paiements',iP)]).then(function(){sbStats();render();toast('Sauvegarde restauree (synchronisee Cosmos)');}).catch(function(e){toast('Erreur import: '+e.message);});
     }catch(err){toast('Fichier invalide',false);}
   };
   r.readAsText(file);e.target.value='';
@@ -376,8 +441,7 @@ function exportCSV(type){
 function dlFile(name,content,mime){var a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type:mime}));a.download=name;a.click();URL.revokeObjectURL(a.href);}
 function resetDemo(){
   if(!confirm('Reinitialiser avec les donnees de demonstration?'))return;
-  S.aos=cp(DEMO_AO);S.marches=cp(DEMO_M);S.cautions=cp(DEMO_C);S.paiements=cp(DEMO_P);S._id=700;
-  lsSave();sbStats();render();toast('Donnees demo restaurees');
+  toast('Fonction desactivee (mode Cosmos - saisir manuellement)');
 }
 
 // NAVIGATION
@@ -430,7 +494,7 @@ function checkAutoTermine(mid){
   if(mc.length<1)return;
   if(mc.every(function(c){return c.statut==='liberee';})){
     m.statut='termine';m.avancement=100;
-    toast('Marche '+m.ref+' passe automatiquement a Termine - toutes les cautions sont liberees');
+    saveItem('marches',m).then(function(){sbStats();render();toast('Marche '+m.ref+' passe automatiquement a Termine - toutes les cautions sont liberees');}).catch(function(e){toast('Erreur save auto-termine: '+e.message);});
   }
 }
 
@@ -500,8 +564,8 @@ function newAO(){
     if(!ref||!objet||!maitre_ouvrage){alert('Champs obligatoires manquants');return;}
     var cpNum=v('cp_num');
     var cp=cpNum?{banque:v('cp_banque'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:null;
-    S.aos.push({id:nid(),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')});
-    persist();toast('AO cree');
+    var newAo={id:nidStr('ao'),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')};
+    saveItem('aos',newAo).then(function(){sbStats();render();toast('AO cree');});
   });
 }
 function editAO(id){
@@ -510,19 +574,19 @@ function editAO(id){
     var cpNum=v('cp_num');
     var cpNew=cpNum?{banque:v('cp_banque'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
     a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
-    persist();toast('AO mis a jour');
+    saveItem('aos',a).then(function(){sbStats();render();toast('AO mis a jour');});
   });
 }
 function attribuerAO(id){
   var a=S.aos.find(function(x){return x.id===id;});if(!a)return;
   if(!confirm("Attribuer l'AO '"+a.ref+"' et creer le marche?"))return;
-  var yr=new Date().getFullYear();var newId=nid();
+  var yr=new Date().getFullYear();var newId=nidStr('m');
   S.marches.push({id:newId,ref:'MRC-'+yr+'-'+String(newId).padStart(3,'0'),titre:a.objet,maitre_ouvrage:a.maitre_ouvrage,objet:a.objet,montant:a.budget_estime||0,type:a.type,statut:'en_cours',date_attribution:new Date().toISOString().slice(0,10),date_commencement:null,delai_execution:null,date_fin_calculee:null,date_reception_provisoire:null,date_reception_definitive:null,avancement:0,garantie:5,ordres_service:[]});
   a.statut='attribue';a.marche_id=newId;
   if(a.caution_prov)a.caution_prov.statut='liberee';
-  persist();toast('Marche cree - completez la fiche marche');closeMod();
+  var newMarche=S.marches[S.marches.length-1];Promise.all([saveItem('marches',newMarche), saveItem('aos',a)]).then(function(){sbStats();render();toast('Marche cree - completez la fiche marche');closeMod();}).catch(function(e){toast('Erreur creation marche');});
 }
-function delAO(id){if(!confirm('Supprimer cet AO?'))return;S.aos=S.aos.filter(function(a){return a.id!==id;});persist();toast('AO supprime');}
+function delAO(id){if(!confirm('Supprimer cet AO?'))return;deleteItem('aos',id).then(function(){sbStats();render();toast('AO supprime');});}
 
 // PAGE MARCHES
 function pgMarches(){
@@ -592,10 +656,11 @@ function newMarche(){
     if(!ref||!titre||!maitre_ouvrage||!montant){alert('Champs obligatoires manquants');return;}
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
-    var newId=nid();
+    var newId=nidStr('m');
     S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
-    S._tmpC.forEach(function(c){S.cautions.push({id:nid(),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,date_expiration:c.date_expiration,statut:c.statut});});
-    S._tmpC=[];persist();toast('Marche cree');
+    var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,date_expiration:c.date_expiration,statut:c.statut};});
+    var newM2=S.marches[S.marches.length-1];
+    saveItem('marches',newM2).then(function(){return saveMany('cautions',newCautions);}).then(function(){S._tmpC=[];sbStats();render();toast('Marche cree');}).catch(function(e){toast('Erreur creation marche');});
   });
 }
 function editMarche(id){
@@ -606,16 +671,17 @@ function editMarche(id){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
     m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
-    persist();toast('Marche mis a jour');
+    saveItem('marches',m).then(function(){sbStats();render();toast('Marche mis a jour');});
   });
 }
 function delMarche(id){
   var m=S.marches.find(function(x){return x.id===id;});if(!m)return;
   if(!confirm('Supprimer "'+m.ref+'"? Les cautions et paiements seront aussi supprimes.'))return;
-  S.marches=S.marches.filter(function(x){return x.id!==id;});
-  S.cautions=S.cautions.filter(function(x){return x.marche_id!==id;});
-  S.paiements=S.paiements.filter(function(x){return x.marche_id!==id;});
-  persist();toast('Marche supprime');
+  var cautionsToDelete=S.cautions.filter(function(x){return x.marche_id===id;});
+  var paiementsToDelete=S.paiements.filter(function(x){return x.marche_id===id;});
+  var delC=cautionsToDelete.map(function(c){return deleteItem('cautions',c.id,c.marche_id);});
+  var delP=paiementsToDelete.map(function(p){return deleteItem('paiements',p.id,p.marche_id);});
+  Promise.all(delC.concat(delP)).then(function(){return deleteItem('marches',id);}).then(function(){sbStats();render();toast('Marche supprime');}).catch(function(e){toast('Erreur suppression: '+e.message);});
 }
 
 // CAUTIONS INLINE dans marche
@@ -645,8 +711,9 @@ function confirmAddCaution(){
   var num=v('nc_num'),montant=vn('nc_montant'),banque=v('nc_banque'),type=v('nc_type');
   if(!num||!montant){alert('N caution et montant obligatoires');return;}
   if(_editingMarcheId){
-    S.cautions.push({id:nid(),marche_id:_editingMarcheId,type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'});
-    lsSave();refreshCautionListInModal(_editingMarcheId);
+    var newCaut={id:nidStr('c'),marche_id:_editingMarcheId,type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'};
+    saveItem('cautions',newCaut).then(function(){refreshCautionListInModal(_editingMarcheId);}).catch(function(e){toast('Erreur: '+e.message);});
+    /* sync via saveItem */
   }else{
     S._tmpC.push({_tid:Date.now(),type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'});
     refreshTmpCautionList();
@@ -666,8 +733,8 @@ function refreshTmpCautionList(){
 function delTmpCaution(tid){S._tmpC=S._tmpC.filter(function(c){return c._tid!==tid;});refreshTmpCautionList();}
 function delCautionInline(id){
   if(!confirm('Supprimer cette caution?'))return;
-  S.cautions=S.cautions.filter(function(c){return c.id!==id;});
-  lsSave();if(_editingMarcheId)refreshCautionListInModal(_editingMarcheId);toast('Caution supprimee');
+  var cdel=S.cautions.find(function(c){return c.id===id;});if(!cdel){toast('Caution introuvable');return;}
+  deleteItem('cautions',id,cdel.marche_id).then(function(){if(_editingMarcheId)refreshCautionListInModal(_editingMarcheId);toast('Caution supprimee');}).catch(function(e){toast('Erreur: '+e.message);});
 }
 
 // PAGE CAUTIONS
@@ -718,8 +785,8 @@ function newCaution(){
   openMod('Nouvelle caution',cautionFormHTML(null),function(){
     var mid=parseInt(v('cmar')),montant=vn('cmnt'),num=v('cnum');
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
-    S.cautions.push({id:nid(),marche_id:mid,type:v('ctype'),montant:montant,banque:v('cbanque'),num:num,date_emission:v('cdem')||null,date_expiration:v('cdex')||null,statut:v('cstat')});
-    persist();toast('Caution creee');
+    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:v('cbanque'),num:num,date_emission:v('cdem')||null,date_expiration:v('cdex')||null,statut:v('cstat')};
+    saveItem('cautions',newC).then(function(){sbStats();render();toast('Caution creee');});
   });
 }
 function editCaution(id){
@@ -727,20 +794,23 @@ function editCaution(id){
   var oldStatut=c.statut;
   openMod('Modifier caution - '+c.num,cautionFormHTML(c),function(){
     c.marche_id=parseInt(v('cmar'));c.type=v('ctype');c.banque=v('cbanque');c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_expiration=v('cdex')||null;c.statut=v('cstat');
-    persist();toast('Caution mise a jour');
+    saveItem('cautions',c).then(function(){sbStats();render();toast('Caution mise a jour');});
     if(c.statut==='liberee'&&oldStatut!=='liberee')checkAutoTermine(c.marche_id);
   });
 }
 function libereCaution(id){
   var c=S.cautions.find(function(x){return x.id===id;});if(!c)return;
   if(!confirm('Liberer cette caution?'))return;
-  c.statut='liberee';persist();checkAutoTermine(c.marche_id);toast('Caution liberee');
+  c.statut='liberee';saveItem('cautions',c).then(function(){sbStats();render();checkAutoTermine(c.marche_id);toast('Caution liberee');});
 }
 function delCaution(id){
   if(!confirm('Supprimer cette caution?'))return;
-  S.cautions=S.cautions.filter(function(c){return c.id!==id;});
-  S.paiements.forEach(function(p){if(p.caution_rg_id===id)p.caution_rg_id=null;});
-  persist();toast('Caution supprimee');
+  var cdel=S.cautions.find(function(c){return c.id===id;});if(!cdel){toast('Caution introuvable');return;}
+  var affectedP=S.paiements.filter(function(p){return p.caution_rg_id===id;});
+  affectedP.forEach(function(p){p.caution_rg_id=null;});
+  deleteItem('cautions',id,cdel.marche_id).then(function(){
+    return Promise.all(affectedP.map(function(p){return saveItem('paiements',p);}));
+  }).then(function(){sbStats();render();toast('Caution supprimee');}).catch(function(e){toast('Erreur: '+e.message);});
 }
 
 // PAGE PAIEMENTS
@@ -796,8 +866,8 @@ function newPaiement(){
     var mode=getMode();var ret=0,net=mbrut,crg=null;
     if(mode==='deduction'){ret=vn('pret');net=mbrut-ret;}
     else if(mode==='caution'){var cv=v('pcrg');crg=cv?parseInt(cv):null;net=mbrut;}
-    S.paiements.push({id:nid(),marche_id:mid,numero:num,type:v('ptype'),montant_brut:mbrut,retenue:ret,net:net,mode_retenue:mode,caution_rg_id:crg,date_depot:v('pddep')||null,date_paiement:v('pdpay')||null,statut:v('pstat')});
-    persist();toast('Decompte cree');
+    var newP={id:nidStr('p'),marche_id:mid,numero:num,type:v('ptype'),montant_brut:mbrut,retenue:ret,net:net,mode_retenue:mode,caution_rg_id:crg,date_depot:v('pddep')||null,date_paiement:v('pdpay')||null,statut:v('pstat')};
+    saveItem('paiements',newP).then(function(){sbStats();render();toast('Decompte cree');});
   });
 }
 function editPaiement(id){
@@ -807,10 +877,10 @@ function editPaiement(id){
     if(mode==='deduction'){ret=vn('pret');net=mbrut-ret;}
     else if(mode==='caution'){var cv=v('pcrg');crg=cv?parseInt(cv):null;net=mbrut;}
     p.marche_id=parseInt(v('pmar'));p.numero=v('pnum');p.type=v('ptype');p.montant_brut=mbrut;p.retenue=ret;p.net=net;p.mode_retenue=mode;p.caution_rg_id=crg;p.date_depot=v('pddep')||null;p.date_paiement=v('pdpay')||null;p.statut=v('pstat');
-    persist();toast('Decompte mis a jour');
+    saveItem('paiements',p).then(function(){sbStats();render();toast('Decompte mis a jour');});
   });
 }
-function delPaiement(id){if(!confirm('Supprimer ce decompte?'))return;S.paiements=S.paiements.filter(function(p){return p.id!==id;});persist();toast('Decompte supprime');}
+function delPaiement(id){if(!confirm('Supprimer ce decompte?'))return;var pdel=S.paiements.find(function(p){return p.id===id;});if(!pdel){toast('Decompte introuvable');return;}deleteItem('paiements',id,pdel.marche_id).then(function(){sbStats();render();toast('Decompte supprime');});}
 
 // RAPPORTS
 function pgRapports(){
@@ -888,7 +958,7 @@ function modOut(e){if(e.target.id==='mod')closeMod();}
 // INIT
 function toggleSb(){var s=document.getElementById('sb'),o=document.getElementById('sb-ov');s.classList.toggle('open');o.classList.toggle('show');}
 document.querySelectorAll('.ni').forEach(function(el){el.addEventListener('click',function(){nav(el.dataset.page);var s=document.getElementById('sb'),o=document.getElementById('sb-ov');s.classList.remove('open');o.classList.remove('show');});});
-window.onload=function(){lsLoad();sbStats();nav('dashboard');};
+window.onload=function(){sbStats();nav('dashboard');apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
