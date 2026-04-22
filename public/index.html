@@ -27,6 +27,11 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 .sb-hd{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sb-brand{font-family:var(--FT);font-size:15px;font-weight:600;color:var(--cream);letter-spacing:-.2px}
 .sb-sub{font-size:10px;color:rgba(246,242,234,.3);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
+.sb-user{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.15)}
+.sb-user-name{font-size:12px;color:var(--cream);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-user-mail{font-size:10px;color:rgba(246,242,234,.4);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-logout{margin-top:10px;display:block;width:100%;padding:7px 10px;background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(246,242,234,.7);font-size:11px;border-radius:4px;cursor:pointer;text-align:center;text-decoration:none;font-family:var(--F);transition:all .15s}
+.sb-logout:hover{background:rgba(255,255,255,.08);color:var(--cream);border-color:rgba(255,255,255,.3)}
 .sb-lbl{padding:14px 18px 4px;font-size:9px;color:rgba(246,242,234,.22);text-transform:uppercase;letter-spacing:1.1px;font-weight:600}
 .ni{display:flex;align-items:center;gap:9px;margin:1px 10px;padding:8px 10px;border-radius:4px;color:rgba(246,242,234,.48);cursor:pointer;transition:color .12s,background .12s;font-size:13px;user-select:none;border-left:2px solid transparent;border-radius:0;margin:0}
 .ni:hover{background:rgba(246,242,234,.05);color:var(--cream)}
@@ -225,6 +230,11 @@ input,select,textarea{font-family:inherit}
     <div class="ni" data-page="paiements"><span class="ni-ic">&#128176;</span>Paiements</div>
     <div class="ni" data-page="rapports"><span class="ni-ic">&#128202;</span>Rapports</div>
     <div class="sb-foot" id="sbf"></div>
+    <div class="sb-user" id="sbu" style="display:none">
+      <div class="sb-user-name" id="sbu-name">-</div>
+      <div class="sb-user-mail" id="sbu-mail">-</div>
+      <a href="/logout" class="sb-logout">Se deconnecter</a>
+    </div>
   </nav>
   <div id="main">
     <div class="ph">
@@ -958,7 +968,26 @@ function modOut(e){if(e.target.id==='mod')closeMod();}
 // INIT
 function toggleSb(){var s=document.getElementById('sb'),o=document.getElementById('sb-ov');s.classList.toggle('open');o.classList.toggle('show');}
 document.querySelectorAll('.ni').forEach(function(el){el.addEventListener('click',function(){nav(el.dataset.page);var s=document.getElementById('sb'),o=document.getElementById('sb-ov');s.classList.remove('open');o.classList.remove('show');});});
-window.onload=function(){sbStats();nav('dashboard');apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
+/* === Auth utilisateur === */
+function loadUser(){
+  return fetch('/.auth/me').then(function(r){return r.json();}).then(function(data){
+    var cp=data&&data.clientPrincipal;
+    if(!cp){return;}
+    var name=cp.userDetails||'Utilisateur';
+    var claims=cp.claims||[];
+    var displayName=name, mail=name;
+    claims.forEach(function(c){
+      if(c.typ==='name'||c.typ==='http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name') displayName=c.val;
+      if(c.typ==='preferred_username'||c.typ==='email'||c.typ==='http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress') mail=c.val;
+    });
+    var el=document.getElementById('sbu');
+    var elN=document.getElementById('sbu-name');
+    var elM=document.getElementById('sbu-mail');
+    if(el&&elN&&elM){elN.textContent=displayName;elM.textContent=mail;el.style.display='block';}
+  }).catch(function(e){console.error('loadUser:',e);});
+}
+
+window.onload=function(){sbStats();nav('dashboard');loadUser();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
