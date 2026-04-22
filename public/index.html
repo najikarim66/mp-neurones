@@ -272,14 +272,14 @@ var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Re
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
 var API_BASE='/api/data';
-var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements'};
+var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements', indices:'mp_indices'};
 
 /* ES5 polyfills */
 function objVals(o){return Object.keys(o).map(function(k){return o[k];});}
 function objEnts(o){return Object.keys(o).map(function(k){return [k,o[k]];});}
 function uniqueArr(a){var s={},r=[];a.forEach(function(v){if(!s[v]){s[v]=1;r.push(v);}});return r;}
 
-var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',aos:[],marches:[],cautions:[],paiements:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[],_loaded:false};
+var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',aos:[],marches:[],cautions:[],paiements:[],indices:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[],_loaded:false};
 
 function cp(o){return JSON.parse(JSON.stringify(o));}
 function setStatus(m){var el=document.getElementById('save-status');if(el)el.textContent=m;}
@@ -339,9 +339,9 @@ function apiDelete(ckey, id, pkValue){
 /* === Load initial === */
 function apiLoadAll(){
   setStatus('Chargement...');
-  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements')])
+  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices()])
   .then(function(res){
-    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3];
+    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4];
     S._loaded=true;
     setStatus('Synchronise '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     sbStats();
@@ -350,6 +350,16 @@ function apiLoadAll(){
     setStatus('Erreur chargement');
     toast('Erreur chargement donnees: '+e.message);
     throw e;
+  });
+}
+
+/* Indices : container a PK /type, on filtre par type=monthly */
+function apiListIndices(){
+  return apiFetch(API_BASE+'/'+CONTAINERS.indices+'?type=monthly').then(function(items){
+    return items.map(function(it){ return fromCosmos('indices', it); });
+  }).catch(function(e){
+    console.warn('Indices non charges (container peut-etre pas cree):', e.message);
+    return [];
   });
 }
 
@@ -455,7 +465,7 @@ function resetDemo(){
 }
 
 // NAVIGATION
-var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',paiements:'Paiements',rapports:'Rapports'};
+var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',paiements:'Paiements',rapports:'Rapports',indices:'Indices HCP'};
 function nav(page){
   objVals(S._charts).forEach(function(c){try{c.destroy();}catch(e){}});
   S._charts={};S.page=page;S.search='';S.sf='';S.tf='';S.bf='';
@@ -987,7 +997,172 @@ function loadUser(){
   }).catch(function(e){console.error('loadUser:',e);});
 }
 
-window.onload=function(){sbStats();nav('dashboard');loadUser();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
+/* ========================================================================
+   SPRINT 1A : INDICES HCP (saisie mensuelle + consultation)
+   Support pour futur calcul de revision des prix (Sprint 1B)
+   ======================================================================== */
+
+var INDICES_TYPES=[
+  {code:'BAT3', label:'BAT3 - Electricite'},
+  {code:'BAT6', label:'BAT6 - Batiment tous corps d\'Etat'}
+];
+
+/* Utilitaires */
+function fmtIdx(val){return val==null||isNaN(val)?'-':Number(val).toFixed(2);}
+function getRecentPeriods(n){
+  n=n||24;
+  var out=[], d=new Date();
+  d.setDate(1);
+  for(var i=0;i<n;i++){
+    var y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0');
+    out.push(y+'-'+m);
+    d.setMonth(d.getMonth()-1);
+  }
+  return out;
+}
+function getIndicesForPeriod(periode){
+  return S.indices.find(function(x){return x.periode===periode;})||null;
+}
+function getIndexValue(periode, code){
+  var row=getIndicesForPeriod(periode);
+  if(!row||!row.values) return null;
+  return row.values[code]!=null ? Number(row.values[code]) : null;
+}
+
+/* Page Indices HCP */
+function pgIndices(){
+  var last24=getRecentPeriods(24);
+
+  var h='<div class="ph"><h2 class="ph-t">Indices HCP</h2><div class="ph-s">Saisie mensuelle des valeurs d\'indices pour la revision des prix</div></div>';
+
+  h+='<div class="ct">';
+  h+='<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';
+  h+='<button class="btn btn-prim" onclick="modalSaisieIndice()">+ Saisir indices d\'un mois</button>';
+  h+='<span style="font-size:12px;color:#7A7369">Indices suivis : '+INDICES_TYPES.map(function(i){return '<strong>'+i.code+'</strong>';}).join(', ')+'</span>';
+  h+='<span style="font-size:11px;color:#7A7369;margin-left:auto">Source : HCP.ma</span>';
+  h+='</div>';
+
+  // Resume statistique
+  var totalSaisis=S.indices.length;
+  var dernierMois=S.indices.length>0?S.indices.map(function(x){return x.periode;}).sort().reverse()[0]:'-';
+  h+='<div class="info-box info-blue" style="margin-bottom:16px;font-size:13px">';
+  h+='<strong>'+totalSaisis+'</strong> mois saisis. Dernier : <strong>'+dernierMois+'</strong>';
+  h+='</div>';
+
+  h+='<table class="mini-table"><thead><tr><th>Periode</th>';
+  INDICES_TYPES.forEach(function(i){h+='<th>'+i.code+'</th>';});
+  h+='<th>Publication</th><th>Statut</th><th>Actions</th></tr></thead><tbody>';
+
+  last24.forEach(function(p){
+    var row=getIndicesForPeriod(p);
+    h+='<tr>';
+    h+='<td><strong>'+p+'</strong></td>';
+    INDICES_TYPES.forEach(function(i){
+      var val=row&&row.values?row.values[i.code]:null;
+      var display=val!=null?fmtIdx(val):'<span style="color:#c2410c">-</span>';
+      h+='<td style="text-align:right;font-family:monospace">'+display+'</td>';
+    });
+    h+='<td style="font-size:11px">'+(row&&row.date_publication?fdat(row.date_publication):'-')+'</td>';
+    h+='<td>'+(row?(row.definitif?'<span class="badge bi">Definitif</span>':'<span class="badge bw">Provisoire</span>'):'<span class="badge" style="background:#FEE2E2;color:#991B1B">Manquant</span>')+'</td>';
+    h+='<td>';
+    if(row){
+      h+='<button class="act" onclick="modalSaisieIndice(\''+p+'\')">Modifier</button> ';
+      h+='<button class="act red" onclick="delIndice(\''+row.id+'\',\''+p+'\')">X</button>';
+    } else {
+      h+='<button class="act" onclick="modalSaisieIndice(\''+p+'\')">Saisir</button>';
+    }
+    h+='</td>';
+    h+='</tr>';
+  });
+  h+='</tbody></table>';
+  h+='</div>';
+
+  document.getElementById('main').innerHTML=h;
+}
+
+/* Modal saisie indice */
+function modalSaisieIndice(periode){
+  var isNew=!periode;
+  if(isNew){
+    periode=getRecentPeriods(1)[0];
+  }
+  var row=getIndicesForPeriod(periode)||{id:null, type:'monthly', periode:periode, values:{}, definitif:false, date_publication:''};
+
+  var h='';
+  h+='<div class="fg"><label>Periode (YYYY-MM) *</label><input class="fc" id="idx_p" value="'+periode+'" '+(row.id?'readonly':'')+' placeholder="ex 2026-03"></div>';
+  h+='<div class="fg"><label>Date de publication HCP</label><input class="fc" type="date" id="idx_pub" value="'+(row.date_publication||'')+'"></div>';
+
+  h+='<div class="sec"><div class="sec-t">Valeurs des indices</div>';
+  INDICES_TYPES.forEach(function(i){
+    var val=row.values[i.code]!=null?row.values[i.code]:'';
+    h+='<div class="fg"><label>'+i.label+'</label><input class="fc" type="number" step="0.01" id="idx_v_'+i.code+'" value="'+val+'" placeholder="ex: 115.24"></div>';
+  });
+  h+='</div>';
+
+  h+='<div class="fg"><label>Statut</label><select class="fc" id="idx_def"><option value="0"'+(row.definitif?'':' selected')+'>Provisoire</option><option value="1"'+(row.definitif?' selected':'')+'>Definitif</option></select></div>';
+
+  openMod((row.id?'Modifier':'Saisir')+' indices '+periode, h, function(){
+    var p=v('idx_p');
+    if(!p||!/^\d{4}-\d{2}$/.test(p)){alert('Periode invalide (format YYYY-MM attendu)');return;}
+
+    var newRow={
+      id:row.id||('ind_'+p.replace('-','_')),
+      type:'monthly',
+      periode:p,
+      date_publication:v('idx_pub')||null,
+      definitif:v('idx_def')==='1',
+      values:{}
+    };
+    var hasValue=false;
+    INDICES_TYPES.forEach(function(i){
+      var val=vn('idx_v_'+i.code);
+      if(val!=null){newRow.values[i.code]=val;hasValue=true;}
+    });
+    if(!hasValue){alert('Saisir au moins une valeur d\'indice');return;}
+
+    saveItem('indices',newRow).then(function(){
+      sbStats();
+      render();
+      toast(row.id?'Indices mis a jour':'Indices saisis pour '+p);
+    }).catch(function(e){
+      alert('Erreur sauvegarde: '+e.message);
+    });
+  });
+}
+
+/* Supprimer une saisie d'indices */
+function delIndice(id, periode){
+  if(!confirm('Supprimer les indices de '+periode+' ?\n\nCela ne peut pas etre annule.'))return;
+  deleteItem('indices', id, 'monthly').then(function(){
+    sbStats();
+    render();
+    toast('Indices '+periode+' supprimes');
+  }).catch(function(e){
+    alert('Erreur suppression: '+e.message);
+  });
+}
+
+/* Hook render pour gerer la page 'indices' */
+var _originalRender_indices = render;
+render = function(){
+  if(S.page==='indices'){pgIndices();return;}
+  _originalRender_indices();
+};
+
+/* Ajouter le lien "Indices HCP" dans le sidebar apres "Rapports" */
+function addIndicesNavLink(){
+  if(document.querySelector('.ni[data-page="indices"]'))return;
+  var rapportsLink=document.querySelector('.ni[data-page="rapports"]');
+  if(!rapportsLink) return;
+  var newLink=document.createElement('div');
+  newLink.className='ni';
+  newLink.setAttribute('data-page','indices');
+  newLink.innerHTML='<span class="ni-ic">&#128200;</span>Indices HCP';
+  rapportsLink.parentNode.insertBefore(newLink, rapportsLink.nextSibling);
+  newLink.addEventListener('click', function(){nav('indices');});
+}
+
+window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
