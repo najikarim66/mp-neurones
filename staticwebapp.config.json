@@ -9,10 +9,6 @@
       "rewrite": "/.auth/logout"
     },
     {
-      "route": "/.auth/*",
-      "allowedRoles": ["anonymous", "authenticated"]
-    },
-    {
       "route": "/api/*",
       "allowedRoles": ["authenticated"]
     },
@@ -21,6 +17,10 @@
       "allowedRoles": ["authenticated"]
     }
   ],
+  "navigationFallback": {
+    "rewrite": "/index.html",
+    "exclude": ["/api/*", "/.auth/*", "/assets/*", "/*.{png,jpg,gif,svg,ico,css,js,webp}"]
+  },
   "responseOverrides": {
     "401": {
       "redirect": "/.auth/login/aad?post_login_redirect_uri=/",
