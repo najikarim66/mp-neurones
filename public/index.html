@@ -263,6 +263,7 @@ input,select,textarea{font-family:inherit}
 <div class="toast" id="toast"></div>
 <input type="file" id="fi" accept=".json" style="display:none" onchange="handleImport(event)">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
@@ -1038,6 +1039,9 @@ function pgIndices(){
   h+='<div class="ct">';
   h+='<div style="margin-bottom:16px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">';
   h+='<button class="btn btn-prim" onclick="modalSaisieIndice()">+ Saisir indices d\'un mois</button>';
+  h+='<button class="btn" onclick="document.getElementById(\'xlsx_import_input\').click()">Importer Excel/CSV</button>';
+  h+='<input type="file" id="xlsx_import_input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIndicesImport(this)">';
+  h+='<a href="#" onclick="downloadIndicesTemplate();return false" style="font-size:12px;color:#1E40AF;text-decoration:underline">Telecharger le template</a>';
   h+='<span style="font-size:12px;color:#7A7369">Indices suivis : '+INDICES_TYPES.map(function(i){return '<strong>'+i.code+'</strong>';}).join(', ')+'</span>';
   h+='<span style="font-size:11px;color:#7A7369;margin-left:auto">Source : HCP.ma</span>';
   h+='</div>';
@@ -1160,6 +1164,285 @@ function addIndicesNavLink(){
   newLink.innerHTML='<span class="ni-ic">&#128200;</span>Indices HCP';
   rapportsLink.parentNode.insertBefore(newLink, rapportsLink.nextSibling);
   newLink.addEventListener('click', function(){nav('indices');});
+}
+
+/* ========================================================================
+   IMPORT INDICES DEPUIS EXCEL / CSV
+   ======================================================================== */
+
+/* Telecharger le template Excel (genere a la volee cote navigateur) */
+function downloadIndicesTemplate(){
+  if(typeof XLSX==='undefined'){
+    toast('Librairie XLSX non chargee - patienter quelques secondes');
+    return;
+  }
+
+  var wb=XLSX.utils.book_new();
+
+  // Sheet 1 : Indices (avec exemple + 24 mois vides)
+  var data=[
+    ['Indices HCP - Saisie mensuelle'],
+    ['Une ligne par mois. Colonne periode au format YYYY-MM.'],
+    [],
+    ['periode','BAT3','BAT6','date_publication','statut'],
+    ['YYYY-MM','Electricite','Batiment TCE','YYYY-MM-DD','provisoire|definitif'],
+    ['2026-03', 115.24, 118.72, '2026-04-15', 'provisoire']
+  ];
+
+  // Ajouter 24 mois vides
+  var now=new Date();
+  now.setDate(1);
+  now.setMonth(now.getMonth()-24);
+  for(var i=0;i<24;i++){
+    var y=now.getFullYear();
+    var m=String(now.getMonth()+1).padStart(2,'0');
+    data.push([y+'-'+m,'','','','']);
+    now.setMonth(now.getMonth()+1);
+  }
+
+  var ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:14},{wch:12},{wch:12},{wch:18},{wch:14}];
+  XLSX.utils.book_append_sheet(wb,ws,'Indices');
+
+  // Sheet 2 : Instructions
+  var instr=[
+    ["Mode d'emploi"],
+    [],
+    ["1. Remplir une ligne par mois dans l'onglet 'Indices'"],
+    ["2. Colonne 'periode' OBLIGATOIRE au format YYYY-MM (ex : 2026-03)"],
+    ["3. Saisir au moins BAT3 OU BAT6 (ou les deux)"],
+    ["4. Colonne 'date_publication' optionnelle (format YYYY-MM-DD)"],
+    ["5. Colonne 'statut' : 'provisoire' ou 'definitif' (defaut : provisoire)"],
+    [],
+    ["Import :"],
+    ["- Ouvrir mp.neurones.ma / Menu 'Indices HCP'"],
+    ["- Cliquer 'Importer Excel/CSV' et selectionner ce fichier"],
+    ["- Les entrees existantes sont mises a jour, pas dupliquees"],
+    [],
+    ["Sources :"],
+    ["- Ministere de l'Equipement et de l'Eau : equipement.gov.ma"],
+    ["- Portail marches publics : marchespublics.gov.ma"]
+  ];
+  var ws2=XLSX.utils.aoa_to_sheet(instr);
+  ws2['!cols']=[{wch:80}];
+  XLSX.utils.book_append_sheet(wb,ws2,'Instructions');
+
+  var today=new Date().toISOString().slice(0,10);
+  XLSX.writeFile(wb,'indices_HCP_template_'+today+'.xlsx');
+  toast('Template telecharge');
+}
+
+/* Importer un fichier Excel/CSV */
+function handleIndicesImport(input){
+  var file=input.files&&input.files[0];
+  if(!file)return;
+
+  if(typeof XLSX==='undefined'){
+    alert('Librairie XLSX non disponible - recharger la page');
+    input.value='';
+    return;
+  }
+
+  var reader=new FileReader();
+  reader.onload=function(e){
+    try{
+      var data=new Uint8Array(e.target.result);
+      var wb=XLSX.read(data,{type:'array',cellDates:true});
+
+      // On cherche d'abord une feuille "Indices" puis on prend la 1ere
+      var sheetName=wb.SheetNames.indexOf('Indices')>=0 ? 'Indices' : wb.SheetNames[0];
+      var sheet=wb.Sheets[sheetName];
+      var rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null,blankrows:false});
+
+      processImportedRows(rows);
+    } catch(err){
+      console.error('Import error:', err);
+      alert('Erreur lecture fichier : '+err.message);
+    }
+    input.value=''; // reset pour pouvoir reimporter meme fichier
+  };
+  reader.onerror=function(){
+    alert('Erreur lecture du fichier');
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* Parser les lignes, valider, creer la liste a importer */
+function processImportedRows(rows){
+  if(!rows||rows.length===0){
+    alert('Fichier vide');
+    return;
+  }
+
+  // Trouver la ligne d'en-tete (chercher celle qui contient "periode")
+  var headerRowIdx=-1;
+  for(var i=0;i<Math.min(rows.length,10);i++){
+    var r=rows[i]||[];
+    for(var j=0;j<r.length;j++){
+      if(r[j] && String(r[j]).trim().toLowerCase()==='periode'){
+        headerRowIdx=i;
+        break;
+      }
+    }
+    if(headerRowIdx>=0)break;
+  }
+
+  if(headerRowIdx<0){
+    alert('En-tete "periode" introuvable.\nVerifier que le fichier a les colonnes : periode, BAT3, BAT6, date_publication, statut');
+    return;
+  }
+
+  var headers=rows[headerRowIdx].map(function(h){return h?String(h).trim().toLowerCase():'';});
+  var idxPeriode=headers.indexOf('periode');
+  var idxBat3=headers.indexOf('bat3');
+  var idxBat6=headers.indexOf('bat6');
+  var idxDate=headers.indexOf('date_publication');
+  var idxStatut=headers.indexOf('statut');
+
+  if(idxPeriode<0){
+    alert('Colonne "periode" introuvable');
+    return;
+  }
+  if(idxBat3<0 && idxBat6<0){
+    alert('Au moins une colonne BAT3 ou BAT6 est requise');
+    return;
+  }
+
+  // Parser les lignes de donnees (apres l'en-tete + eventuelle ligne description)
+  var toImport=[];
+  var errors=[];
+  for(var k=headerRowIdx+1;k<rows.length;k++){
+    var row=rows[k];
+    if(!row || !row[idxPeriode])continue; // skip lignes vides
+
+    var periode=String(row[idxPeriode]).trim();
+
+    // Skip ligne description
+    if(periode.toLowerCase()==='yyyy-mm' || periode.toLowerCase().indexOf('format')>=0){
+      continue;
+    }
+
+    // Validation format periode
+    if(!/^\d{4}-\d{2}$/.test(periode)){
+      errors.push('Ligne '+(k+1)+' : periode invalide "'+periode+'" (format YYYY-MM attendu)');
+      continue;
+    }
+
+    var bat3=idxBat3>=0 ? toNumberOrNull(row[idxBat3]) : null;
+    var bat6=idxBat6>=0 ? toNumberOrNull(row[idxBat6]) : null;
+
+    if(bat3==null && bat6==null){
+      // Ignorer les lignes sans aucune valeur (pre-remplies)
+      continue;
+    }
+
+    var values={};
+    if(bat3!=null) values.BAT3=bat3;
+    if(bat6!=null) values.BAT6=bat6;
+
+    var datePub=null;
+    if(idxDate>=0 && row[idxDate]){
+      datePub=parseDateFromCell(row[idxDate]);
+    }
+
+    var statut='provisoire';
+    if(idxStatut>=0 && row[idxStatut]){
+      var s=String(row[idxStatut]).trim().toLowerCase();
+      if(s==='definitif' || s==='définitif') statut='definitif';
+    }
+
+    toImport.push({
+      id: 'ind_'+periode.replace('-','_'),
+      type:'monthly',
+      periode:periode,
+      values:values,
+      date_publication:datePub,
+      definitif:statut==='definitif'
+    });
+  }
+
+  if(toImport.length===0){
+    var msg='Aucune ligne valide a importer.';
+    if(errors.length>0) msg+='\n\nErreurs :\n'+errors.slice(0,5).join('\n');
+    alert(msg);
+    return;
+  }
+
+  // Confirmation
+  var existantes=0;
+  toImport.forEach(function(r){
+    if(S.indices.find(function(x){return x.periode===r.periode;})) existantes++;
+  });
+  var nouvelles=toImport.length-existantes;
+
+  var confirmMsg=toImport.length+' ligne(s) a importer :\n';
+  confirmMsg+='- '+nouvelles+' nouvelle(s)\n';
+  confirmMsg+='- '+existantes+' existante(s) (seront mises a jour)';
+  if(errors.length>0){
+    confirmMsg+='\n\n'+errors.length+' erreur(s) ignoree(s) :\n'+errors.slice(0,3).join('\n');
+    if(errors.length>3) confirmMsg+='\n...';
+  }
+  confirmMsg+='\n\nContinuer ?';
+
+  if(!confirm(confirmMsg))return;
+
+  doImportIndices(toImport);
+}
+
+/* Helpers */
+function toNumberOrNull(v){
+  if(v==null || v==='')return null;
+  if(typeof v==='number')return v;
+  var s=String(v).trim().replace(',','.').replace(/\s/g,'');
+  var n=Number(s);
+  return isNaN(n) ? null : n;
+}
+
+function parseDateFromCell(v){
+  if(!v)return null;
+  if(v instanceof Date)return v.toISOString().slice(0,10);
+  var s=String(v).trim();
+  // Format YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return s;
+  // Format DD/MM/YYYY
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)){
+    var p=s.split('/');
+    return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  // Autre - tenter Date()
+  try{
+    var d=new Date(s);
+    if(!isNaN(d.getTime()))return d.toISOString().slice(0,10);
+  }catch(e){}
+  return null;
+}
+
+/* Executer l'import (sauvegarde sequentielle pour suivre la progression) */
+function doImportIndices(list){
+  setStatus('Import en cours...');
+  toast('Import de '+list.length+' mois en cours...');
+
+  var done=0, errors=0;
+
+  function next(i){
+    if(i>=list.length){
+      setStatus('Import termine');
+      toast('Import termine : '+done+' OK, '+errors+' erreur(s)');
+      render();
+      return;
+    }
+    saveItem('indices', list[i]).then(function(){
+      done++;
+      setStatus('Import '+done+'/'+list.length);
+      next(i+1);
+    }).catch(function(e){
+      console.error('Erreur import '+list[i].periode+':', e);
+      errors++;
+      next(i+1);
+    });
+  }
+  next(0);
 }
 
 window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
