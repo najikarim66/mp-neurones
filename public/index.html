@@ -273,14 +273,14 @@ var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Re
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
 var API_BASE='/api/data';
-var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements', indices:'mp_indices'};
+var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements', indices:'mp_indices', bordereaux:'mp_bordereau', banques:'mp_banques'};
 
 /* ES5 polyfills */
 function objVals(o){return Object.keys(o).map(function(k){return o[k];});}
 function objEnts(o){return Object.keys(o).map(function(k){return [k,o[k]];});}
 function uniqueArr(a){var s={},r=[];a.forEach(function(v){if(!s[v]){s[v]=1;r.push(v);}});return r;}
 
-var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',aos:[],marches:[],cautions:[],paiements:[],indices:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[],_loaded:false};
+var S={page:'dashboard',search:'',sf:'',tf:'',bf:'',aos:[],marches:[],cautions:[],paiements:[],indices:[],bordereaux:[],banques:[],_charts:{},_nfn:null,_sv:null,_tmpC:[],_osTemp:[],_loaded:false,_tmpPostes:[]};
 
 function cp(o){return JSON.parse(JSON.stringify(o));}
 function setStatus(m){var el=document.getElementById('save-status');if(el)el.textContent=m;}
@@ -289,10 +289,10 @@ function setStatus(m){var el=document.getElementById('save-status');if(el)el.tex
 function nidStr(prefix){return prefix+'_'+Date.now()+'_'+Math.floor(Math.random()*1000);}
 function nid(){return nidStr('n');} /* compat pour _osTemp */
 
-/* === Conversion marche_id <-> marcheId pour cautions/paiements === */
+/* === Conversion marche_id <-> marcheId pour cautions/paiements/bordereaux === */
 function toCosmos(ckey, item){
   var c=cp(item);
-  if(ckey==='cautions' || ckey==='paiements'){
+  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux'){
     if(c.marche_id!=null) c.marcheId=String(c.marche_id);
     delete c.marche_id;
   }
@@ -302,7 +302,7 @@ function toCosmos(ckey, item){
 function fromCosmos(ckey, item){
   var c={};
   Object.keys(item).forEach(function(k){if(k[0]!=='_') c[k]=item[k];});
-  if(ckey==='cautions' || ckey==='paiements'){
+  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux'){
     if(c.marcheId!=null) c.marche_id=c.marcheId;
     delete c.marcheId;
   }
@@ -340,9 +340,9 @@ function apiDelete(ckey, id, pkValue){
 /* === Load initial === */
 function apiLoadAll(){
   setStatus('Chargement...');
-  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices()])
+  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices(), apiListSafe('bordereaux'), apiListSafe('banques')])
   .then(function(res){
-    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4];
+    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4]; S.bordereaux=res[5]; S.banques=res[6];
     S._loaded=true;
     setStatus('Synchronise '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     sbStats();
@@ -351,6 +351,14 @@ function apiLoadAll(){
     setStatus('Erreur chargement');
     toast('Erreur chargement donnees: '+e.message);
     throw e;
+  });
+}
+
+/* Chargement safe : si le container n'existe pas encore, retourner [] */
+function apiListSafe(ckey){
+  return apiList(ckey).catch(function(e){
+    console.warn(ckey+' non charge (container peut-etre pas cree):', e.message);
+    return [];
   });
 }
 
@@ -568,8 +576,8 @@ function pgAO(){
 
 function aoFormHTML(a){
   var hasProv=a&&a.caution_prov;
-  var cpFields='<div class="fr2"><div class="fg"><label>Banque *</label><select class="fc" id="cp_banque">'+BANQUES.map(function(b){return '<option'+(hasProv&&a.caution_prov.banque===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select></div><div class="fg"><label>N Caution *</label><input class="fc" id="cp_num" value="'+(hasProv?esc(a.caution_prov.num):'')+'"></div></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cp_montant" type="number" value="'+(hasProv?a.caution_prov.montant:'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="cp_statut">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(hasProv&&a.caution_prov.statut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date emission</label><input class="fc" id="cp_emission" type="date" value="'+(hasProv&&a.caution_prov.date_emission?a.caution_prov.date_emission:'')+'"></div><div class="fg"><label>Date expiration</label><input class="fc" id="cp_expiration" type="date" value="'+(hasProv&&a.caution_prov.date_expiration?a.caution_prov.date_expiration:'')+'"></div></div><div id="cp_suggest" class="info-box info-amber" style="display:none"></div>';
-  return '<div class="fr2"><div class="fg"><label>Reference AO *</label><input class="fc" id="aref" value="'+esc(a?a.ref:'AO-'+new Date().getFullYear()+'-XXX')+'"></div><div class="fg"><label>Type</label><select class="fc" id="atype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(a&&a.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Objet *</label><input class="fc" id="aobjet" value="'+esc(a?a.objet:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="amo" value="'+esc(a?a.maitre_ouvrage:'')+'"></div><div class="fr2"><div class="fg"><label>Budget estime (MAD)</label><input class="fc" id="abud" type="number" value="'+(a?a.budget_estime||'':'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="astat">'+objEnts(SMAO).map(function(e){return '<option value="'+e[0]+'"'+(a&&a.statut===e[0]?' selected':!a&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date lancement</label><input class="fc" id="adl" type="date" value="'+(a&&a.date_lancement?a.date_lancement:'')+'"></div><div class="fg"><label>Date limite</label><input class="fc" id="adlim" type="date" value="'+(a&&a.date_limite?a.date_limite:'')+'"></div></div><div class="fg"><label>Notes</label><input class="fc" id="anotes" value="'+esc(a?a.notes||'':'')+'"></div><div class="sec"><div class="sec-t">Caution provisoire (soumission)</div><div class="info-box info-amber">La caution provisoire garantit le serieux de l\'offre. Elle est restituee apres attribution.</div>'+(hasProv?cpFields:'<div id="no-cp" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:#7A7369">Aucune caution provisoire.</span><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showCPForm()">+ Ajouter</button></div><div id="cp-form" style="display:none">'+cpFields+'</div>')+'</div>';
+  var cpFields='<div class="fr2"><div class="fg"><label>Banque *</label><input class="fc" id="cp_banque" list="banques-datalist" value="'+esc(hasProv?a.caution_prov.banque:'')+'" placeholder="Taper ou choisir..."></div><div class="fg"><label>N Caution *</label><input class="fc" id="cp_num" value="'+(hasProv?esc(a.caution_prov.num):'')+'"></div></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cp_montant" type="number" value="'+(hasProv?a.caution_prov.montant:'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="cp_statut">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(hasProv&&a.caution_prov.statut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date emission</label><input class="fc" id="cp_emission" type="date" value="'+(hasProv&&a.caution_prov.date_emission?a.caution_prov.date_emission:'')+'"></div><div class="fg"><label>Date expiration</label><input class="fc" id="cp_expiration" type="date" value="'+(hasProv&&a.caution_prov.date_expiration?a.caution_prov.date_expiration:'')+'"></div></div><div id="cp_suggest" class="info-box info-amber" style="display:none"></div>';
+  return '<div class="fr2"><div class="fg"><label>Reference AO *</label><input class="fc" id="aref" value="'+esc(a?a.ref:'AO-'+new Date().getFullYear()+'-XXX')+'"></div><div class="fg"><label>Type</label><select class="fc" id="atype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(a&&a.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Objet *</label><input class="fc" id="aobjet" value="'+esc(a?a.objet:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="amo" value="'+esc(a?a.maitre_ouvrage:'')+'"></div><div class="fr2"><div class="fg"><label>Budget estime (MAD)</label><input class="fc" id="abud" type="number" value="'+(a?a.budget_estime||'':'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="astat">'+objEnts(SMAO).map(function(e){return '<option value="'+e[0]+'"'+(a&&a.statut===e[0]?' selected':!a&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date lancement</label><input class="fc" id="adl" type="date" value="'+(a&&a.date_lancement?a.date_lancement:'')+'"></div><div class="fg"><label>Date limite</label><input class="fc" id="adlim" type="date" value="'+(a&&a.date_limite?a.date_limite:'')+'"></div></div><div class="fg"><label>Notes</label><input class="fc" id="anotes" value="'+esc(a?a.notes||'':'')+'"></div><div class="sec"><div class="sec-t">Caution provisoire (soumission)</div><div class="info-box info-amber">La caution provisoire garantit le serieux de l\'offre. Elle est restituee apres attribution.</div>'+(hasProv?cpFields:'<div id="no-cp" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:#7A7369">Aucune caution provisoire.</span><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showCPForm()">+ Ajouter</button></div><div id="cp-form" style="display:none">'+cpFields+'</div>')+'</div>'+banquesDatalistHTML();
 }
 function showCPForm(){document.getElementById('no-cp').style.display='none';document.getElementById('cp-form').style.display='block';suggestProvMnt();}
 function suggestProvMnt(){
@@ -585,6 +593,7 @@ function newAO(){
     if(!ref||!objet||!maitre_ouvrage){alert('Champs obligatoires manquants');return;}
     var cpNum=v('cp_num');
     var cp=cpNum?{banque:v('cp_banque'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:null;
+    if(cp && cp.banque) ensureBanqueExists(cp.banque);
     var newAo={id:nidStr('ao'),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')};
     saveItem('aos',newAo).then(function(){sbStats();render();toast('AO cree');});
   });
@@ -594,6 +603,7 @@ function editAO(id){
   openMod('Modifier AO - '+a.ref,aoFormHTML(a),function(){
     var cpNum=v('cp_num');
     var cpNew=cpNum?{banque:v('cp_banque'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
+    if(cpNew && cpNew.banque) ensureBanqueExists(cpNew.banque);
     a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
     saveItem('aos',a).then(function(){sbStats();render();toast('AO mis a jour');});
   });
@@ -637,7 +647,7 @@ function marcheFormHTML(m){
   });
   var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td style="font-size:11px">'+fdat(c.date_expiration)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline('+c.id+')">X</button></td></tr>';}).join('');
   var dfin=m?m.date_fin_calculee||'':'';
-  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div></div><div class="fr2"><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'"></div><div class="fg"><label>Reception definitive</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'"></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Expiration</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label><select class="fc" id="nc_banque">'+BANQUES.map(function(b){return '<option>'+b+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div class="fg"><label>Expiration</label><input class="fc" id="nc_expiration" type="date"></div></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>';
+  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'"></div></div><div class="fr2"><div class="fg"><label>Reception definitive</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'"></div><div></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Expiration</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label><input class="fc" id="nc_banque" list="banques-datalist" placeholder="Taper ou choisir..."></div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div class="fg"><label>Expiration</label><input class="fc" id="nc_expiration" type="date"></div></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+banquesDatalistHTML();
 }
 
 var _editingMarcheId=null;
@@ -678,7 +688,7 @@ function newMarche(){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
     var newId=nidStr('m');
-    S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
+    S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_soumission:v('mdsoum')||null,date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
     var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,date_expiration:c.date_expiration,statut:c.statut};});
     var newM2=S.marches[S.marches.length-1];
     saveItem('marches',newM2).then(function(){return saveMany('cautions',newCautions);}).then(function(){S._tmpC=[];sbStats();render();toast('Marche cree');}).catch(function(e){toast('Erreur creation marche');});
@@ -691,7 +701,7 @@ function editMarche(id){
   openMod('Modifier - '+m.ref,marcheFormHTML(m),function(){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
-    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
+    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
     saveItem('marches',m).then(function(){sbStats();render();toast('Marche mis a jour');});
   });
 }
@@ -731,6 +741,8 @@ function updateCautionSuggestions(){if(document.getElementById('add-caution-pane
 function confirmAddCaution(){
   var num=v('nc_num'),montant=vn('nc_montant'),banque=v('nc_banque'),type=v('nc_type');
   if(!num||!montant){alert('N caution et montant obligatoires');return;}
+  if(!banque){alert('Banque obligatoire');return;}
+  ensureBanqueExists(banque);
   if(_editingMarcheId){
     var newCaut={id:nidStr('c'),marche_id:_editingMarcheId,type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'};
     saveItem('cautions',newCaut).then(function(){refreshCautionListInModal(_editingMarcheId);}).catch(function(e){toast('Erreur: '+e.message);});
@@ -800,13 +812,14 @@ function pgCautions(){
 }
 
 function cautionFormHTML(c){
-  return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar">'+S.marches.map(function(m){return '<option value="'+m.id+'"'+(c&&c.marche_id===m.id?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('')+'</select></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label><select class="fc" id="cbanque">'+BANQUES.map(function(b){return '<option'+(c&&c.banque===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Expiration</label><input class="fc" id="cdex" type="date" value="'+(c&&c.date_expiration?c.date_expiration:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>';
+  return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar">'+S.marches.map(function(m){return '<option value="'+m.id+'"'+(c&&c.marche_id===m.id?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('')+'</select></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label><input class="fc" id="cbanque" list="banques-datalist" value="'+esc(c?c.banque:'')+'" placeholder="Taper ou choisir..."></div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Expiration</label><input class="fc" id="cdex" type="date" value="'+(c&&c.date_expiration?c.date_expiration:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+banquesDatalistHTML();
 }
 function newCaution(){
   openMod('Nouvelle caution',cautionFormHTML(null),function(){
     var mid=parseInt(v('cmar')),montant=vn('cmnt'),num=v('cnum');
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
-    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:v('cbanque'),num:num,date_emission:v('cdem')||null,date_expiration:v('cdex')||null,statut:v('cstat')};
+    var banque=v('cbanque'); ensureBanqueExists(banque);
+    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,date_expiration:v('cdex')||null,statut:v('cstat')};
     saveItem('cautions',newC).then(function(){sbStats();render();toast('Caution creee');});
   });
 }
@@ -814,7 +827,8 @@ function editCaution(id){
   var c=S.cautions.find(function(x){return x.id===id;});if(!c)return;
   var oldStatut=c.statut;
   openMod('Modifier caution - '+c.num,cautionFormHTML(c),function(){
-    c.marche_id=parseInt(v('cmar'));c.type=v('ctype');c.banque=v('cbanque');c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_expiration=v('cdex')||null;c.statut=v('cstat');
+    var banque=v('cbanque'); ensureBanqueExists(banque);
+    c.marche_id=parseInt(v('cmar'));c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_expiration=v('cdex')||null;c.statut=v('cstat');
     saveItem('cautions',c).then(function(){sbStats();render();toast('Caution mise a jour');});
     if(c.statut==='liberee'&&oldStatut!=='liberee')checkAutoTermine(c.marche_id);
   });
@@ -1444,6 +1458,268 @@ function doImportIndices(list){
   }
   next(0);
 }
+
+/* ========================================================================
+   SPRINT 1B - Banques dynamiques + Bordereau (config revision) + BAT0
+   ======================================================================== */
+
+/* --- BANQUES : datalist HTML + ensureBanqueExists --- */
+function allBanquesSorted(){
+  // Fusionne liste par defaut + banques ajoutees a la volee
+  var set={};
+  BANQUES.forEach(function(b){set[b]=1;});
+  (S.banques||[]).forEach(function(bk){if(bk&&bk.nom)set[bk.nom]=1;});
+  return Object.keys(set).sort();
+}
+function banquesDatalistHTML(){
+  // Un SEUL datalist id="banques-datalist" reutilise par tous les formulaires
+  return '<datalist id="banques-datalist">'+allBanquesSorted().map(function(b){return '<option value="'+esc(b)+'"></option>';}).join('')+'</datalist>';
+}
+function ensureBanqueExists(nom){
+  // Si la banque n'existe ni dans BANQUES ni dans S.banques, la creer
+  if(!nom)return;
+  var exists=BANQUES.indexOf(nom)>=0 || (S.banques||[]).some(function(bk){return bk.nom===nom;});
+  if(exists)return;
+  var newBk={id:nidStr('bk'),nom:nom};
+  saveItem('banques',newBk).then(function(){toast('Banque "'+nom+'" ajoutee');}).catch(function(e){console.warn('Erreur ajout banque:',e);});
+}
+
+/* --- BAT0 : lecture auto depuis mp_indices pour un mois donne --- */
+function getIndiceForPeriode(periode){
+  // periode format YYYY-MM
+  if(!periode)return null;
+  return (S.indices||[]).find(function(i){return i.periode===periode;})||null;
+}
+function getBAT0(typeIndice, periode){
+  // typeIndice: 'BAT3' ou 'BAT6'
+  var ind=getIndiceForPeriode(periode);
+  if(!ind)return null;
+  var key=typeIndice==='BAT3'?'BAT3':'BAT6';
+  return ind[key]!=null?ind[key]:null;
+}
+
+/* --- BORDEREAU : getter + save --- */
+function getBordereauForMarche(marcheId){
+  return (S.bordereaux||[]).find(function(b){return String(b.marche_id)===String(marcheId);})||null;
+}
+
+/* --- ONGLETS dans la modal d'edition marche --- */
+var _currentMarcheTab='info';
+function switchMarcheTab(tab){
+  _currentMarcheTab=tab;
+  ['info','bordereau'].forEach(function(t){
+    var btn=document.getElementById('mtab-btn-'+t);
+    var content=document.getElementById('mtab-content-'+t);
+    if(btn)btn.classList.toggle('on',t===tab);
+    if(content)content.style.display=t===tab?'block':'none';
+  });
+}
+
+/* Ajout des onglets dans marcheFormHTML via hook : apres ouverture modal, on wrap le contenu */
+var _originalEditMarche_sprint1b = editMarche;
+editMarche = function(id){
+  var m=S.marches.find(function(x){return x.id===id;});if(!m)return;
+  _editingMarcheId=id;S._tmpC=[];S._tmpPostes=[];
+  S._osTemp=cp(m.ordres_service||[]);
+  var existingBordereau=getBordereauForMarche(id);
+  openMod('Modifier - '+m.ref, marcheEditWithTabsHTML(m, existingBordereau), function(){
+    // Onglet Info : save marche
+    var osData=collectOS();
+    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
+    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
+    var savePromises=[saveItem('marches',m)];
+    // Onglet Bordereau : save si modifie
+    var borContainer=document.getElementById('bor-config');
+    if(borContainer){
+      var borData=collectBordereauData(m);
+      if(borData){
+        savePromises.push(saveItem('bordereaux', borData));
+      }
+    }
+    Promise.all(savePromises).then(function(){sbStats();render();toast('Marche mis a jour');}).catch(function(e){toast('Erreur save: '+e.message);});
+  });
+  // Par defaut, onglet Info
+  setTimeout(function(){switchMarcheTab('info');},0);
+};
+
+function marcheEditWithTabsHTML(m, bordereau){
+  return '<div class="m-tabs" style="display:flex;gap:0;border-bottom:1px solid #DDD5C4;margin:-4px -4px 16px;padding:0 4px"><button type="button" id="mtab-btn-info" class="m-tab-btn on" onclick="switchMarcheTab(\'info\')" style="background:transparent;border:none;padding:10px 16px;font-size:13px;font-weight:500;color:#4A453F;border-bottom:2px solid transparent;cursor:pointer">Informations</button><button type="button" id="mtab-btn-bordereau" class="m-tab-btn" onclick="switchMarcheTab(\'bordereau\')" style="background:transparent;border:none;padding:10px 16px;font-size:13px;font-weight:500;color:#4A453F;border-bottom:2px solid transparent;cursor:pointer">Bordereau / Revision</button></div><style>.m-tab-btn.on{color:#1F3A2E !important;border-bottom-color:#B5543A !important;font-weight:600 !important}</style><div id="mtab-content-info">'+marcheFormHTML(m)+'</div><div id="mtab-content-bordereau" style="display:none">'+bordereauTabHTML(m, bordereau)+'</div>';
+}
+
+function bordereauTabHTML(m, b){
+  var typeIndice=b?b.type_indice:'BAT6';
+  var coefA=b?b.coefficient_a:0.15;
+  var coefB=b?b.coefficient_b:0.85;
+  var postes=b?(b.postes||[]):[];
+  S._tmpPostes=cp(postes);
+  var dsoum=m?m.date_soumission:'';
+  var bat0Info='';
+  if(dsoum){
+    var bat=getBAT0(typeIndice, dsoum);
+    if(bat!=null){
+      bat0Info='<div class="info-box info-green" style="margin-bottom:8px"><b>BAT0 = '+bat+'</b> (lu depuis indices HCP pour '+dsoum+')</div>';
+    }else{
+      bat0Info='<div class="info-box info-amber" style="margin-bottom:8px">&#9888; Indice '+typeIndice+' pour '+dsoum+' non trouve dans "Indices HCP". Saisir la valeur manuellement ou ajouter l\'indice.</div>';
+    }
+  }else{
+    bat0Info='<div class="info-box info-amber" style="margin-bottom:8px">&#9888; Renseigner la <b>Date de soumission</b> dans l\'onglet Informations pour que BAT0 soit lu automatiquement.</div>';
+  }
+  var bat0Manuel=b&&b.BAT0_manuel!=null?b.BAT0_manuel:'';
+  var postesRows=S._tmpPostes.map(function(p,i){
+    return '<tr><td style="font-family:monospace;font-size:12px">'+esc(p.num||'')+'</td><td style="font-size:12px">'+esc(p.designation||'')+'</td><td style="font-size:12px">'+esc(p.unite||'')+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.quantite||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.pu_initial||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px;font-weight:600">'+fmad((p.quantite||0)*(p.pu_initial||0))+'</td><td><button type="button" class="act red" onclick="delPoste('+i+')">X</button></td></tr>';
+  }).join('');
+  var totalMontant=S._tmpPostes.reduce(function(a,p){return a+(p.quantite||0)*(p.pu_initial||0);},0);
+  return '<div id="bor-config"><div class="sec"><div class="sec-t">Configuration de la revision des prix</div>'+bat0Info+'<div class="fr2"><div class="fg"><label>Type d\'indice *</label><select class="fc" id="bor_type"><option value="BAT3"'+(typeIndice==='BAT3'?' selected':'')+'>BAT3 - Electricite</option><option value="BAT6"'+(typeIndice==='BAT6'?' selected':'')+'>BAT6 - Batiment tous corps d\'etat</option></select></div><div class="fg"><label>BAT0 (manuel si absent des indices)</label><input class="fc" id="bor_bat0_manuel" type="number" step="0.01" value="'+bat0Manuel+'" placeholder="Laisser vide si lu auto"></div></div><div class="fr2"><div class="fg"><label>Coefficient a (partie fixe)</label><input class="fc" id="bor_coef_a" type="number" step="0.01" value="'+coefA+'"></div><div class="fg"><label>Coefficient b (partie revisable)</label><input class="fc" id="bor_coef_b" type="number" step="0.01" value="'+coefB+'"></div></div><div class="info-box info-blue" style="margin-top:4px;font-size:11px">Formule : <b>P revise = P0 &times; (a + b &times; BAT/BAT0)</b> avec a+b=1 (par defaut 0.15 + 0.85)</div></div><div class="sec"><div class="sec-t">Postes du bordereau</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" onclick="downloadBordereauTemplate()">Telecharger template Excel</button><label class="btn btn-sm" style="background:#EDE8DE;cursor:pointer"><input type="file" id="bor_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importBordereauExcel(event)">Importer Excel/CSV</label><button type="button" class="btn btn-sm" onclick="clearPostes()" style="border-color:#8B2A1C;color:#8B2A1C">Vider</button></div><div id="postes-list">'+(S._tmpPostes.length?'<table class="mini-table"><thead><tr><th>N Poste</th><th>Designation</th><th>Unite</th><th style="text-align:right">Quantite</th><th style="text-align:right">PU</th><th style="text-align:right">Montant</th><th></th></tr></thead><tbody>'+postesRows+'</tbody><tfoot><tr style="background:#EDE8DE;font-weight:600"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right;font-family:monospace">'+fmad(totalMontant)+'</td><td></td></tr></tfoot></table>':'<div style="font-size:12px;color:#7A7369;padding:10px 0">Aucun poste. Importer un fichier Excel ou utiliser le template.</div>')+'</div></div></div>';
+}
+
+function collectBordereauData(m){
+  if(!m)return null;
+  var type=v('bor_type')||'BAT6';
+  var coefA=parseFloat(v('bor_coef_a'))||0.15;
+  var coefB=parseFloat(v('bor_coef_b'))||0.85;
+  var bat0Manuel=v('bor_bat0_manuel');
+  var bat0Auto=m.date_soumission?getBAT0(type, m.date_soumission):null;
+  var bat0Final=bat0Manuel?parseFloat(bat0Manuel):bat0Auto;
+  // Si pas de postes ET pas de BAT0, on ne cree rien
+  if(!S._tmpPostes.length && !bat0Final) return null;
+  var existing=getBordereauForMarche(m.id);
+  var borId=existing?existing.id:nidStr('bor');
+  return {
+    id:borId,
+    marche_id:m.id,
+    type_indice:type,
+    date_reference_BAT0:m.date_soumission||null,
+    BAT0:bat0Auto,
+    BAT0_manuel:bat0Manuel?parseFloat(bat0Manuel):null,
+    coefficient_a:coefA,
+    coefficient_b:coefB,
+    postes:cp(S._tmpPostes),
+    updated_at:new Date().toISOString()
+  };
+}
+
+function refreshPostesList(m){
+  var el=document.getElementById('postes-list');if(!el||!m)return;
+  var rows=S._tmpPostes.map(function(p,i){
+    return '<tr><td style="font-family:monospace;font-size:12px">'+esc(p.num||'')+'</td><td style="font-size:12px">'+esc(p.designation||'')+'</td><td style="font-size:12px">'+esc(p.unite||'')+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.quantite||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.pu_initial||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px;font-weight:600">'+fmad((p.quantite||0)*(p.pu_initial||0))+'</td><td><button type="button" class="act red" onclick="delPoste('+i+')">X</button></td></tr>';
+  }).join('');
+  var total=S._tmpPostes.reduce(function(a,p){return a+(p.quantite||0)*(p.pu_initial||0);},0);
+  if(S._tmpPostes.length){
+    el.innerHTML='<table class="mini-table"><thead><tr><th>N Poste</th><th>Designation</th><th>Unite</th><th style="text-align:right">Quantite</th><th style="text-align:right">PU</th><th style="text-align:right">Montant</th><th></th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr style="background:#EDE8DE;font-weight:600"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right;font-family:monospace">'+fmad(total)+'</td><td></td></tr></tfoot></table>';
+  }else{
+    el.innerHTML='<div style="font-size:12px;color:#7A7369;padding:10px 0">Aucun poste. Importer un fichier Excel ou utiliser le template.</div>';
+  }
+}
+
+function delPoste(idx){
+  S._tmpPostes.splice(idx,1);
+  var m=_editingMarcheId?S.marches.find(function(x){return x.id===_editingMarcheId;}):null;
+  refreshPostesList(m);
+}
+
+function clearPostes(){
+  if(!confirm('Vider tous les postes ?'))return;
+  S._tmpPostes=[];
+  var m=_editingMarcheId?S.marches.find(function(x){return x.id===_editingMarcheId;}):null;
+  refreshPostesList(m);
+}
+
+function downloadBordereauTemplate(){
+  if(typeof XLSX==='undefined'){toast('XLSX non charge');return;}
+  var wb=XLSX.utils.book_new();
+  var data=[
+    ['N Poste','Designation','Unite','Quantite','PU'],
+    ['01.1','Terrassement generaux','m3',1500,85],
+    ['01.2','Fouille en rigole pour semelles','m3',200,120],
+    ['02.1','Beton de proprete','m3',50,800],
+    ['','','','','']
+  ];
+  var ws=XLSX.utils.aoa_to_sheet(data);
+  ws['!cols']=[{wch:10},{wch:40},{wch:8},{wch:12},{wch:12}];
+  XLSX.utils.book_append_sheet(wb,ws,'Bordereau');
+  XLSX.writeFile(wb,'bordereau_template.xlsx');
+  toast('Template telecharge');
+}
+
+function importBordereauExcel(e){
+  var input=e.target;
+  var file=input.files&&input.files[0];
+  if(!file){return;}
+  var reader=new FileReader();
+  reader.onload=function(ev){
+    try{
+      var data=new Uint8Array(ev.target.result);
+      var wb=XLSX.read(data,{type:'array'});
+      var sheetName=wb.SheetNames.indexOf('Bordereau')>=0?'Bordereau':wb.SheetNames[0];
+      var sheet=wb.Sheets[sheetName];
+      var rows=XLSX.utils.sheet_to_json(sheet,{header:1,defval:null,blankrows:false});
+      processBordereauRows(rows);
+    }catch(err){
+      console.error('Import bordereau error:',err);
+      alert('Erreur lecture fichier : '+err.message);
+    }
+    input.value='';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+function processBordereauRows(rows){
+  if(!rows||rows.length===0){alert('Fichier vide');return;}
+  // Trouver la ligne d'en-tete
+  var headerIdx=-1;
+  for(var i=0;i<Math.min(rows.length,5);i++){
+    var r=(rows[i]||[]).map(function(x){return x?String(x).toLowerCase().trim():'';});
+    if(r.indexOf('n poste')>=0||r.indexOf('numero')>=0||(r[0]&&r[0].indexOf('poste')>=0)){headerIdx=i;break;}
+  }
+  if(headerIdx<0){
+    alert('En-tete introuvable.\nColonnes attendues : N Poste | Designation | Unite | Quantite | PU');
+    return;
+  }
+  var headers=rows[headerIdx].map(function(h){return h?String(h).trim().toLowerCase():'';});
+  function findCol(keywords){
+    for(var j=0;j<headers.length;j++){
+      for(var k=0;k<keywords.length;k++){
+        if(headers[j].indexOf(keywords[k])>=0)return j;
+      }
+    }
+    return -1;
+  }
+  var iNum=findCol(['n poste','poste','numero','num']);
+  var iDes=findCol(['designation','libelle','description']);
+  var iUni=findCol(['unite','un']);
+  var iQte=findCol(['quantite','qte','qty']);
+  var iPU=findCol(['pu','prix unitaire','prix']);
+  if(iNum<0||iDes<0||iQte<0||iPU<0){alert('Colonnes manquantes : N Poste, Designation, Quantite, PU requises');return;}
+  var postes=[];var errors=[];
+  for(var k=headerIdx+1;k<rows.length;k++){
+    var row=rows[k];if(!row||row.every(function(c){return !c;}))continue;
+    var num=row[iNum]?String(row[iNum]).trim():'';
+    var des=row[iDes]?String(row[iDes]).trim():'';
+    var qte=parseFloat(row[iQte])||0;
+    var pu=parseFloat(row[iPU])||0;
+    if(!num && !des)continue;
+    if(!num){errors.push('Ligne '+(k+1)+' : N Poste manquant');continue;}
+    if(qte<=0){errors.push('Ligne '+(k+1)+' : Quantite invalide');continue;}
+    if(pu<=0){errors.push('Ligne '+(k+1)+' : PU invalide');continue;}
+    postes.push({num:num,designation:des,unite:iUni>=0&&row[iUni]?String(row[iUni]).trim():'',quantite:qte,pu_initial:pu});
+  }
+  if(!postes.length){
+    alert('Aucun poste valide\n'+(errors.length?errors.slice(0,5).join('\n'):''));
+    return;
+  }
+  var msg=postes.length+' poste(s) a importer';
+  if(errors.length)msg+='\n'+errors.length+' erreur(s) ignoree(s)';
+  if(S._tmpPostes.length){msg+='\n\nRemplacer les '+S._tmpPostes.length+' postes existants ?';}
+  if(!confirm(msg))return;
+  S._tmpPostes=postes;
+  var m=_editingMarcheId?S.marches.find(function(x){return x.id===_editingMarcheId;}):null;
+  refreshPostesList(m);
+  toast('Import terminer : '+postes.length+' postes');
+}
+
+/* ========================================================================
+   FIN SPRINT 1B
+   ======================================================================== */
 
 window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
 </script>
