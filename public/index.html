@@ -48,6 +48,10 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 .ph-t{font-family:var(--FT);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.3px}
 .ph-s{font-size:11px;color:var(--ink-muted);margin-top:2px}
 .ph-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+#sync-indicator.stale{color:#c2410c;font-weight:600}
+#btn-refresh.syncing{opacity:.6;pointer-events:none}
+#btn-refresh.syncing::before{content:'⟳ ';display:inline-block;animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
 .pb{flex:1;overflow-y:auto;padding:20px 22px;background:var(--cream)}
 
 /* KPI */
@@ -221,7 +225,7 @@ input,select,textarea{font-family:inherit}
 <div id="wrap">
 <div id="sb-ov" onclick="toggleSb()"></div>
   <nav id="sb">
-    <div class="sb-hd"><div class="sb-brand">MP Manager</div><div class="sb-sub">Version monoposte v3.0</div></div>
+    <div class="sb-hd"><div class="sb-brand">MP Manager</div><div class="sb-sub">v3.2 &middot; Cosmos &middot; Multi-utilisateurs</div></div>
     <div class="sb-lbl">Navigation</div>
     <div class="ni on" data-page="dashboard"><span class="ni-ic">&#128202;</span>Tableau de bord</div>
     <div class="ni" data-page="ao"><span class="ni-ic">&#128221;</span>Appels d'offres</div>
@@ -241,6 +245,8 @@ input,select,textarea{font-family:inherit}
       <button class="ham" id="ham" onclick="toggleSb()">&#9776;</button>
       <div><div class="ph-t" id="ph-t">Tableau de bord</div><div class="ph-s" id="ph-s"></div></div>
       <div class="ph-r">
+        <span id="sync-indicator" style="font-size:11px;color:#7A7369;font-family:var(--FM);white-space:nowrap" title="Derniere synchronisation avec le cloud">Chargement...</span>
+        <button class="btn" id="btn-refresh" onclick="manualRefresh()" title="Rafraichir les donnees depuis le cloud">&#8635; Rafraichir</button>
         <div class="drop">
           <button class="btn" onclick="toggleDrop(this)">Exporter &#9660;</button>
           <div class="drop-menu">
@@ -493,7 +499,7 @@ function sbStats(){
   var ca=S.cautions.filter(function(c){return c.statut==='active';}).length;
   var pa=S.paiements.filter(function(p){return p.statut==='en_attente'||p.statut==='en_cours';}).length;
   var aoc=S.aos.filter(function(a){return a.statut==='en_cours';}).length;
-  document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:11px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div><button class="btn btn-sm" style="width:100%;margin-top:6px;font-size:11px;color:#7A7369" onclick="resetDemo()">Donnees demo</button>';
+  document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:11px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div>';
 }
 function render(){
   var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,paiements:pgPaiements,rapports:pgRapports};
@@ -651,6 +657,7 @@ function marcheFormHTML(m){
 }
 
 var _editingMarcheId=null;
+var _editingPaiementId=null;
 function addOS(type){var id=nid();S._osTemp.push({id:id,type:type,date:'',motif:''});reRenderOS();}
 function removeOS(id){S._osTemp=S._osTemp.filter(function(o){return o.id!==id;});reRenderOS();updateDFC();}
 function reRenderOS(){
@@ -871,9 +878,11 @@ function paiementFormHTML(p){
   var marcheOpts=S.marches.map(function(m){return '<option value="'+m.id+'"'+(p&&p.marche_id===m.id?' selected':!p&&m===S.marches[0]?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('');
   var crgOpts=S.cautions.filter(function(c){return c.type==='retenue_garantie'&&c.marche_id==marcheId;}).map(function(c){return '<option value="'+c.id+'"'+(p&&p.caution_rg_id===c.id?' selected':'')+'>'+c.num+' - '+c.banque+' - '+fmad(c.montant)+'</option>';}).join('');
   var deducPanel='<div class="info-box info-amber">La retenue est deduite directement du montant du decompte.</div><div class="fr2"><div class="fg"><label>Montant retenu (MAD)</label><input class="fc" id="pret" type="number" value="'+(p&&p.mode_retenue==='deduction'?p.retenue:'')+'" placeholder="0" oninput="calcNet()"></div><div class="fg"><label>Net a payer (MAD)</label><input class="fc" id="pnet" type="number" readonly style="background:#EDE8DE;font-weight:600" value="'+(p&&p.mode_retenue==='deduction'?p.net:'')+'"></div></div>';
-  var cautPanel='<div class="info-box info-blue">La RG est couverte par caution bancaire - pas de deduction sur ce decompte.</div><div class="fg"><label>Caution RG liee</label><select class="fc" id="pcrg"><option value="">- Selectionner -</option>'+crgOpts+'</select></div><div class="fg"><label>Net a payer (MAD)</label><input class="fc" id="pnet2" type="number" readonly style="background:#EDE8DE;font-weight:600;color:#059669" value="'+(p&&p.mode_retenue==='caution'?p.net:'')+'"></div>';
+  var cautPanel='<div class="info-box info-blue">La RG est couverte par caution bancaire - pas de deduction sur ce decompte.</div><div class="fg"><label>Caution RG liee</label><select class="fc" id="pcrg"><option value="">- Selectionner -</option>'+crgOpts+'</select></div><div class="fg"><label>Net a payer (MAD)</label><input class=\"fc\" id=\"pnet2\" type=\"number\" readonly style=\"background:#EDE8DE;font-weight:600;color:#059669\" value=\"'+(p&&p.mode_retenue==='caution'?p.net:'')+'\"></div>';
   var aucunPanel='<div class="info-box info-green">Aucune retenue.</div><div class="fg"><label>Net a payer (MAD)</label><input class="fc" id="pnet3" type="number" readonly style="background:#EDE8DE;font-weight:600" value="'+(p&&p.mode_retenue==='aucune'?p.net:'')+'"></div>';
-  return '<div class="fg"><label>Marche *</label><select class="fc" id="pmar" onchange="reloadCRG()">'+marcheOpts+'</select></div><div class="fr2"><div class="fg"><label>N Decompte *</label><input class="fc" id="pnum" value="'+esc(p?p.numero:'')+'"></div><div class="fg"><label>Type</label><select class="fc" id="ptype"><option value="provisoire"'+(p&&p.type==='provisoire'?' selected':!p?' selected':'')+'>Provisoire</option><option value="definitif"'+(p&&p.type==='definitif'?' selected':'')+'>Definitif</option></select></div></div><div class="fr2"><div class="fg"><label>Montant brut (MAD) *</label><input class="fc" id="pmnt" type="number" value="'+(p?p.montant_brut:'')+'" placeholder="0" oninput="calcNet()"></div><div></div></div><div class="fg"><label>Mode de retenue de garantie</label><div class="mode-btn-grp" style="margin-top:4px"><button type="button" class="mode-btn'+(mode==='deduction'?' on':'')+'" onclick="setMode(\'deduction\')">Deduction directe</button><button type="button" class="mode-btn'+(mode==='caution'?' on':'')+'" onclick="setMode(\'caution\')">Caution bancaire</button><button type="button" class="mode-btn'+(mode==='aucune'?' on':'')+'" onclick="setMode(\'aucune\')">Aucune retenue</button></div></div><div id="p-deduc" style="display:'+(mode==='deduction'?'block':'none')+'">'+deducPanel+'</div><div id="p-caut" style="display:'+(mode==='caution'?'block':'none')+'">'+cautPanel+'</div><div id="p-aucun" style="display:'+(mode==='aucune'?'block':'none')+'">'+aucunPanel+'</div><div class="fr2"><div class="fg"><label>Date depot</label><input class="fc" id="pddep" type="date" value="'+(p&&p.date_depot?p.date_depot:'')+'"></div><div class="fg"><label>Date paiement</label><input class="fc" id="pdpay" type="date" value="'+(p&&p.date_paiement?p.date_paiement:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="pstat">'+objEnts(SMP).map(function(e){return '<option value="'+e[0]+'"'+(p&&p.statut===e[0]?' selected':!p&&e[0]==='en_attente'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>';
+  // Section Revision de prix - rendu via updateRevisionSection() apres ouverture
+  var revisionPlaceholder='<div id="p-revision" style="margin-top:8px"></div>';
+  return '<div class="fg"><label>Marche *</label><select class="fc" id="pmar" onchange="reloadCRG();updateRevisionSection();">'+marcheOpts+'</select></div><div class="fr2"><div class="fg"><label>N Decompte *</label><input class="fc" id="pnum" value="'+esc(p?p.numero:'')+'"></div><div class="fg"><label>Type</label><select class="fc" id="ptype"><option value="provisoire"'+(p&&p.type==='provisoire'?' selected':!p?' selected':'')+'>Provisoire</option><option value="definitif"'+(p&&p.type==='definitif'?' selected':'')+'>Definitif</option></select></div></div>'+revisionPlaceholder+'<div class="fr2"><div class="fg"><label>Montant brut (MAD) *</label><input class="fc" id="pmnt" type="number" value="'+(p?p.montant_brut:'')+'" placeholder="0" oninput="calcNet()"></div><div></div></div><div class="fg"><label>Mode de retenue de garantie</label><div class="mode-btn-grp" style="margin-top:4px"><button type="button" class="mode-btn'+(mode==='deduction'?' on':'')+'" onclick="setMode(\'deduction\')">Deduction directe</button><button type="button" class="mode-btn'+(mode==='caution'?' on':'')+'" onclick="setMode(\'caution\')">Caution bancaire</button><button type="button" class="mode-btn'+(mode==='aucune'?' on':'')+'" onclick="setMode(\'aucune\')">Aucune retenue</button></div></div><div id="p-deduc" style="display:'+(mode==='deduction'?'block':'none')+'">'+deducPanel+'</div><div id="p-caut" style="display:'+(mode==='caution'?'block':'none')+'">'+cautPanel+'</div><div id="p-aucun" style="display:'+(mode==='aucune'?'block':'none')+'">'+aucunPanel+'</div><div class="fr2"><div class="fg"><label>Date depot</label><input class="fc" id="pddep" type="date" value="'+(p&&p.date_depot?p.date_depot:'')+'"></div><div class="fg"><label>Date paiement</label><input class="fc" id="pdpay" type="date" value="'+(p&&p.date_paiement?p.date_paiement:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="pstat">'+objEnts(SMP).map(function(e){return '<option value="'+e[0]+'"'+(p&&p.statut===e[0]?' selected':!p&&e[0]==='en_attente'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>';
 }
 function setMode(mode){
   document.querySelectorAll('.mode-btn').forEach(function(b,i){b.classList.toggle('on',['deduction','caution','aucune'][i]===mode);});
@@ -884,8 +893,8 @@ function setMode(mode){
 }
 function getMode(){var btns=document.querySelectorAll('.mode-btn');var modes=['deduction','caution','aucune'];for(var i=0;i<btns.length;i++){if(btns[i].classList.contains('on'))return modes[i];}return'deduction';}
 function reloadCRG(){
-  var mid=parseInt(v('pmar'));var sel=document.getElementById('pcrg');if(!sel)return;
-  var opts=S.cautions.filter(function(c){return c.type==='retenue_garantie'&&c.marche_id==mid;}).map(function(c){return '<option value="'+c.id+'">'+c.num+' - '+c.banque+' - '+fmad(c.montant)+'</option>';}).join('');
+  var mid=v('pmar');var sel=document.getElementById('pcrg');if(!sel)return;
+  var opts=S.cautions.filter(function(c){return c.type==='retenue_garantie'&&String(c.marche_id)==String(mid);}).map(function(c){return '<option value="'+c.id+'">'+c.num+' - '+c.banque+' - '+fmad(c.montant)+'</option>';}).join('');
   sel.innerHTML='<option value="">- Selectionner -</option>'+opts;
 }
 function calcNet(){
@@ -987,7 +996,7 @@ function openMod(title,html,onSave){
   document.getElementById('mbox').innerHTML='<div class="mh"><div class="mt">'+title+'</div><button class="mcl" onclick="closeMod()">x</button></div><div class="mb2">'+html+'</div><div class="mf"><button class="btn" onclick="closeMod()">Annuler</button>'+(onSave?'<button class="btn btn-prim" onclick="S._sv&&S._sv()">Enregistrer</button>':'<button class="btn btn-prim" onclick="closeMod()">Fermer</button>')+'</div>';
   S._sv=onSave;document.getElementById('mod').classList.add('show');
 }
-function closeMod(){document.getElementById('mod').classList.remove('show');S._sv=null;_editingMarcheId=null;}
+function closeMod(){document.getElementById('mod').classList.remove('show');S._sv=null;_editingMarcheId=null;_editingPaiementId=null;}
 function modOut(e){if(e.target.id==='mod')closeMod();}
 
 // INIT
@@ -1664,14 +1673,14 @@ function downloadBordereauTemplate(){
   if(typeof XLSX==='undefined'){toast('XLSX non charge');return;}
   var wb=XLSX.utils.book_new();
   var data=[
-    ['N Poste','Designation','Unite','Quantite','PU'],
-    ['01.1','Terrassement generaux','m3',1500,85],
-    ['01.2','Fouille en rigole pour semelles','m3',200,120],
-    ['02.1','Beton de proprete','m3',50,800],
-    ['','','','','']
+    ['N Poste','Designation de la prestation','Unite','Quantite','Prix unitaire (H.T)','Total (H.T)'],
+    ['1','Exemple : Installation equipement A','U',2,28000,56000],
+    ['2','Exemple : Fourniture materiel B','ML',150,850,127500],
+    ['3','Exemple : Main d\'oeuvre pose','H',40,250,10000],
+    ['','','','','','']
   ];
   var ws=XLSX.utils.aoa_to_sheet(data);
-  ws['!cols']=[{wch:10},{wch:40},{wch:8},{wch:12},{wch:12}];
+  ws['!cols']=[{wch:10},{wch:40},{wch:10},{wch:12},{wch:18},{wch:15}];
   XLSX.utils.book_append_sheet(wb,ws,'Bordereau');
   XLSX.writeFile(wb,'bordereau_template.xlsx');
   toast('Template telecharge');
@@ -1701,63 +1710,449 @@ function importBordereauExcel(e){
 
 function processBordereauRows(rows){
   if(!rows||rows.length===0){alert('Fichier vide');return;}
-  // Trouver la ligne d'en-tete
+
+  // Normalisation : enleve accents, espaces multiples, caracteres speciaux
+  function normalizeHeader(s){
+    if(!s) return '';
+    return String(s).toLowerCase()
+      .replace(/[°\.\,\:\;\(\)\[\]\/\\\-_]/g,' ')  // remplace caracteres speciaux par espace
+      .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ûü]/g,'u')
+      .replace(/\s+/g,' ').trim();
+  }
+
+  // Trouver la ligne d'en-tete : chercher une ligne qui contient au moins 3 mots-cles typiques
   var headerIdx=-1;
-  for(var i=0;i<Math.min(rows.length,5);i++){
-    var r=(rows[i]||[]).map(function(x){return x?String(x).toLowerCase().trim():'';});
-    if(r.indexOf('n poste')>=0||r.indexOf('numero')>=0||(r[0]&&r[0].indexOf('poste')>=0)){headerIdx=i;break;}
+  var HEADER_KEYWORDS = ['poste','prestation','designation','unite','quantite','prix','total'];
+  for(var i=0;i<Math.min(rows.length,15);i++){
+    var r=(rows[i]||[]).map(normalizeHeader);
+    var matches=0;
+    for(var j=0;j<r.length;j++){
+      for(var k=0;k<HEADER_KEYWORDS.length;k++){
+        if(r[j].indexOf(HEADER_KEYWORDS[k])>=0){ matches++; break; }
+      }
+    }
+    if(matches>=3){ headerIdx=i; break; }
   }
   if(headerIdx<0){
-    alert('En-tete introuvable.\nColonnes attendues : N Poste | Designation | Unite | Quantite | PU');
+    alert('En-tete introuvable.\nColonnes attendues : N Poste (ou N° P), Designation (ou Prestation), Unite, Quantite, PU (ou Prix unitaire)');
     return;
   }
-  var headers=rows[headerIdx].map(function(h){return h?String(h).trim().toLowerCase():'';});
+
+  var headers=rows[headerIdx].map(normalizeHeader);
+
+  // findCol itere KEYWORDS D'ABORD puis colonnes : le keyword le plus specifique
+  // est teste contre toutes les colonnes avant de passer au suivant plus generique
+  // Cela evite que "prix" matche "n des prix" avant que "prix unitaire" matche la bonne colonne
   function findCol(keywords){
-    for(var j=0;j<headers.length;j++){
-      for(var k=0;k<keywords.length;k++){
-        if(headers[j].indexOf(keywords[k])>=0)return j;
+    for(var k=0;k<keywords.length;k++){
+      for(var j=0;j<headers.length;j++){
+        var h=headers[j];
+        if(h===keywords[k] || h.indexOf(keywords[k])>=0) return j;
       }
     }
     return -1;
   }
-  var iNum=findCol(['n poste','poste','numero','num']);
-  var iDes=findCol(['designation','libelle','description']);
-  var iUni=findCol(['unite','un']);
-  var iQte=findCol(['quantite','qte','qty']);
-  var iPU=findCol(['pu','prix unitaire','prix']);
-  if(iNum<0||iDes<0||iQte<0||iPU<0){alert('Colonnes manquantes : N Poste, Designation, Quantite, PU requises');return;}
-  var postes=[];var errors=[];
-  for(var k=headerIdx+1;k<rows.length;k++){
-    var row=rows[k];if(!row||row.every(function(c){return !c;}))continue;
-    var num=row[iNum]?String(row[iNum]).trim():'';
-    var des=row[iDes]?String(row[iDes]).trim():'';
-    var qte=parseFloat(row[iQte])||0;
-    var pu=parseFloat(row[iPU])||0;
-    if(!num && !des)continue;
-    if(!num){errors.push('Ligne '+(k+1)+' : N Poste manquant');continue;}
-    if(qte<=0){errors.push('Ligne '+(k+1)+' : Quantite invalide');continue;}
-    if(pu<=0){errors.push('Ligne '+(k+1)+' : PU invalide');continue;}
-    postes.push({num:num,designation:des,unite:iUni>=0&&row[iUni]?String(row[iUni]).trim():'',quantite:qte,pu_initial:pu});
+
+  function findColExcept(keywords, excludedCols){
+    for(var k=0;k<keywords.length;k++){
+      for(var j=0;j<headers.length;j++){
+        if(excludedCols.indexOf(j)>=0) continue;
+        var h=headers[j];
+        if(h===keywords[k] || h.indexOf(keywords[k])>=0) return j;
+      }
+    }
+    return -1;
   }
+
+  // Ordre : du plus specifique au plus generique
+  var iNum = findCol(['n des prix', 'n prix', 'n poste', 'n p', 'no poste', 'numero poste', 'numero', 'num poste', 'poste', 'prix n', 'num']);
+  var iDes = findCol(['designation de la prestation', 'designation prestation', 'designation', 'prestation', 'libelle', 'description']);
+  var iUni = findCol(['unite', 'un']);
+  var iQte = findCol(['quantite', 'qte', 'qty', 'qtt']);
+  // Pour PU : d'abord patterns specifiques, puis "prix" en dernier recours
+  // On EXCLUT les colonnes deja utilisees pour Num pour eviter la confusion avec "n des prix"
+  var iPU  = findColExcept(['prix unitaire en dh', 'prix unitaire hors', 'prix unitaire h t', 'prix unitaire ht', 'prix unitaire', 'pu h t', 'pu ht', 'pu', 'prix'], [iNum]);
+
+  if(iNum<0 || iDes<0 || iQte<0 || iPU<0){
+    var missing=[];
+    if(iNum<0)missing.push('N Poste');
+    if(iDes<0)missing.push('Designation');
+    if(iQte<0)missing.push('Quantite');
+    if(iPU<0)missing.push('PU');
+    alert('Colonnes manquantes : '+missing.join(', ')+'\n\nEn-tete detecte (ligne '+(headerIdx+1)+') :\n'+headers.filter(function(h){return h;}).join(' | '));
+    return;
+  }
+
+  var postes=[]; var errors=[]; var ignoredTotals=0;
+  for(var k=headerIdx+1;k<rows.length;k++){
+    var row=rows[k];
+    if(!row || row.every(function(c){return c===null || c===undefined || c==='';})) continue;
+
+    var numRaw = row[iNum]!=null ? String(row[iNum]).trim() : '';
+    var des    = row[iDes]!=null ? String(row[iDes]).trim() : '';
+
+    // Ignorer les lignes TOTAL / TVA / TTC / mentions legales silencieusement
+    var numLow = (numRaw+' '+des).toLowerCase();
+    if(numLow.indexOf('total')>=0 || numLow.indexOf('tva')>=0 || numLow.indexOf('t.t.c')>=0 || numLow.indexOf('ttc')>=0 || numLow.indexOf('h.t')>=0 || numLow.indexOf('sous total')>=0 || numLow.indexOf('arrete')>=0 || numLow.indexOf('arrêté')>=0 || numLow.indexOf('fait a')>=0 || numLow.indexOf('signature')>=0 || numLow.indexOf('cachet')>=0 || numLow.indexOf('concurrent')>=0 || numLow.indexOf('somme toute')>=0){
+      ignoredTotals++;
+      continue;
+    }
+
+    var qte = parseFloat(String(row[iQte]).replace(',','.'))||0;
+    var pu  = parseFloat(String(row[iPU]).replace(',','.'))||0;
+
+    if(!numRaw && !des) continue;
+    if(!numRaw){ errors.push('Ligne '+(k+1)+' : N Poste manquant'); continue; }
+    if(qte<=0){ errors.push('Ligne '+(k+1)+' : Quantite invalide ('+row[iQte]+')'); continue; }
+    if(pu<=0){ errors.push('Ligne '+(k+1)+' : PU invalide ('+row[iPU]+')'); continue; }
+
+    postes.push({
+      num: numRaw,
+      designation: des,
+      unite: iUni>=0 && row[iUni]!=null ? String(row[iUni]).trim() : '',
+      quantite: qte,
+      pu_initial: pu
+    });
+  }
+
   if(!postes.length){
     alert('Aucun poste valide\n'+(errors.length?errors.slice(0,5).join('\n'):''));
     return;
   }
-  var msg=postes.length+' poste(s) a importer';
-  if(errors.length)msg+='\n'+errors.length+' erreur(s) ignoree(s)';
-  if(S._tmpPostes.length){msg+='\n\nRemplacer les '+S._tmpPostes.length+' postes existants ?';}
-  if(!confirm(msg))return;
-  S._tmpPostes=postes;
-  var m=_editingMarcheId?S.marches.find(function(x){return x.id===_editingMarcheId;}):null;
+
+  var msg = postes.length+' poste(s) a importer';
+  if(ignoredTotals>0) msg += '\n'+ignoredTotals+' ligne(s) TOTAL/TVA/TTC ignoree(s)';
+  if(errors.length) msg += '\n'+errors.length+' erreur(s) ignoree(s) :\n- '+errors.slice(0,3).join('\n- ');
+  if(S._tmpPostes.length) msg += '\n\nRemplacer les '+S._tmpPostes.length+' postes existants ?';
+  if(!confirm(msg)) return;
+
+  S._tmpPostes = postes;
+  var m = _editingMarcheId ? S.marches.find(function(x){return x.id===_editingMarcheId;}) : null;
   refreshPostesList(m);
-  toast('Import terminer : '+postes.length+' postes');
+  toast('Import termine : '+postes.length+' postes');
 }
 
 /* ========================================================================
    FIN SPRINT 1B
    ======================================================================== */
 
-window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();}).catch(function(){/* erreur deja toastee */});};
+/* ========================================================================
+   MULTI-UTILISATEURS : polling 5 min + bouton Rafraichir + indicateur
+   ======================================================================== */
+
+var _lastSyncAt = null; // Date de derniere synchro reussie
+var POLLING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+
+function updateSyncIndicator(){
+  var el = document.getElementById('sync-indicator');
+  if(!el) return;
+  if(!_lastSyncAt){ el.textContent='Chargement...'; el.className=''; return; }
+  var ageMs = Date.now() - _lastSyncAt.getTime();
+  var ageMin = Math.floor(ageMs / 60000);
+  var hhmm = _lastSyncAt.toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'});
+  if(ageMin < 1){
+    el.textContent = 'Synchro '+hhmm;
+  } else if(ageMin < 60){
+    el.textContent = 'Synchro '+hhmm+' ('+ageMin+'min)';
+  } else {
+    el.textContent = 'Synchro '+hhmm+' (!)';
+  }
+  el.className = ageMin >= 10 ? 'stale' : '';
+}
+
+function manualRefresh(){
+  var btn = document.getElementById('btn-refresh');
+  if(btn) btn.classList.add('syncing');
+  apiLoadAll().then(function(){
+    _lastSyncAt = new Date();
+    updateSyncIndicator();
+    render();
+    if(btn) btn.classList.remove('syncing');
+    toast('Donnees rafraichies');
+  }).catch(function(e){
+    if(btn) btn.classList.remove('syncing');
+    toast('Erreur refresh: '+e.message);
+  });
+}
+
+function isModalOpen(){
+  var mod = document.getElementById('mod');
+  return mod && (mod.classList.contains('show') || mod.style.display==='flex');
+}
+
+function pollingRefresh(){
+  // Skip si modal ouverte (l'utilisateur est en train d'editer)
+  if(isModalOpen()) return;
+  // Skip si onglet en arriere-plan
+  if(document.hidden) return;
+  // Skip si pas encore charge initialement
+  if(!S._loaded) return;
+  // Skip si l'utilisateur est en train de taper dans un input/textarea
+  var ae = document.activeElement;
+  if(ae && (ae.tagName==='INPUT' || ae.tagName==='TEXTAREA' || ae.tagName==='SELECT')) return;
+
+  apiLoadAll().then(function(){
+    _lastSyncAt = new Date();
+    updateSyncIndicator();
+    render();
+  }).catch(function(e){
+    console.warn('Polling refresh failed:', e.message);
+  });
+}
+
+// Mise a jour indicateur toutes les 30s (affichage uniquement, pas de fetch)
+setInterval(updateSyncIndicator, 30000);
+
+// Polling reel toutes les 5 min
+setInterval(pollingRefresh, POLLING_INTERVAL_MS);
+
+// Hook apiLoadAll pour memoriser la date
+var _origApiLoadAll = apiLoadAll;
+apiLoadAll = function(){
+  return _origApiLoadAll().then(function(res){
+    _lastSyncAt = new Date();
+    updateSyncIndicator();
+    return res;
+  });
+};
+
+/* ========================================================================
+   SPRINT 1B.2 : Calcul K automatique sur les decomptes
+   ======================================================================== */
+
+/* Etat temporaire pour le calcul du K dans le formulaire decompte */
+var _revCtx = { K:null, BAT:null, BAT0:null, periode:null, bordereau:null };
+
+/* Appele apres ouverture du formulaire decompte ET sur changement de marche */
+function updateRevisionSection(){
+  var wrap = document.getElementById('p-revision');
+  if(!wrap) return;
+  var midRaw = v('pmar');
+  if(!midRaw){ wrap.innerHTML=''; _revCtx={K:null,BAT:null,BAT0:null,periode:null,bordereau:null}; return; }
+
+  var m = S.marches.find(function(x){ return String(x.id)===String(midRaw); });
+  if(!m){ wrap.innerHTML=''; return; }
+
+  var bord = getBordereauForMarche(m.id);
+  var bat0 = bord ? (bord.BAT0_manuel!=null ? bord.BAT0_manuel : bord.BAT0) : null;
+
+  // Pas de bordereau ou pas de BAT0 -> pas de calcul K
+  if(!bord || bat0==null){
+    wrap.innerHTML = '<div class="sec" style="padding:10px;background:#FEF3C7;border:1px solid #FDE68A;border-radius:4px;font-size:12px;color:#78350f">'+
+      '<b>&#9888; Revision non configuree</b><br>'+
+      'Ce marche n\'a pas de bordereau avec BAT0 defini. Saisir le montant brut directement, ou configurer le bordereau (onglet "Bordereau / Revision" sur la fiche du marche).'+
+      '</div>';
+    _revCtx={K:null,BAT:null,BAT0:null,periode:null,bordereau:null};
+    document.getElementById('p-rev-activate') && (document.getElementById('p-rev-activate').checked=false);
+    return;
+  }
+
+  // Bordereau dispo : afficher la section revision
+  var pCurrent = S.paiements.find(function(x){ return String(x.id)===String(_editingPaiementId); });
+  var periodeSaved = pCurrent ? pCurrent.periode_realisation : '';
+  var mntInitialSaved = pCurrent ? pCurrent.montant_brut_initial : '';
+  var activateChecked = pCurrent && pCurrent.K_applique ? 'checked' : (pCurrent ? '' : 'checked');
+
+  wrap.innerHTML =
+    '<div class="sec" style="padding:12px;background:#E6EEE9;border:1px solid #B8CFC0;border-radius:4px">'+
+      '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
+        '<div style="font-size:13px;font-weight:600;color:#1F3A2E">Revision de prix</div>'+
+        '<label style="font-size:11px;color:#4A453F;display:flex;align-items:center;gap:6px;cursor:pointer">'+
+          '<input type="checkbox" id="p-rev-activate" '+activateChecked+' onchange="toggleRevisionInputs()"> Appliquer la revision de prix'+
+        '</label>'+
+      '</div>'+
+      '<div style="font-size:11px;color:#7A7369;margin-bottom:8px">'+
+        'Formule : P = P<sub>0</sub> &times; (a + b &times; BAT/BAT<sub>0</sub>) | '+
+        'Indice : <b>'+bord.type_indice+'</b> | '+
+        'BAT<sub>0</sub> = <b>'+bat0+'</b> ('+(bord.date_reference_BAT0||'reference du marche')+') | '+
+        'a = '+bord.coefficient_a+', b = '+bord.coefficient_b+
+      '</div>'+
+      '<div id="p-rev-inputs">'+
+        '<div class="fr2">'+
+          '<div class="fg"><label style="font-size:11px">Periode de realisation *</label><input class="fc" id="p-rev-periode" type="month" value="'+(periodeSaved||'')+'" oninput="recomputeK()"></div>'+
+          '<div class="fg"><label style="font-size:11px">Montant initial P<sub>0</sub> (MAD) *</label><input class="fc" id="p-rev-mnt-initial" type="number" value="'+(mntInitialSaved||'')+'" placeholder="Saisir le montant avant revision" oninput="recomputeK()"></div>'+
+        '</div>'+
+        '<div id="p-rev-result" style="margin-top:6px;font-size:12px;color:#4A453F"></div>'+
+      '</div>'+
+    '</div>';
+
+  _revCtx.bordereau = bord;
+  _revCtx.BAT0 = bat0;
+  // Trigger recompute si des valeurs pre-remplies
+  setTimeout(recomputeK, 0);
+  // Etat initial de la checkbox
+  setTimeout(toggleRevisionInputs, 0);
+}
+
+/* Active/desactive la section revision selon la checkbox */
+function toggleRevisionInputs(){
+  var cb = document.getElementById('p-rev-activate');
+  var inputs = document.getElementById('p-rev-inputs');
+  var pmnt = document.getElementById('pmnt');
+  if(!cb || !inputs) return;
+  if(cb.checked){
+    inputs.style.display='block';
+    if(pmnt){
+      pmnt.readOnly=true;
+      pmnt.style.background='#EDE8DE';
+      pmnt.title='Calcule automatiquement depuis P0 x K';
+    }
+    recomputeK();
+  } else {
+    inputs.style.display='none';
+    if(pmnt){
+      pmnt.readOnly=false;
+      pmnt.style.background='';
+      pmnt.title='';
+    }
+    _revCtx.K=null;_revCtx.BAT=null;_revCtx.periode=null;
+  }
+}
+
+/* Recalcule K et met a jour le montant brut du decompte */
+function recomputeK(){
+  var cb = document.getElementById('p-rev-activate');
+  if(!cb || !cb.checked) return;
+  var bord = _revCtx.bordereau;
+  if(!bord || _revCtx.BAT0==null){ return; }
+
+  var periode = v('p-rev-periode');
+  var mntInitial = vn('p-rev-mnt-initial');
+  var resultEl = document.getElementById('p-rev-result');
+  var pmnt = document.getElementById('pmnt');
+
+  if(!periode){
+    if(resultEl) resultEl.innerHTML = '<span style="color:#7A7369">&larr; Saisir la periode de realisation</span>';
+    _revCtx.K=null;_revCtx.BAT=null;_revCtx.periode=null;
+    return;
+  }
+
+  var indice = getIndiceForPeriode(periode);
+  var BAT = indice ? (indice[bord.type_indice]) : null;
+
+  if(BAT==null){
+    if(resultEl) resultEl.innerHTML = '<span style="color:#c2410c">&#9888; Indice '+bord.type_indice+' introuvable pour '+periode+' (aller sur page Indices HCP pour l\'ajouter)</span>';
+    _revCtx.K=null;_revCtx.BAT=null;_revCtx.periode=periode;
+    if(pmnt) pmnt.value='';
+    return;
+  }
+
+  var a = bord.coefficient_a || 0.15;
+  var b = bord.coefficient_b || 0.85;
+  var K = a + b * (BAT / _revCtx.BAT0);
+  var mntRevise = mntInitial ? Math.round(mntInitial * K * 100) / 100 : 0;
+
+  _revCtx.K = K;
+  _revCtx.BAT = BAT;
+  _revCtx.periode = periode;
+
+  var variation = ((K - 1) * 100).toFixed(2);
+  var variationSign = K >= 1 ? '+' : '';
+  var variationColor = K >= 1 ? '#065f46' : '#8B2A1C';
+
+  if(resultEl){
+    resultEl.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
+        '<div>'+
+          '<div style="font-size:11px;color:#7A7369">BAT periode ('+periode+')</div>'+
+          '<div style="font-family:var(--FM);font-size:14px;font-weight:600">'+BAT+'</div>'+
+        '</div>'+
+        '<div>'+
+          '<div style="font-size:11px;color:#7A7369">Coefficient K</div>'+
+          '<div style="font-family:var(--FM);font-size:14px;font-weight:600;color:'+variationColor+'">'+K.toFixed(4)+' ('+variationSign+variation+'%)</div>'+
+        '</div>'+
+      '</div>'+
+      (mntInitial ? '<div style="margin-top:6px;padding:6px 8px;background:#F5EAE6;border-radius:3px;font-size:12px">'+
+        'Montant revise = '+fmad(mntInitial)+' &times; '+K.toFixed(4)+' = <b>'+fmad(mntRevise)+'</b>'+
+      '</div>' : '');
+  }
+
+  // Mettre a jour le champ pmnt (montant brut du decompte)
+  if(pmnt) pmnt.value = mntRevise;
+  calcNet();
+}
+
+/* Hook newPaiement : afficher la section revision apres ouverture */
+var _originalNewPaiement_sprint1b2 = newPaiement;
+newPaiement = function(){
+  _editingPaiementId = null;
+  openMod('Nouveau decompte', paiementFormHTML(null), function(){
+    var mid=v('pmar'),mbrut=vn('pmnt'),num=v('pnum');
+    if(!mid||!mbrut||!num){alert('Champs obligatoires manquants');return;}
+    var mode=getMode();var ret=0,net=mbrut,crg=null;
+    if(mode==='deduction'){ret=vn('pret');net=mbrut-ret;}
+    else if(mode==='caution'){var cv=v('pcrg');crg=cv||null;net=mbrut;}
+    // Collecte des donnees revision
+    var cb = document.getElementById('p-rev-activate');
+    var revData = (cb && cb.checked && _revCtx.K!=null) ? {
+      periode_realisation: v('p-rev-periode')||null,
+      BAT_periode: _revCtx.BAT,
+      BAT0: _revCtx.BAT0,
+      K_applique: _revCtx.K,
+      type_indice: _revCtx.bordereau ? _revCtx.bordereau.type_indice : null,
+      montant_brut_initial: vn('p-rev-mnt-initial')||null
+    } : { periode_realisation:null, BAT_periode:null, BAT0:null, K_applique:null, type_indice:null, montant_brut_initial:null };
+    var newP = {
+      id:nidStr('p'), marche_id:mid, numero:num, type:v('ptype'),
+      montant_brut:mbrut, retenue:ret, net:net, mode_retenue:mode, caution_rg_id:crg,
+      date_depot:v('pddep')||null, date_paiement:v('pdpay')||null, statut:v('pstat'),
+      periode_realisation: revData.periode_realisation,
+      BAT_periode: revData.BAT_periode,
+      BAT0: revData.BAT0,
+      K_applique: revData.K_applique,
+      type_indice: revData.type_indice,
+      montant_brut_initial: revData.montant_brut_initial
+    };
+    saveItem('paiements', newP).then(function(){ sbStats();render();toast('Decompte cree'); });
+  });
+  // Apres ouverture : render revision section
+  setTimeout(updateRevisionSection, 0);
+};
+
+/* Hook editPaiement : idem */
+var _originalEditPaiement_sprint1b2 = editPaiement;
+editPaiement = function(id){
+  var p = S.paiements.find(function(x){ return String(x.id)===String(id); });
+  if(!p) return;
+  _editingPaiementId = id;
+  openMod('Modifier - '+p.numero, paiementFormHTML(p), function(){
+    var mode=getMode();var mbrut=vn('pmnt')||p.montant_brut;var ret=0,net=mbrut,crg=null;
+    if(mode==='deduction'){ret=vn('pret');net=mbrut-ret;}
+    else if(mode==='caution'){var cv=v('pcrg');crg=cv||null;net=mbrut;}
+    var cb = document.getElementById('p-rev-activate');
+    if(cb && cb.checked && _revCtx.K!=null){
+      p.periode_realisation = v('p-rev-periode')||null;
+      p.BAT_periode = _revCtx.BAT;
+      p.BAT0 = _revCtx.BAT0;
+      p.K_applique = _revCtx.K;
+      p.type_indice = _revCtx.bordereau ? _revCtx.bordereau.type_indice : null;
+      p.montant_brut_initial = vn('p-rev-mnt-initial')||null;
+    } else {
+      p.periode_realisation = null;
+      p.BAT_periode = null;
+      p.BAT0 = null;
+      p.K_applique = null;
+      p.type_indice = null;
+      p.montant_brut_initial = null;
+    }
+    p.marche_id=v('pmar');p.numero=v('pnum');p.type=v('ptype');
+    p.montant_brut=mbrut;p.retenue=ret;p.net=net;p.mode_retenue=mode;p.caution_rg_id=crg;
+    p.date_depot=v('pddep')||null;p.date_paiement=v('pdpay')||null;p.statut=v('pstat');
+    saveItem('paiements',p).then(function(){ sbStats();render();toast('Decompte mis a jour'); });
+  });
+  // Rendre la section revision au setTimeout(0) pour que les champs soient dans le DOM
+  setTimeout(updateRevisionSection, 0);
+};
+
+/* ========================================================================
+   FIN SPRINT 1B.2
+   ======================================================================== */
+
+/* ========================================================================
+   FIN MULTI-UTILISATEURS
+   ======================================================================== */
+
+window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
