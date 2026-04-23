@@ -1951,7 +1951,8 @@ function updateRevisionSection(){
   var pCurrent = S.paiements.find(function(x){ return String(x.id)===String(_editingPaiementId); });
   var periodeSaved = pCurrent ? pCurrent.periode_realisation : '';
   var mntInitialSaved = pCurrent ? pCurrent.montant_brut_initial : '';
-  var activateChecked = pCurrent && pCurrent.K_applique ? 'checked' : (pCurrent ? '' : 'checked');
+  // Case decochee par defaut : coche uniquement si decompte existant avec K
+  var activateChecked = pCurrent && pCurrent.K_applique ? 'checked' : '';
 
   wrap.innerHTML =
     '<div class="sec" style="padding:12px;background:#E6EEE9;border:1px solid #B8CFC0;border-radius:4px">'+
