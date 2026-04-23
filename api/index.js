@@ -2,7 +2,7 @@ const { CosmosClient } = require("@azure/cosmos");
 
 const ALLOWED = new Set([
   "mp_marches", "mp_aos", "mp_cautions", "mp_paiements",
-  "mp_bordereau", "mp_avancements", "mp_indices"
+  "mp_bordereau", "mp_avancements", "mp_indices", "mp_banques"
 ]);
 
 // Partition key field par container
@@ -13,7 +13,8 @@ const PK_PATH = {
   "mp_paiements":   "marcheId",
   "mp_bordereau":   "marcheId",
   "mp_avancements": "marcheId",
-  "mp_indices":     "type"
+  "mp_indices":     "type",
+  "mp_banques":     "id"
 };
 
 let _db = null;
