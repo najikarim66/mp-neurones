@@ -2276,10 +2276,409 @@ sbStats = function(){
    ======================================================================== */
 
 /* ========================================================================
+   IMPORT HISTORIQUE : charger les marches existants depuis Excel
+   ======================================================================== */
+
+/* Etat temporaire : liste des marches parses en attente d'import */
+var _importState = { rows: [], selected: {}, fileName: '' };
+
+/* Ajouter lien "Import historique" dans le sidebar apres "Indices HCP" */
+function addImportNavLink(){
+  if(document.querySelector('.ni[data-page="import"]'))return;
+  var indicesLink = document.querySelector('.ni[data-page="indices"]');
+  if(!indicesLink) return;
+  var newLink = document.createElement('div');
+  newLink.className = 'ni';
+  newLink.setAttribute('data-page','import');
+  newLink.innerHTML = '<span class="ni-ic">&#128228;</span>Import historique';
+  indicesLink.parentNode.insertBefore(newLink, indicesLink.nextSibling);
+  newLink.addEventListener('click', function(){nav('import');});
+}
+
+/* Hook render pour gerer la page 'import' */
+var _originalRender_import = render;
+render = function(){
+  if(S.page==='import'){pgImportHist();return;}
+  _originalRender_import();
+};
+
+/* Hook titres et labels nav */
+if(typeof TITLES!=='undefined') TITLES.import='Import historique des marches';
+
+/* Fonction utilitaire : convertir date Excel (serial ou string) vers YYYY-MM-DD */
+function excelDateToISO(v){
+  if(v===null || v===undefined || v==='' || v==='0000-00-00' || v===0 || v==='0') return null;
+  // Date object
+  if(v instanceof Date){
+    if(isNaN(v.getTime())) return null;
+    return v.toISOString().slice(0,10);
+  }
+  // Number : Excel serial number (days since 1899-12-30)
+  if(typeof v==='number' || /^\d+(\.\d+)?$/.test(String(v).trim())){
+    var n = parseFloat(v);
+    if(n < 25000 || n > 60000) return null; // plage raisonnable 1968-2064
+    var baseDate = new Date(1899, 11, 30); // 30 decembre 1899
+    var dt = new Date(baseDate.getTime() + n * 86400000);
+    if(isNaN(dt.getTime())) return null;
+    return dt.toISOString().slice(0,10);
+  }
+  // String : tenter YYYY-MM-DD ou DD/MM/YYYY
+  var s = String(v).trim();
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  if(/^\d{2}\/\d{2}\/\d{4}$/.test(s)){
+    var p = s.split('/');
+    return p[2]+'-'+p[1]+'-'+p[0];
+  }
+  try{
+    var d = new Date(s);
+    if(!isNaN(d.getTime())) return d.toISOString().slice(0,10);
+  }catch(e){}
+  return null;
+}
+
+/* Deduire le type travaux/fournitures/services depuis l'intitule */
+function deduireType(intitule){
+  if(!intitule) return 'travaux';
+  var s = String(intitule).toLowerCase()
+    .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ûü]/g,'u');
+  if(s.indexOf('fourniture')>=0 || s.indexOf('acquisition')>=0 || s.indexOf('achat')>=0 || s.indexOf('equipement')>=0 || s.indexOf('materiel')>=0 || s.indexOf('logiciel')>=0) return 'fournitures';
+  if(s.indexOf('maintenance')>=0 || s.indexOf('entretien')>=0 || s.indexOf('prestation')>=0 || s.indexOf('service')>=0 || s.indexOf('controle')>=0) return 'services';
+  return 'travaux'; // par defaut
+}
+
+/* Render de la page Import historique */
+function pgImportHist(){
+  var phT = document.getElementById('ph-t'); if(phT) phT.textContent = 'Import historique des marches';
+  var phS = document.getElementById('ph-s'); if(phS) phS.textContent = 'Charger les marches existants depuis un fichier Excel';
+  var btnNew = document.getElementById('btn-new'); if(btnNew) btnNew.style.display = 'none';
+
+  var pb = document.getElementById('pb');
+  if(!pb) return;
+
+  var html = '<div class="card">' +
+    '<div class="sh"><div class="st">Etape 1 - Selectionner le fichier Excel</div></div>' +
+    '<div style="font-size:13px;color:#4A453F;margin-bottom:12px">' +
+      'Le fichier doit contenir les colonnes : <b>N° marche</b>, <b>Intitule</b>, <b>Maitre d\'ouvrage</b>, <b>Montant</b>, et idealement <b>Date de commencement</b>, <b>Date Rec. provisoire</b>, <b>Date ret. garantie</b>, <b>Date Rec. definitive</b>.' +
+    '</div>' +
+    '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
+      '<label class="btn btn-prim" style="cursor:pointer">' +
+        '<input type="file" id="importHist_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importHistReadFile(event)">' +
+        '&#128228; Charger un fichier Excel' +
+      '</label>' +
+      '<button class="btn" onclick="importHistDownloadTemplate()">&#128190; Telecharger template</button>' +
+      (_importState.fileName ? '<span style="font-size:12px;color:#065f46">Fichier charge : <b>'+esc(_importState.fileName)+'</b> ('+_importState.rows.length+' lignes)</span>' : '') +
+    '</div>' +
+  '</div>';
+
+  if(_importState.rows.length > 0){
+    html += renderImportPreview();
+  }
+
+  pb.innerHTML = html;
+}
+
+/* Template Excel pour l'import */
+function importHistDownloadTemplate(){
+  if(typeof XLSX==='undefined'){toast('XLSX non charge');return;}
+  var wb = XLSX.utils.book_new();
+  var data = [
+    ['Etat','N° marche','Intitule','Maitre d\'ouvrage','Date Rec. provisoire','Date ret. garantie','Date Rec. definitive','Date de commencement','Montant'],
+    ['EN COURS','MRC-2025-001','Exemple : Fourniture installation switches reseau','Office National des Peches',null,null,null,'2025-07-10',500000],
+    ['EN COURS','MRC-2025-002','Exemple : Travaux d\'amenagement electrique','Ministere de la Sante',null,null,null,'2025-03-15',1200000],
+    ['','','','','','','','','']
+  ];
+  var ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:10},{wch:20},{wch:50},{wch:30},{wch:15},{wch:15},{wch:15},{wch:15},{wch:15}];
+  XLSX.utils.book_append_sheet(wb, ws, 'Marches');
+  XLSX.writeFile(wb, 'template_import_marches.xlsx');
+  toast('Template telecharge');
+}
+
+/* Lire et parser le fichier Excel */
+function importHistReadFile(e){
+  var input = e.target;
+  var file = input.files && input.files[0];
+  if(!file){return;}
+  _importState.fileName = file.name;
+  var reader = new FileReader();
+  reader.onload = function(ev){
+    try{
+      var data = new Uint8Array(ev.target.result);
+      var wb = XLSX.read(data, {type:'array', cellDates:true});
+      var ws = wb.Sheets[wb.SheetNames[0]];
+      var rows = XLSX.utils.sheet_to_json(ws, {header:1, defval:null, blankrows:false});
+      importHistParse(rows);
+    }catch(err){
+      console.error('Import error:', err);
+      alert('Erreur lecture fichier : '+err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsArrayBuffer(file);
+}
+
+/* Parser le tableau : detecter entete, extraire les lignes, normaliser */
+function importHistParse(rows){
+  if(!rows || rows.length===0){alert('Fichier vide');return;}
+
+  // Trouver la ligne d'entete
+  var headerIdx = -1;
+  for(var i=0;i<Math.min(rows.length,10);i++){
+    var r = (rows[i]||[]).map(function(x){return x?String(x).toLowerCase().trim():'';});
+    var hasMarche = r.some(function(c){return c.indexOf('marche')>=0 || c.indexOf('marché')>=0;});
+    var hasIntitule = r.some(function(c){return c.indexOf('intitul')>=0 || c.indexOf('objet')>=0;});
+    var hasMontant = r.some(function(c){return c.indexOf('montant')>=0 || c.indexOf('budget')>=0;});
+    if(hasMarche && hasIntitule && hasMontant){ headerIdx = i; break; }
+  }
+  if(headerIdx < 0){
+    alert('En-tete introuvable.\nLe fichier doit contenir au moins : N° marche, Intitule, Montant');
+    return;
+  }
+
+  var headers = rows[headerIdx].map(function(h){return h?String(h).toLowerCase().trim():'';});
+
+  function findColImport(keywords){
+    for(var k=0;k<keywords.length;k++){
+      for(var j=0;j<headers.length;j++){
+        if(headers[j].indexOf(keywords[k])>=0) return j;
+      }
+    }
+    return -1;
+  }
+
+  var iRef = findColImport(['n° marche','n marche','n° marché','n marché','reference','ref']);
+  var iInt = findColImport(['intitule','intitulé','objet','description']);
+  var iMo  = findColImport(['maitre d','maître d','mo']);
+  var iMnt = findColImport(['montant','budget']);
+  var iDcom= findColImport(['date de commencement','commencement','demarrage']);
+  var iDrp = findColImport(['rec provisoire','rec. provisoire','reception provisoire','récep. provisoire']);
+  var iDrg = findColImport(['ret garantie','ret. garantie','retenue garantie']);
+  var iDrd = findColImport(['rec definitive','rec. definitive','reception definitive','réc. définitive','rec. définitive']);
+
+  if(iRef<0 || iInt<0 || iMnt<0){
+    alert('Colonnes essentielles manquantes : N° marche, Intitule, Montant');
+    return;
+  }
+
+  // Parser chaque ligne
+  var parsed = [];
+  for(var k=headerIdx+1;k<rows.length;k++){
+    var row = rows[k];
+    if(!row || row.every(function(c){return c===null || c===undefined || c==='';})) continue;
+    var ref = row[iRef] ? String(row[iRef]).trim() : '';
+    var intitule = row[iInt] ? String(row[iInt]).trim() : '';
+    if(!ref && !intitule) continue;
+    if(!ref){
+      parsed.push({_row:k+1,_status:'error',_error:'Reference manquante',ref:'',intitule:intitule});
+      continue;
+    }
+
+    var mnt = parseFloat(String(row[iMnt]||'').replace(',','.')) || 0;
+    var mo  = iMo>=0 && row[iMo] ? String(row[iMo]).trim() : '';
+    var dcom = iDcom>=0 ? excelDateToISO(row[iDcom]) : null;
+    var drp  = iDrp>=0 ? excelDateToISO(row[iDrp]) : null;
+    var drg  = iDrg>=0 ? excelDateToISO(row[iDrg]) : null;
+    var drd  = iDrd>=0 ? excelDateToISO(row[iDrd]) : null;
+
+    var type = deduireType(intitule);
+    // Statut deduit : si date reception definitive renseignee = termine, sinon en_cours
+    var statut = drd ? 'termine' : 'en_cours';
+
+    var warnings = [];
+    if(mnt<=0) warnings.push('Montant 0');
+    if(!mo) warnings.push('MO vide');
+    if(!intitule) warnings.push('Intitule vide');
+
+    parsed.push({
+      _row: k+1,
+      _status: warnings.length>0 ? 'warning' : 'ok',
+      _warnings: warnings,
+      ref: ref,
+      titre: intitule.substring(0,80),
+      objet: intitule,
+      maitre_ouvrage: mo,
+      montant: mnt,
+      type: type,
+      statut: statut,
+      date_commencement: dcom,
+      date_reception_provisoire: drp,
+      date_reception_definitive: drd,
+      avancement: 0,
+      garantie: 5,
+      ordres_service: [],
+      _drg: drg // date ret garantie (pas encore mappee sur marche, info seulement)
+    });
+  }
+
+  _importState.rows = parsed;
+  _importState.selected = {};
+  // Par defaut, tous les OK et warnings sont coches, les errors decoches
+  parsed.forEach(function(p, idx){
+    _importState.selected[idx] = p._status !== 'error';
+  });
+
+  render();
+  toast(parsed.length + ' marche(s) parse(s) - verifier avant import');
+}
+
+/* Render du tableau de preview des marches parses */
+function renderImportPreview(){
+  var rows = _importState.rows;
+  var selCount = Object.keys(_importState.selected).filter(function(k){return _importState.selected[k];}).length;
+
+  // Detecter doublons avec marches existants
+  var existingRefs = {};
+  S.marches.forEach(function(m){ existingRefs[m.ref] = m; });
+
+  var totalSelected = 0;
+  rows.forEach(function(p, idx){
+    if(_importState.selected[idx] && p.montant) totalSelected += p.montant;
+  });
+
+  var rowsHtml = rows.map(function(p, idx){
+    var checked = _importState.selected[idx] ? 'checked' : '';
+    var statusBadge, statusColor;
+    if(p._status === 'error'){ statusBadge = 'Erreur'; statusColor = 'bd'; }
+    else if(p._status === 'warning'){ statusBadge = 'A verifier'; statusColor = 'bw'; }
+    else { statusBadge = 'OK'; statusColor = 'bs'; }
+
+    var existingMark = existingRefs[p.ref] ? '<span class="badge bd" style="font-size:10px" title="Un marche avec cette reference existe deja">Doublon</span>' : '';
+
+    var warnings = p._warnings && p._warnings.length ? ' - '+p._warnings.join(', ') : (p._error || '');
+
+    return '<tr'+(p._status==='error'?' style="background:#F5E6E3"':(p._status==='warning'?' style="background:#FEF3C7"':''))+'>'+
+      '<td><input type="checkbox" '+checked+' onchange="importHistToggle('+idx+')"'+(p._status==='error'?' disabled':'')+'></td>'+
+      '<td style="font-size:11px">L'+p._row+'</td>'+
+      '<td style="font-family:monospace;font-size:11px;font-weight:600">'+esc(p.ref)+' '+existingMark+'</td>'+
+      '<td style="font-size:12px">'+esc((p.titre||'').substring(0,50))+(p.titre&&p.titre.length>50?'...':'')+'</td>'+
+      '<td style="font-size:11px">'+esc((p.maitre_ouvrage||'').substring(0,30))+'</td>'+
+      '<td style="font-family:monospace;font-size:11px;text-align:right">'+(p.montant?fmad(p.montant):'-')+'</td>'+
+      '<td><span class="badge bn" style="font-size:10px">'+p.type+'</span></td>'+
+      '<td><span class="badge '+(p.statut==='termine'?'bs':'bi')+'" style="font-size:10px">'+(p.statut==='termine'?'Termine':'En cours')+'</span></td>'+
+      '<td style="font-size:11px">'+(p.date_commencement?fdat(p.date_commencement):'-')+'</td>'+
+      '<td><span class="badge '+statusColor+'" style="font-size:10px">'+statusBadge+'</span><div style="font-size:10px;color:#7A7369;margin-top:2px">'+esc(warnings)+'</div></td>'+
+    '</tr>';
+  }).join('');
+
+  var legend = '<div style="display:flex;gap:16px;font-size:12px;color:#4A453F;margin-bottom:10px;flex-wrap:wrap">'+
+    '<div><span class="badge bs">OK</span> tout est valide</div>'+
+    '<div><span class="badge bw">A verifier</span> warnings, importable</div>'+
+    '<div><span class="badge bd">Erreur</span> non importable</div>'+
+    '<div><span class="badge bd" style="font-size:10px">Doublon</span> existe deja en base</div>'+
+  '</div>';
+
+  var actions = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
+    '<button class="btn btn-sm" onclick="importHistSelectAll(true)">Tout cocher</button>'+
+    '<button class="btn btn-sm" onclick="importHistSelectAll(false)">Tout decocher</button>'+
+    '<button class="btn btn-sm" onclick="importHistSelectNonDoublons()">Cocher sans doublons</button>'+
+    '<span style="flex:1"></span>'+
+    '<span style="font-size:13px;color:#4A453F"><b>'+selCount+'</b> / '+rows.length+' selectionne(s) - Total : <b style="font-family:var(--FM)">'+fmad(totalSelected)+'</b></span>'+
+    '<button class="btn btn-prim" onclick="importHistCommit()" '+(selCount===0?'disabled':'')+'>Importer '+selCount+' marche(s)</button>'+
+  '</div>';
+
+  return '<div class="card">'+
+    '<div class="sh"><div class="st">Etape 2 - Verifier et importer</div></div>'+
+    legend+
+    actions+
+    '<div class="tw"><table><thead><tr>'+
+      '<th style="width:30px"><input type="checkbox" onchange="importHistSelectAll(this.checked)"></th>'+
+      '<th>Ligne</th><th>Reference</th><th>Intitule</th><th>MO</th><th style="text-align:right">Montant</th>'+
+      '<th>Type</th><th>Statut</th><th>Commencement</th><th>Diagnostic</th>'+
+    '</tr></thead><tbody>'+rowsHtml+'</tbody></table></div>'+
+  '</div>';
+}
+
+function importHistToggle(idx){
+  _importState.selected[idx] = !_importState.selected[idx];
+  render();
+}
+
+function importHistSelectAll(checked){
+  _importState.rows.forEach(function(p, idx){
+    if(p._status !== 'error') _importState.selected[idx] = checked;
+  });
+  render();
+}
+
+function importHistSelectNonDoublons(){
+  var existing = {};
+  S.marches.forEach(function(m){existing[m.ref]=1;});
+  _importState.rows.forEach(function(p, idx){
+    if(p._status === 'error' || existing[p.ref]){
+      _importState.selected[idx] = false;
+    } else {
+      _importState.selected[idx] = true;
+    }
+  });
+  render();
+}
+
+/* Commit : importer les marches coches dans Cosmos */
+function importHistCommit(){
+  var toImport = [];
+  _importState.rows.forEach(function(p, idx){
+    if(_importState.selected[idx] && p._status !== 'error'){
+      var m = {
+        id: nidStr('m'),
+        ref: p.ref,
+        titre: p.titre || p.ref,
+        objet: p.objet || '',
+        maitre_ouvrage: p.maitre_ouvrage || '',
+        type: p.type,
+        statut: p.statut,
+        montant: p.montant || 0,
+        avancement: 0,
+        garantie: 5,
+        date_commencement: p.date_commencement,
+        date_reception_provisoire: p.date_reception_provisoire,
+        date_reception_definitive: p.date_reception_definitive,
+        delai_execution: null,
+        date_fin_calculee: null,
+        date_attribution: null,
+        date_soumission: null,
+        ordres_service: []
+      };
+      toImport.push(m);
+    }
+  });
+
+  if(toImport.length === 0){alert('Rien a importer');return;}
+
+  if(!confirm('Importer '+toImport.length+' marche(s) dans la base ?\n\nAttention : cette action ajoute des nouveaux marches dans Cosmos (pas de remplacement, meme pour les doublons).'))return;
+
+  toast('Import en cours...');
+  var done = 0, failed = 0;
+
+  function next(i){
+    if(i >= toImport.length){
+      toast('Import termine : '+done+' OK, '+failed+' erreur(s)');
+      _importState = { rows:[], selected:{}, fileName:'' };
+      sbStats();
+      render();
+      return;
+    }
+    saveItem('marches', toImport[i]).then(function(){
+      done++;
+      setStatus('Import '+done+'/'+toImport.length);
+      next(i+1);
+    }).catch(function(e){
+      console.error('Erreur import '+toImport[i].ref+':', e);
+      failed++;
+      next(i+1);
+    });
+  }
+  next(0);
+}
+
+/* ========================================================================
+   FIN IMPORT HISTORIQUE
+   ======================================================================== */
+
+/* ========================================================================
    FIN MULTI-UTILISATEURS
    ======================================================================== */
 
-window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
+window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
