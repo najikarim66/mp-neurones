@@ -188,9 +188,28 @@ input,select,textarea{font-family:inherit}
 @media screen and (max-width:768px){
   #wrap{display:flex;flex-direction:column;height:100vh;overflow:hidden}
   
+  /* ─── FIX MOBILE : Sidebar en mode "tiroir" ────────────────────
+     Par défaut sur mobile, la sidebar est cachée hors écran (translateX -100%).
+     La classe .open (ajoutée par toggleSb()) la fait glisser de gauche.
+     Sans ces règles, la sidebar gardait sa largeur 230px (héritée desktop)
+     et masquait tout le contenu sur iPhone Chrome.
+  ────────────────────────────────────────────────────────────── */
+  #sb{
+    position:fixed;
+    top:0;left:0;bottom:0;
+    width:260px;max-width:80vw;
+    z-index:100;
+    -webkit-transform:translateX(-100%);
+    transform:translateX(-100%);
+    -webkit-transition:-webkit-transform .25s ease;
+    transition:transform .25s ease;
+    box-shadow:2px 0 12px rgba(0,0,0,.15);
+  }
   #sb.open{-webkit-transform:translateX(0);transform:translateX(0)}
   #sb.open ~ #sb-ov,.show{display:block}
   
+  /* Le contenu principal prend toute la largeur sur mobile */
+  #main{width:100%;flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch}
   
   .ham{display:-webkit-flex!important;display:flex!important;
        -webkit-align-items:center;align-items:center;
@@ -279,7 +298,7 @@ var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Re
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
 var API_BASE='/api/data';
-var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements', indices:'mp_indices', bordereaux:'mp_bordereau', banques:'mp_banques'};
+var CONTAINERS={aos:'mp_aos', marches:'mp_marches', cautions:'mp_cautions', paiements:'mp_paiements', indices:'mp_indices', bordereaux:'mp_bordereau', banques:'mp_banques', avenants:'mp_avenants'};
 
 /* ES5 polyfills */
 function objVals(o){return Object.keys(o).map(function(k){return o[k];});}
@@ -298,7 +317,7 @@ function nid(){return nidStr('n');} /* compat pour _osTemp */
 /* === Conversion marche_id <-> marcheId pour cautions/paiements/bordereaux === */
 function toCosmos(ckey, item){
   var c=cp(item);
-  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux'){
+  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux' || ckey==='avenants'){
     if(c.marche_id!=null) c.marcheId=String(c.marche_id);
     delete c.marche_id;
   }
@@ -308,7 +327,7 @@ function toCosmos(ckey, item){
 function fromCosmos(ckey, item){
   var c={};
   Object.keys(item).forEach(function(k){if(k[0]!=='_') c[k]=item[k];});
-  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux'){
+  if(ckey==='cautions' || ckey==='paiements' || ckey==='bordereaux' || ckey==='avenants'){
     if(c.marcheId!=null) c.marche_id=c.marcheId;
     delete c.marcheId;
   }
@@ -346,9 +365,9 @@ function apiDelete(ckey, id, pkValue){
 /* === Load initial === */
 function apiLoadAll(){
   setStatus('Chargement...');
-  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices(), apiListSafe('bordereaux'), apiListSafe('banques')])
+  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices(), apiListSafe('bordereaux'), apiListSafe('banques'), apiListSafe('avenants')])
   .then(function(res){
-    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4]; S.bordereaux=res[5]; S.banques=res[6];
+    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4]; S.bordereaux=res[5]; S.banques=res[6]; S.avenants=res[7]||[];
     S._loaded=true;
     setStatus('Synchronise '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     sbStats();
@@ -664,9 +683,9 @@ function marcheFormHTML(m){
   (S._osTemp||[]).forEach(function(o){
     osHtml+='<div class="os-row '+(o.type==='arret'?'os-arret':'os-reprise')+'"><div><span class="badge '+(o.type==='arret'?'bw':'bs')+'" style="font-size:11px">'+(o.type==='arret'?'Arret':'Reprise')+'</span></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Date</label><input class="fc" style="margin-top:2px" type="date" value="'+(o.date||'')+'" id="os_date_'+o.id+'" oninput="updateDFC()"></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Motif</label><input class="fc" style="margin-top:2px" type="text" value="'+esc(o.motif||'')+'" id="os_motif_'+o.id+'"></div><div style="padding-bottom:2px"><button class="act red" onclick="removeOS('+o.id+')">X</button></div></div>';
   });
-  var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td style="font-size:11px">'+fdat(c.date_expiration)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('');
+  var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('');
   var dfin=m?m.date_fin_calculee||'':'';
-  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'"></div></div><div class="fr2"><div class="fg"><label>Reception definitive</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'"></div><div></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Expiration</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('nc', '')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div class="fg"><label>Expiration</label><input class="fc" id="nc_expiration" type="date"></div></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+banquesDatalistHTML();
+  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'" oninput="updateDRD()"></div></div><div class="fr2"><div class="fg"><label>Delai de garantie (mois)</label><input class="fc" id="mdgar_mois" type="number" min="0" max="60" value="'+(m&&m.delai_garantie_mois!=null?m.delai_garantie_mois:12)+'" placeholder="12" oninput="updateDRD()" title="Standard CCAG-T: 12 mois"></div><div class="fg"><label>Reception definitive (calculee)</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'" readonly style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: reception provisoire + delai de garantie"></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-totals">'+renderCautionTotals(m,mc)+'</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('nc', '')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+renderAvenantsSection(m)+banquesDatalistHTML();
 }
 
 var _editingMarcheId=null;
@@ -700,6 +719,148 @@ function updateDFC(){
   var inf=document.getElementById('os-info');
   if(inf){if(susp>0){inf.style.display='block';inf.textContent='Total jours d\'arret: '+susp+' jours - Date fin reportee d\'autant.';}else inf.style.display='none';}
 }
+
+// ─── Calcul automatique reception definitive = reception provisoire + delai garantie ───
+function updateDRD(){
+  var drp=v('mdrp');
+  var dgarMois=parseInt(v('mdgar_mois'));
+  var el=document.getElementById('mdrd');
+  if(!el)return;
+  if(!drp||isNaN(dgarMois)||dgarMois<0){el.value='';return;}
+  // Ajouter X mois a la date de reception provisoire
+  var d=new Date(drp);
+  d.setMonth(d.getMonth()+dgarMois);
+  // Format YYYY-MM-DD pour input type date
+  var iso=d.toISOString().slice(0,10);
+  el.value=iso;
+}
+
+// ─── Totaux cautions par type avec alertes 3% CD / 7% RG (CCAG-T Maroc) ─────
+// Calcule sur les cautions ACTIVES uniquement (non liberees)
+function renderCautionTotals(m,mc){
+  if(!m)return '';
+  var montantMarche=Number(m.montant)||0;
+  if(montantMarche<=0)return '<div style="font-size:11px;color:#7A7369;margin-bottom:8px">Saisir le montant du marche pour voir les totaux.</div>';
+  // Filtrer cautions actives uniquement
+  var actives=mc.filter(function(c){return c.statut==='active';});
+  // Totaux par type
+  var totCD=0,totRG=0,totProv=0;
+  actives.forEach(function(c){
+    var mnt=Number(c.montant)||0;
+    if(c.type==='bonne_execution')totCD+=mnt;
+    else if(c.type==='retenue_garantie')totRG+=mnt;
+    else if(c.type==='provisoire')totProv+=mnt;
+  });
+  var pctCD=montantMarche>0?(totCD/montantMarche*100):0;
+  var pctRG=montantMarche>0?(totRG/montantMarche*100):0;
+  var pctProv=montantMarche>0?(totProv/montantMarche*100):0;
+  // Style alerte si depassement
+  var styleCD=pctCD>3?'background:#fef2f2;border:1px solid #ef4444;color:#991b1b':'background:#f0fdf4;border:1px solid #86efac;color:#065f46';
+  var styleRG=pctRG>7?'background:#fef2f2;border:1px solid #ef4444;color:#991b1b':'background:#f0fdf4;border:1px solid #86efac;color:#065f46';
+  var iconCD=pctCD>3?'⚠️ ':'✓ ';
+  var iconRG=pctRG>7?'⚠️ ':'✓ ';
+  var msgCD=pctCD>3?' (DEPASSE 3% CCAG-T)':'';
+  var msgRG=pctRG>7?' (DEPASSE 7% CCAG-T)':'';
+  var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">';
+  if(totCD>0||true){
+    html+='<div style="'+styleCD+';padding:6px 10px;border-radius:4px;font-size:11px"><div style="font-weight:600">'+iconCD+'Total Caution Definitive</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totCD)+' <span style="font-size:10px">('+pctCD.toFixed(2)+'%)</span></div><div style="font-size:9px;margin-top:1px">Plafond CCAG-T: 3%'+msgCD+'</div></div>';
+  }
+  if(totRG>0||true){
+    html+='<div style="'+styleRG+';padding:6px 10px;border-radius:4px;font-size:11px"><div style="font-weight:600">'+iconRG+'Total Retenue de Garantie</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totRG)+' <span style="font-size:10px">('+pctRG.toFixed(2)+'%)</span></div><div style="font-size:9px;margin-top:1px">Plafond CCAG-T: 7%'+msgRG+'</div></div>';
+  }
+  html+='</div>';
+  if(totProv>0){
+    html+='<div style="background:#fffbeb;border:1px solid #fbbf24;color:#92400e;padding:5px 10px;border-radius:4px;font-size:11px;margin-bottom:8px"><strong>Caution Provisoire</strong> : '+fmad(totProv)+' ('+pctProv.toFixed(2)+'%) - Active uniquement avant attribution</div>';
+  }
+  return html;
+}
+
+// ─── Section avenants : liste + bouton nouveau ─────────────────────
+function renderAvenantsSection(m){
+  if(!m||!m.id)return '';// pas d'avenants pour un nouveau marche non sauvegarde
+  var avs=(S.avenants||[]).filter(function(a){return a.marche_id===m.id;}).sort(function(a,b){return (a.numero||0)-(b.numero||0);});
+  var montantInitial=Number(m.montant)||0;
+  var totalAvenants=avs.reduce(function(s,a){return s+(Number(a.montant_ht)||0);},0);
+  var montantActuel=montantInitial+totalAvenants;
+  var delaiSupplementaire=avs.reduce(function(s,a){return s+(Number(a.delai_supplementaire_jours)||0);},0);
+  var html='<div class="sec"><div class="sec-t">Avenants au marche</div>';
+  if(avs.length){
+    html+='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Montant HT</th><th>Delai sup.</th><th>Garantie</th><th></th></tr></thead><tbody>';
+    avs.forEach(function(a){
+      var sign=Number(a.montant_ht)>=0?'+':'';
+      html+='<tr><td><span class="badge bi" style="font-size:10px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:11px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:11px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:11px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:11px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td><button class="act red" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
+    });
+    html+='</tbody></table>';
+    // Recap
+    html+='<div style="background:#f0fdf4;border:1px solid #86efac;color:#065f46;padding:8px 12px;border-radius:4px;font-size:11px;margin-bottom:10px">';
+    html+='<div>Montant initial: <strong>'+fmad(montantInitial)+'</strong></div>';
+    html+='<div>Avenants cumules: <strong>'+(totalAvenants>=0?'+':'')+fmad(totalAvenants)+'</strong></div>';
+    html+='<div style="border-top:1px solid #86efac;margin-top:4px;padding-top:4px;font-size:13px">Montant actuel: <strong>'+fmad(montantActuel)+'</strong></div>';
+    if(delaiSupplementaire>0)html+='<div style="margin-top:3px">Delai total supplementaire: <strong>+'+delaiSupplementaire+' jours</strong></div>';
+    html+='</div>';
+  }else{
+    html+='<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucun avenant.</div>';
+  }
+  html+='<button class="btn btn-sm btn-prim" onclick="showAddAvenant(\''+m.id+'\')">+ Nouvel avenant</button></div>';
+  return html;
+}
+
+// ─── Modal nouveau avenant ──────────────────────────────────────
+function showAddAvenant(marcheId){
+  var avs=(S.avenants||[]).filter(function(a){return a.marche_id===marcheId;});
+  var nextNum=avs.length+1;
+  var html='<div class="fr2"><div class="fg"><label>Numero avenant *</label><input class="fc" id="av_numero" type="number" value="'+nextNum+'" min="1"></div><div class="fg"><label>Date de signature *</label><input class="fc" id="av_date" type="date" value="'+(new Date().toISOString().slice(0,10))+'"></div></div>';
+  html+='<div class="fg"><label>Objet de l\'avenant *</label><textarea class="fc" id="av_objet" rows="2" placeholder="Ex: Augmentation de la prestation X"></textarea></div>';
+  html+='<div class="fr2"><div class="fg"><label>Montant HT (MAD)</label><input class="fc" id="av_montant" type="number" placeholder="0 (peut etre negatif)"></div><div class="fg"><label>Delai supplementaire (jours)</label><input class="fc" id="av_delai" type="number" min="0" placeholder="0"></div></div>';
+  html+='<div class="fg"><label>Delai de garantie modifie (mois) - optionnel</label><input class="fc" id="av_garantie" type="number" min="0" max="60" placeholder="Laisser vide si pas de changement"></div>';
+  openMod('Nouvel avenant',html,function(){
+    var numero=parseInt(v('av_numero'));
+    var dateSig=v('av_date');
+    var objet=v('av_objet');
+    if(!numero||!dateSig||!objet){alert('Numero, date et objet sont obligatoires');return;}
+    var montantHT=parseFloat(v('av_montant'))||0;
+    var delaiSup=parseInt(v('av_delai'))||0;
+    var garantieMois=v('av_garantie')!==''?parseInt(v('av_garantie')):null;
+    var newAv={id:nidStr('av'),marche_id:marcheId,numero:numero,date_signature:dateSig,objet:objet,montant_ht:montantHT,delai_supplementaire_jours:delaiSup,delai_garantie_mois:garantieMois,created_at:new Date().toISOString()};
+    if(!S.avenants)S.avenants=[];
+    S.avenants.push(newAv);
+    saveItem('avenants',newAv).then(function(){toast('Avenant cree');refreshAvenantsInModal(marcheId);}).catch(function(e){toast('Erreur: '+e.message);});
+  });
+}
+
+// ─── Suppression avenant ─────────────────────────────────────────
+function delAvenant(id){
+  if(!confirm('Supprimer cet avenant ?'))return;
+  var av=(S.avenants||[]).find(function(a){return a.id===id;});
+  if(!av){toast('Avenant introuvable');return;}
+  var marcheId=av.marche_id;
+  deleteItem('avenants',id,marcheId).then(function(){
+    S.avenants=(S.avenants||[]).filter(function(a){return a.id!==id;});
+    refreshAvenantsInModal(marcheId);
+    toast('Avenant supprime');
+  }).catch(function(e){toast('Erreur: '+e.message);});
+}
+
+// ─── Refresh de la section avenants apres ajout/suppression ────
+function refreshAvenantsInModal(marcheId){
+  var m=S.marches.find(function(x){return x.id===marcheId;});
+  if(!m)return;
+  // Trouver le conteneur avenants (la div .sec qui contient "Avenants au marche")
+  var modBody=document.getElementById('mod-body')||document.querySelector('.mod-body');
+  if(!modBody)return;
+  // Chercher la section avenants (trouver le sec-t avec "Avenants au marche")
+  var secs=modBody.querySelectorAll('.sec');
+  for(var i=0;i<secs.length;i++){
+    var t=secs[i].querySelector('.sec-t');
+    if(t&&t.textContent.indexOf('Avenants')>=0){
+      // Remplacer le contenu de cette section
+      var temp=document.createElement('div');
+      temp.innerHTML=renderAvenantsSection(m);
+      if(temp.firstChild)secs[i].outerHTML=temp.firstChild.outerHTML;
+      return;
+    }
+  }
+}
 function newMarche(){
   S._tmpC=[];S._osTemp=[];_editingMarcheId=null;
   openMod('Nouveau marche',marcheFormHTML(null),function(){
@@ -708,8 +869,8 @@ function newMarche(){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
     var newId=nidStr('m');
-    S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_soumission:v('mdsoum')||null,date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
-    var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,date_expiration:c.date_expiration,statut:c.statut};});
+    S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_soumission:v('mdsoum')||null,date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,delai_garantie_mois:v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
+    var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,statut:c.statut};});
     var newM2=S.marches[S.marches.length-1];
     saveItem('marches',newM2).then(function(){return saveMany('cautions',newCautions);}).then(function(){S._tmpC=[];sbStats();render();toast('Marche cree');}).catch(function(e){toast('Erreur creation marche');});
   });
@@ -721,7 +882,7 @@ function editMarche(id){
   openMod('Modifier - '+m.ref,marcheFormHTML(m),function(){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
-    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
+    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.delai_garantie_mois=v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
     saveItem('marches',m).then(function(){sbStats();render();toast('Marche mis a jour');});
   });
 }
@@ -764,11 +925,11 @@ function confirmAddCaution(){
   if(!banque){alert('Banque obligatoire');return;}
   ensureBanqueExists(banque);
   if(_editingMarcheId){
-    var newCaut={id:nidStr('c'),marche_id:_editingMarcheId,type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'};
+    var newCaut={id:nidStr('c'),marche_id:_editingMarcheId,type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,statut:'active'};
     saveItem('cautions',newCaut).then(function(){refreshCautionListInModal(_editingMarcheId);}).catch(function(e){toast('Erreur: '+e.message);});
     /* sync via saveItem */
   }else{
-    S._tmpC.push({_tid:Date.now(),type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,date_expiration:v('nc_expiration')||null,statut:'active'});
+    S._tmpC.push({_tid:Date.now(),type:type,montant:montant,banque:banque,num:num,date_emission:v('nc_emission')||null,statut:'active'});
     refreshTmpCautionList();
   }
   hideAddCaution();toast('Caution ajoutee');
@@ -776,12 +937,15 @@ function confirmAddCaution(){
 function refreshCautionListInModal(mid){
   var mc=S.cautions.filter(function(c){return c.marche_id===mid;});
   var cont=document.getElementById('caution-list');if(!cont)return;
-  cont.innerHTML=mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Expiration</th><th>Statut</th><th></th></tr></thead><tbody>'+mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td style="font-size:11px">'+fdat(c.date_expiration)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('')+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';
+  cont.innerHTML=mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('')+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';
+  // Mettre à jour aussi les totaux en haut
+  var totDiv=document.getElementById('caution-totals');
+  if(totDiv){var m=S.marches.find(function(x){return x.id===mid;});if(m)totDiv.innerHTML=renderCautionTotals(m,mc);}
 }
 function refreshTmpCautionList(){
   var cont=document.getElementById('caution-list');if(!cont)return;
   if(!S._tmpC.length){cont.innerHTML='<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';return;}
-  cont.innerHTML='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Expiration</th><th></th></tr></thead><tbody>'+S._tmpC.map(function(c){return '<tr><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td style="font-size:11px">'+fdat(c.date_expiration)+'</td><td><button class="act red" onclick="delTmpCaution('+c._tid+')">X</button></td></tr>';}).join('')+'</tbody></table>';
+  cont.innerHTML='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th></th></tr></thead><tbody>'+S._tmpC.map(function(c){return '<tr><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td><button class="act red" onclick="delTmpCaution('+c._tid+')">X</button></td></tr>';}).join('')+'</tbody></table>';
 }
 function delTmpCaution(tid){S._tmpC=S._tmpC.filter(function(c){return c._tid!==tid;});refreshTmpCautionList();}
 function delCautionInline(id){
@@ -838,7 +1002,7 @@ function pgCautions(){
 }
 
 function cautionFormHTML(c){
-  return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar">'+S.marches.map(function(m){return '<option value="'+m.id+'"'+(c&&c.marche_id===m.id?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('')+'</select></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Expiration</label><input class="fc" id="cdex" type="date" value="'+(c&&c.date_expiration?c.date_expiration:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
+  return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar">'+S.marches.map(function(m){return '<option value="'+m.id+'"'+(c&&c.marche_id===m.id?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('')+'</select></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
   '<div class="sec" style="margin-top:8px;padding:10px;background:#F6F2EA;border-radius:4px"><div class="sec-t" style="font-size:12px;margin-bottom:6px">Suivi mainlevee (optionnel)</div><div class="fr2"><div class="fg"><label style="font-size:11px">Date demande mainlevee</label><input class="fc" id="cdemmain" type="date" value="'+(c&&c.date_demande_mainlevee?c.date_demande_mainlevee:'')+'" title="Date ou vous avez demande au MO de liberer la caution"></div><div class="fg"><label style="font-size:11px">Date liberation effective</label><input class="fc" id="cliber" type="date" value="'+(c&&c.date_liberation_effective?c.date_liberation_effective:'')+'" title="Date ou la banque a confirme le deblocage de l\'argent"></div></div><div class="fg"><label style="font-size:11px">Notes (relances, contacts MO)</label><input class="fc" id="cnotesmain" value="'+esc(c&&c.notes_mainlevee?c.notes_mainlevee:'')+'" placeholder="Ex: Relance envoyee le 15/04, interlocuteur M. Bennani"></div></div>'+
   banquesDatalistHTML();
 }
@@ -856,7 +1020,7 @@ function editCaution(id){
   var oldStatut=c.statut;
   openMod('Modifier caution - '+c.num,cautionFormHTML(c),function(){
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_expiration=v('cdex')||null;c.statut=v('cstat');
+    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.statut=v('cstat');
     c.date_demande_mainlevee=v('cdemmain')||null;
     c.date_liberation_effective=v('cliber')||null;
     c.notes_mainlevee=v('cnotesmain')||'';
@@ -1618,7 +1782,7 @@ editMarche = function(id){
     // Onglet Info : save marche
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
-    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
+    m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.delai_garantie_mois=v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
     var savePromises=[saveItem('marches',m)];
     // Onglet Bordereau : save si modifie
     var borContainer=document.getElementById('bor-config');

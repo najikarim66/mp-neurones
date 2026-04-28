@@ -1,8 +1,9 @@
-const { CosmosClient } = require("@azure/cosmos");
+﻿const { CosmosClient } = require("@azure/cosmos");
 
 const ALLOWED = new Set([
   "mp_marches", "mp_aos", "mp_cautions", "mp_paiements",
-  "mp_bordereau", "mp_avancements", "mp_indices", "mp_banques"
+  "mp_bordereau", "mp_avancements", "mp_indices", "mp_banques",
+  "mp_avenants"
 ]);
 
 // Partition key field par container
@@ -14,7 +15,8 @@ const PK_PATH = {
   "mp_bordereau":   "marcheId",
   "mp_avancements": "marcheId",
   "mp_indices":     "type",
-  "mp_banques":     "id"
+  "mp_banques":     "id",
+  "mp_avenants":    "marcheId"
 };
 
 let _db = null;
@@ -42,12 +44,10 @@ module.exports = async function (context, req) {
     try {
       const container = context.bindingData.container;
       const id = context.bindingData.id;
-
       if (!ALLOWED.has(container)) {
         context.res = { status: 400, body: { error: "Container inconnu ou non autorise : " + container } };
         return;
       }
-
       const c = getDb().container(container);
       const method = (req.method || "GET").toUpperCase();
       const pkField = PK_PATH[container];
@@ -57,18 +57,15 @@ module.exports = async function (context, req) {
         // Support ?marcheId=xxx pour filtrer
         const marcheIdFilter = req.query.marcheId;
         const typeFilter = req.query.type;
-
         let query = "SELECT * FROM c";
         const params = [];
-
-        if (marcheIdFilter && (container === "mp_cautions" || container === "mp_paiements" || container === "mp_bordereau" || container === "mp_avancements")) {
+        if (marcheIdFilter && (container === "mp_cautions" || container === "mp_paiements" || container === "mp_bordereau" || container === "mp_avancements" || container === "mp_avenants")) {
           query = "SELECT * FROM c WHERE c.marcheId = @marcheId";
           params.push({ name: "@marcheId", value: marcheIdFilter });
         } else if (typeFilter && container === "mp_indices") {
           query = "SELECT * FROM c WHERE c.type = @type ORDER BY c.periode DESC";
           params.push({ name: "@type", value: typeFilter });
         }
-
         const iterator = params.length ? c.items.query({ query, parameters: params }) : c.items.readAll();
         const { resources } = await iterator.fetchAll();
         context.res = { status: 200, body: resources };
@@ -109,7 +106,6 @@ module.exports = async function (context, req) {
       }
 
       context.res = { status: 405, body: { error: "Method not allowed" } };
-
     } catch (e) {
       context.log.error("data error:", e.message, e.code);
       context.res = { status: 500, body: { error: e.message, code: e.code } };
