@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="UTF-8">
@@ -50,7 +50,7 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 .ph-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #sync-indicator.stale{color:#c2410c;font-weight:600}
 #btn-refresh.syncing{opacity:.6;pointer-events:none}
-#btn-refresh.syncing::before{content:'⟳ ';display:inline-block;animation:spin 1s linear infinite}
+#btn-refresh.syncing::before{content:'âŸ³ ';display:inline-block;animation:spin 1s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .pb{flex:1;overflow-y:auto;padding:20px 22px;background:var(--cream)}
 
@@ -84,7 +84,7 @@ tr:hover td{background:var(--cream-dark)}
 .mini-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink-soft)}
 .mini-table tr:last-child td{border-bottom:none}
 
-/* BADGES — pastille colorée */
+/* BADGES â€” pastille colorÃ©e */
 .badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 6px;border-radius:3px;font-size:10.5px;font-weight:500;white-space:nowrap;border:1px solid transparent}
 .badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .bs{background:var(--green-pale);color:var(--green-soft);border-color:var(--green-mid)}.bs::before{background:var(--green-soft)}
@@ -181,19 +181,19 @@ input,select,textarea{font-family:inherit}
 /* MISC */
 .empty{text-align:center;padding:40px;color:var(--ink-muted)}
 
-/* ── RESPONSIVE MOBILE (iPhone / tablette) ─────────────────── */
+/* â”€â”€ RESPONSIVE MOBILE (iPhone / tablette) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 .ham{display:none;background:none;border:none;font-size:22px;color:var(--ink);cursor:pointer;padding:4px 8px;line-height:1;flex-shrink:0}
 #sb-ov{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(26,24,21,.45);z-index:99}
 
 @media screen and (max-width:768px){
   #wrap{display:flex;flex-direction:column;height:100vh;overflow:hidden}
   
-  /* ─── FIX MOBILE : Sidebar en mode "tiroir" ────────────────────
-     Par défaut sur mobile, la sidebar est cachée hors écran (translateX -100%).
-     La classe .open (ajoutée par toggleSb()) la fait glisser de gauche.
-     Sans ces règles, la sidebar gardait sa largeur 230px (héritée desktop)
+  /* â”€â”€â”€ FIX MOBILE : Sidebar en mode "tiroir" â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+     Par dÃ©faut sur mobile, la sidebar est cachÃ©e hors Ã©cran (translateX -100%).
+     La classe .open (ajoutÃ©e par toggleSb()) la fait glisser de gauche.
+     Sans ces rÃ¨gles, la sidebar gardait sa largeur 230px (hÃ©ritÃ©e desktop)
      et masquait tout le contenu sur iPhone Chrome.
-  ────────────────────────────────────────────────────────────── */
+  â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
   #sb{
     position:fixed;
     top:0;left:0;bottom:0;
@@ -248,7 +248,7 @@ input,select,textarea{font-family:inherit}
     <div class="sb-lbl">Navigation</div>
     <div class="ni on" data-page="dashboard"><span class="ni-ic">&#128202;</span>Tableau de bord</div>
     <div class="ni" data-page="ao"><span class="ni-ic">&#128221;</span>Appels d'offres</div>
-    <div class="ni" data-page="marches"><span class="ni-ic">&#128203;</span>Marchés</div>
+    <div class="ni" data-page="marches"><span class="ni-ic">&#128203;</span>MarchÃ©s</div>
     <div class="ni" data-page="cautions"><span class="ni-ic">&#127970;</span>Cautions bancaires</div>
     <div class="ni" data-page="paiements"><span class="ni-ic">&#128176;</span>Paiements</div>
     <div class="ni" data-page="rapports"><span class="ni-ic">&#128202;</span>Rapports</div>
@@ -481,8 +481,8 @@ function exportCSV(type){
     headers=['Ref','Titre','Maitre ouvrage','Type','Montant MAD','Avancement%','Commencement','Delai(j)','Date fin calc','Recept prov','Statut'];
     S.marches.forEach(function(m){data.push([m.ref,m.titre,m.maitre_ouvrage,m.type,m.montant,m.avancement,m.date_commencement||'',m.delai_execution||'',m.date_fin_calculee||'',m.date_reception_provisoire||'',(SMM[m.statut]||{l:m.statut}).l]);});
   }else if(type==='cautions'){
-    headers=['N Caution','Marche','Type','Banque','Montant MAD','Emission','Expiration','Statut'];
-    S.cautions.forEach(function(c){data.push([c.num,gm(c.marche_id).ref,(TC[c.type]||c.type),c.banque,c.montant,c.date_emission||'',c.date_expiration||'',(SMC[c.statut]||{l:c.statut}).l]);});
+    headers=['N Caution','Marche','Type','Banque','Montant MAD','Emission','Statut'];
+    S.cautions.forEach(function(c){data.push([c.num,gm(c.marche_id).ref,(TC[c.type]||c.type),c.banque,c.montant,c.date_emission||'',(SMC[c.statut]||{l:c.statut}).l]);});
   }else{
     headers=['N Decompte','Marche','Type','Montant brut MAD','Mode retenue','Retenue MAD','Net MAD','Date depot','Date paiement','Statut'];
     S.paiements.forEach(function(p){data.push([p.numero,gm(p.marche_id).ref,p.type,p.montant_brut,p.mode_retenue,p.retenue,p.net,p.date_depot||'',p.date_paiement||'',(SMP[p.statut]||{l:p.statut}).l]);});
@@ -558,10 +558,11 @@ function pgDash(){
   var pf=ec.reduce(function(a,m){return a+m.montant;},0);
   var enc=S.paiements.filter(function(p){return p.statut==='paye';}).reduce(function(a,p){return a+p.net;},0);
   var pap=S.paiements.filter(function(p){return p.statut==='en_attente'||p.statut==='en_cours';});
-  var expList=S.cautions.filter(function(c){return c.statut==='active'&&days(c.date_expiration)<=60;}).sort(function(a,b){return new Date(a.date_expiration)-new Date(b.date_expiration);});
+  // v12: alerte reception definitive a demander (1 mois avant echeance)
+  var recDefList=S.marches.filter(function(m){return m.date_reception_definitive&&m.statut!=='termine'&&days(m.date_reception_definitive)<=30;}).sort(function(a,b){return new Date(a.date_reception_definitive)-new Date(b.date_reception_definitive);});
   var rec=S.marches.slice().sort(function(a,b){return new Date(b.date_attribution||0)-new Date(a.date_attribution||0);}).slice(0,6);
   var alerts='';
-  expList.forEach(function(c){alerts+='<div class="ai-box ai-r"><div class="ai-t">Caution '+c.num+' expire dans '+days(c.date_expiration)+' jours</div><div class="ai-s">'+gm(c.marche_id).ref+' - '+c.banque+' - '+fmad(c.montant)+'</div></div>';});
+  recDefList.forEach(function(m){var d=days(m.date_reception_definitive);var msg=d<0?'Reception definitive en retard de '+(-d)+' jours':(d===0?'Reception definitive a demander aujourd\'hui':'Reception definitive a demander dans '+d+' jours');alerts+='<div class="ai-box ai-r"><div class="ai-t">'+msg+'</div><div class="ai-s">'+m.ref+' - '+(m.titre||'').substring(0,60)+'</div></div>';});
   pap.slice(0,3).forEach(function(p){alerts+='<div class="ai-box"><div class="ai-t">Decompte '+p.numero+' en attente</div><div class="ai-s">'+gm(p.marche_id).ref+' - '+fmad(p.net)+'</div></div>';});
   var byType=['travaux','fournitures','services'].map(function(t){
     var ms=S.marches.filter(function(m){return m.type===t;});
@@ -570,7 +571,7 @@ function pgDash(){
     return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>'+t+'</span><span style="color:#7A7369">'+ms.length+' - '+fmad(tot)+'</span></div><div class="prog-bar-big"><div class="prog-bar-fill" style="width:'+pct+'%"></div></div></div>';
   }).join('');
   var recRows=rec.map(function(m){return '<tr style="cursor:pointer" onclick="editMarche(\''+m.id+'\')"><td><b style="font-size:12px">'+m.ref+'</b><div style="font-size:11px;color:#7A7369">'+m.titre.substring(0,35)+'</div></td><td style="font-size:12px">'+m.maitre_ouvrage+'</td><td>'+prg(m.avancement)+'</td><td>'+bdg(m.statut,SMM)+'</td></tr>';}).join('');
-  return '<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+expList.length+' a renouveler</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
+  return '<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
   '<div class="g2"><div class="card"><div class="sh"><div class="st">Repartition par type</div></div>'+byType+'</div><div class="card"><div class="sh"><div class="st">Marches recents</div><button class="btn btn-sm" onclick="nav(\'marches\')">Voir tout</button></div><div class="tw"><table><thead><tr><th>Reference</th><th>Maitre d\'ouvrage</th><th>Avanc.</th><th>Statut</th></tr></thead><tbody>'+recRows+'</tbody></table></div></div></div>';
 }
 
@@ -601,7 +602,7 @@ function pgAO(){
 
 function aoFormHTML(a){
   var hasProv=a&&a.caution_prov;
-  var cpFields='<div class="fr2"><div class="fg"><label>Banque *</label>'+banqueSelectHTML('cp', hasProv?a.caution_prov.banque:'')+'</div><div class="fg"><label>N Caution *</label><input class="fc" id="cp_num" value="'+(hasProv?esc(a.caution_prov.num):'')+'"></div></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cp_montant" type="number" value="'+(hasProv?a.caution_prov.montant:'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="cp_statut">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(hasProv&&a.caution_prov.statut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date emission</label><input class="fc" id="cp_emission" type="date" value="'+(hasProv&&a.caution_prov.date_emission?a.caution_prov.date_emission:'')+'"></div><div class="fg"><label>Date expiration</label><input class="fc" id="cp_expiration" type="date" value="'+(hasProv&&a.caution_prov.date_expiration?a.caution_prov.date_expiration:'')+'"></div></div><div id="cp_suggest" class="info-box info-amber" style="display:none"></div>';
+  var cpFields='<div class="fr2"><div class="fg"><label>Banque *</label>'+banqueSelectHTML('cp', hasProv?a.caution_prov.banque:'')+'</div><div class="fg"><label>N Caution *</label><input class="fc" id="cp_num" value="'+(hasProv?esc(a.caution_prov.num):'')+'"></div></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cp_montant" type="number" value="'+(hasProv?a.caution_prov.montant:'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="cp_statut">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(hasProv&&a.caution_prov.statut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date emission</label><input class="fc" id="cp_emission" type="date" value="'+(hasProv&&a.caution_prov.date_emission?a.caution_prov.date_emission:'')+'"></div><div class="fg"></div></div><div id="cp_suggest" class="info-box info-amber" style="display:none"></div>';
   return '<div class="fr2"><div class="fg"><label>Reference AO *</label><input class="fc" id="aref" value="'+esc(a?a.ref:'AO-'+new Date().getFullYear()+'-XXX')+'"></div><div class="fg"><label>Type</label><select class="fc" id="atype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(a&&a.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Objet *</label><input class="fc" id="aobjet" value="'+esc(a?a.objet:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="amo" value="'+esc(a?a.maitre_ouvrage:'')+'"></div><div class="fr2"><div class="fg"><label>Budget estime (MAD)</label><input class="fc" id="abud" type="number" value="'+(a?a.budget_estime||'':'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="astat">'+objEnts(SMAO).map(function(e){return '<option value="'+e[0]+'"'+(a&&a.statut===e[0]?' selected':!a&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date lancement</label><input class="fc" id="adl" type="date" value="'+(a&&a.date_lancement?a.date_lancement:'')+'"></div><div class="fg"><label>Date limite</label><input class="fc" id="adlim" type="date" value="'+(a&&a.date_limite?a.date_limite:'')+'"></div></div><div class="fg"><label>Notes</label><input class="fc" id="anotes" value="'+esc(a?a.notes||'':'')+'"></div><div class="sec"><div class="sec-t">Caution provisoire (soumission)</div><div class="info-box info-amber">La caution provisoire garantit le serieux de l\'offre. Elle est restituee apres attribution.</div>'+(hasProv?cpFields:'<div id="no-cp" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:#7A7369">Aucune caution provisoire.</span><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showCPForm()">+ Ajouter</button></div><div id="cp-form" style="display:none">'+cpFields+'</div>')+'</div>'+banquesDatalistHTML();
 }
 function showCPForm(){document.getElementById('no-cp').style.display='none';document.getElementById('cp-form').style.display='block';suggestProvMnt();}
@@ -617,7 +618,7 @@ function newAO(){
     var ref=v('aref'),objet=v('aobjet'),maitre_ouvrage=v('amo');
     if(!ref||!objet||!maitre_ouvrage){alert('Champs obligatoires manquants');return;}
     var cpNum=v('cp_num');
-    var cp=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:null;
+    var cp=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,statut:v('cp_statut')||'active'}:null;
     if(cp && cp.banque) ensureBanqueExists(cp.banque);
     var newAo={id:nidStr('ao'),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')};
     saveItem('aos',newAo).then(function(){sbStats();render();toast('AO cree');});
@@ -628,7 +629,7 @@ function editAO(id){
   var oldStatut=a.statut;
   openMod('Modifier AO - '+a.ref,aoFormHTML(a),function(){
     var cpNum=v('cp_num');
-    var cpNew=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,date_expiration:v('cp_expiration')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
+    var cpNew=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
     if(cpNew && cpNew.banque) ensureBanqueExists(cpNew.banque);
     a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
     // Si AO devient infructueux/annule ET caution prov encore active, basculer en mainlevee_demandee
@@ -663,6 +664,13 @@ function pgMarches(){
   if(S.search)ms=ms.filter(function(m){return [m.ref,m.titre,m.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
   if(S.sf)ms=ms.filter(function(m){return m.statut===S.sf;});
   if(S.tf)ms=ms.filter(function(m){return m.type===S.tf;});
+  // v12: tri par annee extraite de la reference, du plus recent au plus ancien
+  ms=ms.slice().sort(function(a,b){
+    var ya=(a.ref||'').match(/(\d{4})/);ya=ya?parseInt(ya[1],10):0;
+    var yb=(b.ref||'').match(/(\d{4})/);yb=yb?parseInt(yb[1],10):0;
+    if(yb!==ya)return yb-ya;
+    return (b.ref||'').localeCompare(a.ref||'');
+  });
   var rows=ms.length?ms.map(function(m){
     var mc=S.cautions.filter(function(c){return c.marche_id===m.id;});
     var cauBadges=mc.map(function(c){return '<span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px;margin-right:2px" title="'+(TC[c.type]||c.type)+' - '+(SMC[c.statut]||{l:c.statut}).l+'">'+(c.type==='bonne_execution'?'Def':'RG')+'</span>';}).join('');
@@ -671,7 +679,12 @@ function pgMarches(){
     var dfin=m.date_fin_calculee;
     var dfinWarn=dfin&&days(dfin)<0&&m.statut==='en_cours';
     var dfinCell=dfin?(dfinWarn?'<span style="color:#dc2626;font-weight:600">'+fdat(dfin)+' (!)</span>':'<span style="color:#065f46;font-weight:500">'+fdat(dfin)+'</span>')+(enArret?'<br><span class="badge bw" style="font-size:9px">Arret</span>':''):'-';
-    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+m.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+m.titre+'</div></td><td style="font-size:12px;color:#7A7369">'+m.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+m.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(m.montant)+'</td><td>'+prg(m.avancement)+'</td><td style="font-size:12px">'+fdat(m.date_commencement)+'</td><td style="font-size:12px;text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td style="font-size:12px">'+dfinCell+'</td><td style="font-size:12px">'+fdat(m.date_reception_provisoire)+'</td><td style="text-align:center">'+(os.length?'<span class="badge bn" style="font-size:10px">'+os.length+' OS</span>':'-')+'</td><td>'+(cauBadges||'-')+'</td><td>'+bdg(m.statut,SMM)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editMarche(\''+m.id+'\')">&#9998;</button><button class="act red" onclick="delMarche(\''+m.id+'\')">&#128465;</button></div></td></tr>';
+    // v12: rouge si marche termine + au moins une caution active emise il y a > 5 ans
+    var FIVE_Y_MS=5*365.25*24*60*60*1000;
+    var oldCau=m.statut==='termine'&&mc.some(function(c){return (c.statut==='active'||c.statut==='mainlevee_demandee')&&c.date_emission&&(new Date()-new Date(c.date_emission))>FIVE_Y_MS;});
+    var trStyle=oldCau?' style="background:#fee2e2"':'';
+    var trTitle=oldCau?' title="Marche termine avec caution(s) en cours depuis plus de 5 ans"':'';
+    return '<tr'+trStyle+trTitle+'><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+m.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+m.titre+'</div></td><td style="font-size:12px;color:#7A7369">'+m.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+m.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(m.montant)+'</td><td>'+prg(m.avancement)+'</td><td style="font-size:12px">'+fdat(m.date_commencement)+'</td><td style="font-size:12px;text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td style="font-size:12px">'+dfinCell+'</td><td style="font-size:12px">'+fdat(m.date_reception_provisoire)+'</td><td style="text-align:center">'+(os.length?'<span class="badge bn" style="font-size:10px">'+os.length+' OS</span>':'-')+'</td><td>'+(cauBadges||'-')+'</td><td>'+bdg(m.statut,SMM)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editMarche(\''+m.id+'\')">&#9998;</button><button class="act red" onclick="delMarche(\''+m.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="14"><div class="empty">Aucun marche</div></td></tr>';
   return '<div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(S.tf===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+ms.length+' marche(s)</span><button class="btn btn-sm" onclick="printEtat(\'marches\')">Imprimer</button></div></div><div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>Reference</th><th>Intitule</th><th>Maitre ouvrage</th><th>Type</th><th>Montant</th><th>Avancement</th><th>Commencement</th><th>Delai</th><th>Date fin calc.</th><th>Recept. prov.</th><th>OS</th><th>Cautions</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td style="font-family:monospace">'+fmad(ms.reduce(function(a,m){return a+m.montant;},0))+'</td><td colspan="9"></td></tr></tfoot></table></div></div>';
 }
@@ -720,7 +733,7 @@ function updateDFC(){
   if(inf){if(susp>0){inf.style.display='block';inf.textContent='Total jours d\'arret: '+susp+' jours - Date fin reportee d\'autant.';}else inf.style.display='none';}
 }
 
-// ─── Calcul automatique reception definitive = reception provisoire + delai garantie ───
+// â”€â”€â”€ Calcul automatique reception definitive = reception provisoire + delai garantie â”€â”€â”€
 function updateDRD(){
   var drp=v('mdrp');
   var dgarMois=parseInt(v('mdgar_mois'));
@@ -735,7 +748,7 @@ function updateDRD(){
   el.value=iso;
 }
 
-// ─── Totaux cautions par type avec alertes 3% CD / 7% RG (CCAG-T Maroc) ─────
+// â”€â”€â”€ Totaux cautions par type avec alertes 3% CD / 7% RG (CCAG-T Maroc) â”€â”€â”€â”€â”€
 // Calcule sur les cautions ACTIVES uniquement (non liberees)
 function renderCautionTotals(m,mc){
   if(!m)return '';
@@ -757,8 +770,8 @@ function renderCautionTotals(m,mc){
   // Style alerte si depassement
   var styleCD=pctCD>3?'background:#fef2f2;border:1px solid #ef4444;color:#991b1b':'background:#f0fdf4;border:1px solid #86efac;color:#065f46';
   var styleRG=pctRG>7?'background:#fef2f2;border:1px solid #ef4444;color:#991b1b':'background:#f0fdf4;border:1px solid #86efac;color:#065f46';
-  var iconCD=pctCD>3?'⚠️ ':'✓ ';
-  var iconRG=pctRG>7?'⚠️ ':'✓ ';
+  var iconCD=pctCD>3?'âš ï¸ ':'âœ“ ';
+  var iconRG=pctRG>7?'âš ï¸ ':'âœ“ ';
   var msgCD=pctCD>3?' (DEPASSE 3% CCAG-T)':'';
   var msgRG=pctRG>7?' (DEPASSE 7% CCAG-T)':'';
   var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">';
@@ -775,7 +788,7 @@ function renderCautionTotals(m,mc){
   return html;
 }
 
-// ─── Section avenants : liste + bouton nouveau ─────────────────────
+// â”€â”€â”€ Section avenants : liste + bouton nouveau â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function renderAvenantsSection(m){
   if(!m||!m.id)return '';// pas d'avenants pour un nouveau marche non sauvegarde
   var avs=(S.avenants||[]).filter(function(a){return a.marche_id===m.id;}).sort(function(a,b){return (a.numero||0)-(b.numero||0);});
@@ -785,7 +798,7 @@ function renderAvenantsSection(m){
   var delaiSupplementaire=avs.reduce(function(s,a){return s+(Number(a.delai_supplementaire_jours)||0);},0);
   var html='<div class="sec"><div class="sec-t">Avenants au marche</div>';
   if(avs.length){
-    html+='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Montant HT</th><th>Delai sup.</th><th>Garantie</th><th></th></tr></thead><tbody>';
+    html+='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>NÂ°</th><th>Date</th><th>Objet</th><th>Montant HT</th><th>Delai sup.</th><th>Garantie</th><th></th></tr></thead><tbody>';
     avs.forEach(function(a){
       var sign=Number(a.montant_ht)>=0?'+':'';
       html+='<tr><td><span class="badge bi" style="font-size:10px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:11px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:11px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:11px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:11px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td><button class="act red" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
@@ -805,7 +818,7 @@ function renderAvenantsSection(m){
   return html;
 }
 
-// ─── Modal nouveau avenant ──────────────────────────────────────
+// â”€â”€â”€ Modal nouveau avenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function showAddAvenant(marcheId){
   var avs=(S.avenants||[]).filter(function(a){return a.marche_id===marcheId;});
   var nextNum=avs.length+1;
@@ -828,7 +841,7 @@ function showAddAvenant(marcheId){
   });
 }
 
-// ─── Suppression avenant ─────────────────────────────────────────
+// â”€â”€â”€ Suppression avenant â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function delAvenant(id){
   if(!confirm('Supprimer cet avenant ?'))return;
   var av=(S.avenants||[]).find(function(a){return a.id===id;});
@@ -841,7 +854,7 @@ function delAvenant(id){
   }).catch(function(e){toast('Erreur: '+e.message);});
 }
 
-// ─── Refresh de la section avenants apres ajout/suppression ────
+// â”€â”€â”€ Refresh de la section avenants apres ajout/suppression â”€â”€â”€â”€
 function refreshAvenantsInModal(marcheId){
   var m=S.marches.find(function(x){return x.id===marcheId;});
   if(!m)return;
@@ -905,7 +918,7 @@ function showAddCaution(type){
 }
 function hideAddCaution(){
   document.getElementById('add-caution-panel').style.display='none';
-  ['nc_num','nc_montant','nc_emission','nc_expiration'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
+  ['nc_num','nc_montant','nc_emission'].forEach(function(id){var el=document.getElementById(id);if(el)el.value='';});
   var sg=document.getElementById('nc_suggestion');if(sg)sg.style.display='none';
 }
 function prefillCautionAmount(){
@@ -914,8 +927,8 @@ function prefillCautionAmount(){
   var type=document.getElementById('nc_type')&&document.getElementById('nc_type').value;
   var sg=document.getElementById('nc_suggestion');if(!mnt||!sg)return;
   if(type==='bonne_execution'||type==='retenue_garantie'){
-    sg.style.display='block';sg.textContent='Suggestion: '+gar+'% = '+fmad(Math.round(mnt*gar/100));
-    var el=document.getElementById('nc_montant');if(el&&!el.value)el.value=Math.round(mnt*gar/100);
+    sg.style.display='block';sg.textContent='Suggestion: '+gar+'% = '+fmad(Math.ceil(mnt*gar/100));
+    var el=document.getElementById('nc_montant');if(el&&!el.value)el.value=Math.ceil(mnt*gar/100);
   }else sg.style.display='none';
 }
 function updateCautionSuggestions(){if(document.getElementById('add-caution-panel')&&document.getElementById('add-caution-panel').style.display!=='none')prefillCautionAmount();}
@@ -938,7 +951,7 @@ function refreshCautionListInModal(mid){
   var mc=S.cautions.filter(function(c){return c.marche_id===mid;});
   var cont=document.getElementById('caution-list');if(!cont)return;
   cont.innerHTML=mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('')+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';
-  // Mettre à jour aussi les totaux en haut
+  // Mettre Ã  jour aussi les totaux en haut
   var totDiv=document.getElementById('caution-totals');
   if(totDiv){var m=S.marches.find(function(x){return x.id===mid;});if(m)totDiv.innerHTML=renderCautionTotals(m,mc);}
 }
@@ -962,7 +975,6 @@ function pgCautions(){
   if(S.tf)cs=cs.filter(function(c){return c.type===S.tf;});
   if(S.bf)cs=cs.filter(function(c){return c.banque===S.bf;});
   var tot=S.cautions.filter(function(c){return c.statut==='active';}).reduce(function(a,c){return a+c.montant;},0);
-  var expList=S.cautions.filter(function(c){return c.statut==='active'&&days(c.date_expiration)<=60;});
 
   // Situation par banque
   var TORD=['bonne_execution','retenue_garantie','soumission','avance_demarrage'];
@@ -981,9 +993,8 @@ function pgCautions(){
     return '<tr><td style="font-weight:600">'+b+'</td>'+typesActifs.map(function(t){var cell=mat[b][t];return '<td style="text-align:right;font-family:monospace;font-size:12px">'+(cell.mnt_actif?fmad(cell.mnt_actif)+'<div style="font-size:10px;color:#7A7369">'+cell.nb+' caution(s)</div>':'-')+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(tActifB[b])+'</td></tr>';
   }).join('');
   var sitFoot='<tr style="background:#f0fdf4;border-top:2px solid #1A5C3A"><td style="font-weight:700">TOTAL</td>'+typesActifs.map(function(t){return '<td style="text-align:right;font-family:monospace;font-weight:700">'+fmad(tActifT[t])+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(gTotActif)+'</td></tr>';
-  var alerts=expList.map(function(c){return '<div class="ai-box ai-r"><div class="ai-t">'+(TC[c.type]||c.type)+' - Caution '+c.num+' expire dans '+days(c.date_expiration)+' jours</div><div class="ai-s">'+gm(c.marche_id).ref+' - '+c.banque+' - '+fmad(c.montant)+'</div></div>';}).join('');
+  var alerts='';
   var rows=cs.length?cs.map(function(c){
-    var d=days(c.date_expiration);var warn=c.statut==='active'&&d<=60;
     var payUse=c.type==='retenue_garantie'?S.paiements.filter(function(p){return p.caution_rg_id===c.id;}):[];
     var libBtn='';
     if(c.statut==='active'){
@@ -992,13 +1003,13 @@ function pgCautions(){
     } else if(c.statut==='mainlevee_demandee'){
       libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Confirmer liberation effective" style="color:#065f46;font-weight:bold">OK</button>';
     }
-    return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+c.num+'</td><td style="font-size:12px"><div style="font-weight:500">'+gm(c.marche_id).ref+'</div><div style="color:#7A7369;font-size:11px">'+gm(c.marche_id).titre.substring(0,28)+'</div></td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:11px">'+(TC[c.type]||c.type)+'</span></td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td style="font-size:12px">'+fdat(c.date_emission)+'</td><td style="font-size:12px">'+(warn?'<span style="color:#d97706;font-weight:600">'+fdat(c.date_expiration)+' (!)</span>':fdat(c.date_expiration))+'</td><td style="font-size:11px">'+(payUse.length?payUse.map(function(p){return '<span class="badge bn">'+p.numero+'</span>';}).join(' '):'-')+'</td><td>'+bdg(c.statut,SMC)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editCaution(\''+c.id+'\')">&#9998;</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')">&#128465;</button></div></td></tr>';
+    return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+c.num+'</td><td style="font-size:12px"><div style="font-weight:500">'+gm(c.marche_id).ref+'</div><div style="color:#7A7369;font-size:11px">'+gm(c.marche_id).titre.substring(0,28)+'</div></td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:11px">'+(TC[c.type]||c.type)+'</span></td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td style="font-size:12px">'+fdat(c.date_emission)+'</td><td style="font-size:11px">'+(payUse.length?payUse.map(function(p){return '<span class="badge bn">'+p.numero+'</span>';}).join(' '):'-')+'</td><td>'+bdg(c.statut,SMC)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editCaution(\''+c.id+'\')">&#9998;</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="10"><div class="empty">Aucune caution</div></td></tr>';
   return (alerts?'<div style="margin-bottom:12px">'+alerts+'</div>':'')+
-  '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+fmad(gTotActif)+'</div></div><div class="kpi k1"><div class="kl">A renouveler</div><div class="kv">'+expList.length+'</div></div><div class="kpi k4"><div class="kl">Expirees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='expiree';}).length+'</div></div><div class="kpi k3"><div class="kl">Liberees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='liberee';}).length+'</div></div></div>'+
+  '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+fmad(gTotActif)+'</div></div><div class="kpi k1"><div class="kl">Mainlevee demandee</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='mainlevee_demandee';}).length+'</div></div><div class="kpi k4"><div class="kl">Expirees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='expiree';}).length+'</div></div><div class="kpi k3"><div class="kl">Liberees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='liberee';}).length+'</div></div></div>'+
   '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 10px;border-bottom:1px solid #DDD5C4;font-size:14px;font-weight:600">Situation par banque et par type (cautions actives)</div><div class="tw"><table><thead><tr>'+sitHead+'</tr></thead><tbody>'+sitRows+'</tbody><tfoot>'+sitFoot+'</tfoot></table></div></div>'+
   '<div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+uniqueArr(S.cautions.map(function(c){return c.banque;})).sort().map(function(b){return '<option'+(S.bf===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+cs.length+' caution(s)</span><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div></div>'+
-  '<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N Caution</th><th>Marche</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Expiration</th><th>Utilisee dans</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL ACTIF</td><td style="font-family:monospace">'+fmad(cs.filter(function(c){return c.statut==='active';}).reduce(function(a,c){return a+c.montant;},0))+'</td><td colspan="5"></td></tr></tfoot></table></div></div>';
+  '<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N Caution</th><th>Marche</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Utilisee dans</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL ACTIF</td><td style="font-family:monospace">'+fmad(cs.filter(function(c){return c.statut==='active';}).reduce(function(a,c){return a+c.montant;},0))+'</td><td colspan="4"></td></tr></tfoot></table></div></div>';
 }
 
 function cautionFormHTML(c){
@@ -1011,7 +1022,7 @@ function newCaution(){
     var mid=v('cmar'),montant=vn('cmnt'),num=v('cnum');
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,date_expiration:v('cdex')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
+    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
     saveItem('cautions',newC).then(function(){sbStats();render();toast('Caution creee');});
   });
 }
@@ -1187,8 +1198,8 @@ function printEtat(type){
     titre='Etat des cautions bancaires';
     var cs=S.cautions;if(S.search)cs=cs.filter(function(c){return [c.num,c.banque,gm(c.marche_id).ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)cs=cs.filter(function(c){return c.statut===S.sf;});if(S.bf)cs=cs.filter(function(c){return c.banque===S.bf;});
     var totCA=cs.filter(function(c){return c.statut==='active';}).reduce(function(a,c){return a+c.montant;},0);
-    body+='<table><thead><tr><th>#</th><th>N Caution</th><th>Marche</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Expiration</th><th>Statut</th></tr></thead><tbody>';
-    cs.forEach(function(c,i){var stS=(SMC[c.statut]||{l:c.statut,c:'bn'});body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+c.num+'</b></td><td>'+gm(c.marche_id).ref+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'">'+(TC[c.type]||c.type)+'</span></td><td>'+c.banque+'</td><td class="mono" style="text-align:right">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td>'+fdat(c.date_expiration)+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
+    body+='<table><thead><tr><th>#</th><th>N Caution</th><th>Marche</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Statut</th></tr></thead><tbody>';
+    cs.forEach(function(c,i){var stS=(SMC[c.statut]||{l:c.statut,c:'bn'});body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+c.num+'</b></td><td>'+gm(c.marche_id).ref+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'">'+(TC[c.type]||c.type)+'</span></td><td>'+c.banque+'</td><td class="mono" style="text-align:right">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL ACTIF</td><td class="mono" style="text-align:right">'+fmad(totCA)+'</td><td colspan="3"></td></tr></tfoot></table>';
   }else if(type==='paiements'){
     titre='Etat des paiements et decomptes';
@@ -1583,7 +1594,7 @@ function processImportedRows(rows){
     var statut='provisoire';
     if(idxStatut>=0 && row[idxStatut]){
       var s=String(row[idxStatut]).trim().toLowerCase();
-      if(s==='definitif' || s==='définitif') statut='definitif';
+      if(s==='definitif' || s==='dÃ©finitif') statut='definitif';
     }
 
     toImport.push({
@@ -1926,8 +1937,8 @@ function processBordereauRows(rows){
   function normalizeHeader(s){
     if(!s) return '';
     return String(s).toLowerCase()
-      .replace(/[°\.\,\:\;\(\)\[\]\/\\\-_]/g,' ')  // remplace caracteres speciaux par espace
-      .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ûü]/g,'u')
+      .replace(/[Â°\.\,\:\;\(\)\[\]\/\\\-_]/g,' ')  // remplace caracteres speciaux par espace
+      .replace(/[Ã Ã¢Ã¤]/g,'a').replace(/[Ã©Ã¨ÃªÃ«]/g,'e').replace(/[Ã®Ã¯]/g,'i').replace(/[Ã´Ã¶]/g,'o').replace(/[Ã»Ã¼]/g,'u')
       .replace(/\s+/g,' ').trim();
   }
 
@@ -1945,7 +1956,7 @@ function processBordereauRows(rows){
     if(matches>=3){ headerIdx=i; break; }
   }
   if(headerIdx<0){
-    alert('En-tete introuvable.\nColonnes attendues : N Poste (ou N° P), Designation (ou Prestation), Unite, Quantite, PU (ou Prix unitaire)');
+    alert('En-tete introuvable.\nColonnes attendues : N Poste (ou NÂ° P), Designation (ou Prestation), Unite, Quantite, PU (ou Prix unitaire)');
     return;
   }
 
@@ -2004,7 +2015,7 @@ function processBordereauRows(rows){
 
     // Ignorer les lignes TOTAL / TVA / TTC / mentions legales silencieusement
     var numLow = (numRaw+' '+des).toLowerCase();
-    if(numLow.indexOf('total')>=0 || numLow.indexOf('tva')>=0 || numLow.indexOf('t.t.c')>=0 || numLow.indexOf('ttc')>=0 || numLow.indexOf('h.t')>=0 || numLow.indexOf('sous total')>=0 || numLow.indexOf('arrete')>=0 || numLow.indexOf('arrêté')>=0 || numLow.indexOf('fait a')>=0 || numLow.indexOf('signature')>=0 || numLow.indexOf('cachet')>=0 || numLow.indexOf('concurrent')>=0 || numLow.indexOf('somme toute')>=0){
+    if(numLow.indexOf('total')>=0 || numLow.indexOf('tva')>=0 || numLow.indexOf('t.t.c')>=0 || numLow.indexOf('ttc')>=0 || numLow.indexOf('h.t')>=0 || numLow.indexOf('sous total')>=0 || numLow.indexOf('arrete')>=0 || numLow.indexOf('arrÃªtÃ©')>=0 || numLow.indexOf('fait a')>=0 || numLow.indexOf('signature')>=0 || numLow.indexOf('cachet')>=0 || numLow.indexOf('concurrent')>=0 || numLow.indexOf('somme toute')>=0){
       ignoredTotals++;
       continue;
     }
@@ -2377,10 +2388,10 @@ function joursMainlevee(c){
 
 /* Code couleur selon seuils : 15j vert, 30j jaune, 45j rouge */
 function colorMainlevee(jours){
-  if(jours<15) return {color:'#065f46', bg:'#E4F0E8', emoji:'🟢', label:'A jour'};
-  if(jours<30) return {color:'#c2410c', bg:'#FEF3C7', emoji:'🟡', label:'A surveiller'};
-  if(jours<45) return {color:'#8B2A1C', bg:'#F5E6E3', emoji:'🟠', label:'A relancer'};
-  return {color:'#8B2A1C', bg:'#F5E6E3', emoji:'🔴', label:'Urgent'};
+  if(jours<15) return {color:'#065f46', bg:'#E4F0E8', emoji:'ðŸŸ¢', label:'A jour'};
+  if(jours<30) return {color:'#c2410c', bg:'#FEF3C7', emoji:'ðŸŸ¡', label:'A surveiller'};
+  if(jours<45) return {color:'#8B2A1C', bg:'#F5E6E3', emoji:'ðŸŸ ', label:'A relancer'};
+  return {color:'#8B2A1C', bg:'#F5E6E3', emoji:'ðŸ”´', label:'Urgent'};
 }
 
 /* Widget dashboard : alerte cautions en attente de mainlevee */
@@ -2504,7 +2515,7 @@ function excelDateToISO(v){
 function deduireType(intitule){
   if(!intitule) return 'travaux';
   var s = String(intitule).toLowerCase()
-    .replace(/[àâä]/g,'a').replace(/[éèêë]/g,'e').replace(/[îï]/g,'i').replace(/[ôö]/g,'o').replace(/[ûü]/g,'u');
+    .replace(/[Ã Ã¢Ã¤]/g,'a').replace(/[Ã©Ã¨ÃªÃ«]/g,'e').replace(/[Ã®Ã¯]/g,'i').replace(/[Ã´Ã¶]/g,'o').replace(/[Ã»Ã¼]/g,'u');
   if(s.indexOf('fourniture')>=0 || s.indexOf('acquisition')>=0 || s.indexOf('achat')>=0 || s.indexOf('equipement')>=0 || s.indexOf('materiel')>=0 || s.indexOf('logiciel')>=0) return 'fournitures';
   if(s.indexOf('maintenance')>=0 || s.indexOf('entretien')>=0 || s.indexOf('prestation')>=0 || s.indexOf('service')>=0 || s.indexOf('controle')>=0) return 'services';
   return 'travaux'; // par defaut
@@ -2522,7 +2533,7 @@ function pgImportHist(){
   var html = '<div class="card">' +
     '<div class="sh"><div class="st">Etape 1 - Selectionner le fichier Excel</div></div>' +
     '<div style="font-size:13px;color:#4A453F;margin-bottom:12px">' +
-      'Le fichier doit contenir les colonnes : <b>N° marche</b>, <b>Intitule</b>, <b>Maitre d\'ouvrage</b>, <b>Montant</b>, et idealement <b>Date de commencement</b>, <b>Date Rec. provisoire</b>, <b>Date ret. garantie</b>, <b>Date Rec. definitive</b>.' +
+      'Le fichier doit contenir les colonnes : <b>NÂ° marche</b>, <b>Intitule</b>, <b>Maitre d\'ouvrage</b>, <b>Montant</b>, et idealement <b>Date de commencement</b>, <b>Date Rec. provisoire</b>, <b>Date ret. garantie</b>, <b>Date Rec. definitive</b>.' +
     '</div>' +
     '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">' +
       '<label class="btn btn-prim" style="cursor:pointer">' +
@@ -2546,7 +2557,7 @@ function importHistDownloadTemplate(){
   if(typeof XLSX==='undefined'){toast('XLSX non charge');return;}
   var wb = XLSX.utils.book_new();
   var data = [
-    ['Etat','N° marche','Intitule','Maitre d\'ouvrage','Date Rec. provisoire','Date ret. garantie','Date Rec. definitive','Date de commencement','Montant'],
+    ['Etat','NÂ° marche','Intitule','Maitre d\'ouvrage','Date Rec. provisoire','Date ret. garantie','Date Rec. definitive','Date de commencement','Montant'],
     ['EN COURS','MRC-2025-001','Exemple : Fourniture installation switches reseau','Office National des Peches',null,null,null,'2025-07-10',500000],
     ['EN COURS','MRC-2025-002','Exemple : Travaux d\'amenagement electrique','Ministere de la Sante',null,null,null,'2025-03-15',1200000],
     ['','','','','','','','','']
@@ -2589,13 +2600,13 @@ function importHistParse(rows){
   var headerIdx = -1;
   for(var i=0;i<Math.min(rows.length,10);i++){
     var r = (rows[i]||[]).map(function(x){return x?String(x).toLowerCase().trim():'';});
-    var hasMarche = r.some(function(c){return c.indexOf('marche')>=0 || c.indexOf('marché')>=0;});
+    var hasMarche = r.some(function(c){return c.indexOf('marche')>=0 || c.indexOf('marchÃ©')>=0;});
     var hasIntitule = r.some(function(c){return c.indexOf('intitul')>=0 || c.indexOf('objet')>=0;});
     var hasMontant = r.some(function(c){return c.indexOf('montant')>=0 || c.indexOf('budget')>=0;});
     if(hasMarche && hasIntitule && hasMontant){ headerIdx = i; break; }
   }
   if(headerIdx < 0){
-    alert('En-tete introuvable.\nLe fichier doit contenir au moins : N° marche, Intitule, Montant');
+    alert('En-tete introuvable.\nLe fichier doit contenir au moins : NÂ° marche, Intitule, Montant');
     return;
   }
 
@@ -2610,17 +2621,17 @@ function importHistParse(rows){
     return -1;
   }
 
-  var iRef = findColImport(['n° marche','n marche','n° marché','n marché','reference','ref']);
-  var iInt = findColImport(['intitule','intitulé','objet','description']);
-  var iMo  = findColImport(['maitre d','maître d','mo']);
+  var iRef = findColImport(['nÂ° marche','n marche','nÂ° marchÃ©','n marchÃ©','reference','ref']);
+  var iInt = findColImport(['intitule','intitulÃ©','objet','description']);
+  var iMo  = findColImport(['maitre d','maÃ®tre d','mo']);
   var iMnt = findColImport(['montant','budget']);
   var iDcom= findColImport(['date de commencement','commencement','demarrage']);
-  var iDrp = findColImport(['rec provisoire','rec. provisoire','reception provisoire','récep. provisoire']);
+  var iDrp = findColImport(['rec provisoire','rec. provisoire','reception provisoire','rÃ©cep. provisoire']);
   var iDrg = findColImport(['ret garantie','ret. garantie','retenue garantie']);
-  var iDrd = findColImport(['rec definitive','rec. definitive','reception definitive','réc. définitive','rec. définitive']);
+  var iDrd = findColImport(['rec definitive','rec. definitive','reception definitive','rÃ©c. dÃ©finitive','rec. dÃ©finitive']);
 
   if(iRef<0 || iInt<0 || iMnt<0){
-    alert('Colonnes essentielles manquantes : N° marche, Intitule, Montant');
+    alert('Colonnes essentielles manquantes : NÂ° marche, Intitule, Montant');
     return;
   }
 
