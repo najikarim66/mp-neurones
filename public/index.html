@@ -3278,14 +3278,21 @@ apiLoadAll = function(){
   });
 };
 
-/* Init injection sidebar (au chargement window) */
+/* Init injection sidebar (au chargement DOM)
+   On utilise addEventListener (cumulatif) au lieu de window.onload (re-assignable)
+   pour ne pas etre ecrase par la ligne window.onload=... qui suit ce module. */
 (function(){
-  var _origOnload = window.onload;
-  window.onload = function(){
-    if(_origOnload) _origOnload();
+  function veilleInit(){
     addVeilleNavLink();
-    /* Le compteur sera mis a jour apres apiLoadAll via le hook ci-dessus */
-  };
+    /* Si la sidebar est deja active sur 'veille' au chargement, force render */
+    if(S.page==='veille') render();
+  }
+  if(document.readyState==='loading'){
+    document.addEventListener('DOMContentLoaded', veilleInit);
+  } else {
+    /* DOM deja pret (script en fin de body) - inject sur le prochain tick */
+    setTimeout(veilleInit, 0);
+  }
 })();
 
 /* ========================================================================
