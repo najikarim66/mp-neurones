@@ -2853,6 +2853,445 @@ function importHistCommit(){
    FIN MULTI-UTILISATEURS
    ======================================================================== */
 
+
+/* ========================================================================
+   VEILLE AO - module auto-injectif
+   v12 : ajout onglet "Veille AO" lie au container Cosmos mp_veille_ao.
+   Pipeline Python (najikarim66/neurones-veille-ao) ecrit, MP Manager lit
+   et permet la decision go/no-go.
+   ======================================================================== */
+
+/* Container PK /source (different des autres : /id ou /marcheId) */
+if(typeof CONTAINERS!=='undefined' && !CONTAINERS.veille){
+  CONTAINERS.veille='mp_veille_ao';
+}
+
+/* Etat dedie veille (separe pour ne pas polluer S.search/sf/tf de MP) */
+S.veille=[];
+S._vsearch='';
+S._vstatut='';
+S._vscoremin=0;
+S._vurgence='';
+
+/* Statuts veille AO (synchronise avec pipeline Python) */
+var SMVA={
+  a_etudier:{l:'A etudier',c:'bw'},
+  en_analyse:{l:'En analyse',c:'bi'},
+  go:{l:'Go',c:'bs'},
+  no_go:{l:'No go',c:'bd'},
+  soumissionne:{l:'Soumissionne',c:'bp'},
+  gagne:{l:'Gagne',c:'bs'}
+};
+
+/* Couleurs score */
+function veilleScoreColor(s){
+  if(s>=60) return {bg:'#C6EFCE',fg:'#107C41'};   /* vert */
+  if(s>=35) return {bg:'#FFEB9C',fg:'#B7472A'};   /* jaune */
+  return {bg:'#F2F2F2',fg:'#666666'};
+}
+
+/* Parse "DD/MM/YYYY" -> Date */
+function veilleParseDateLimite(s){
+  if(!s) return null;
+  var p=s.split('/');
+  if(p.length!==3) return null;
+  var d=new Date(parseInt(p[2],10), parseInt(p[1],10)-1, parseInt(p[0],10));
+  return isNaN(d.getTime())?null:d;
+}
+
+/* Jours restants jusqu'a date_limite (negatif si passe) */
+function veilleJoursRestants(s){
+  var d=veilleParseDateLimite(s);
+  if(!d) return null;
+  return Math.ceil((d-Date.now())/86400000);
+}
+
+/* === API : load/save specifique veille (PK = source) === */
+function veilleApiList(){
+  return apiFetch(API_BASE+'/'+CONTAINERS.veille).then(function(items){
+    return items.map(function(it){
+      var c={};
+      Object.keys(it).forEach(function(k){if(k[0]!=='_') c[k]=it[k];});
+      return c;
+    });
+  }).catch(function(e){
+    console.warn('Veille AO non charges (container peut-etre pas en whitelist API):', e.message);
+    return [];
+  });
+}
+
+function veilleApiSave(item){
+  /* PK = item.source. apiUpsert standard fonctionne car le serveur lit la PK
+     du body via la config du container Cosmos. */
+  var body=JSON.parse(JSON.stringify(item));
+  if(body.id!=null) body.id=String(body.id);
+  return apiFetch(API_BASE+'/'+CONTAINERS.veille, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(body)
+  });
+}
+
+/* === Permissions === */
+/* Pour MVP : tous les utilisateurs M365 connectes peuvent voir,
+   tous peuvent aussi modifier (le tenant est restreint a neurones.ma).
+   Si on veut restreindre plus tard, brancher ici sur _user.role */
+function veilleCanEdit(){return true;}
+
+/* === Rendu === */
+function pgVeille(){
+  var rows=S.veille.slice();
+
+  /* Filtres */
+  if(S._vsearch){
+    var q=S._vsearch.toLowerCase();
+    rows=rows.filter(function(r){
+      return (r.objet||'').toLowerCase().indexOf(q)>=0
+          || (r.acheteur||'').toLowerCase().indexOf(q)>=0
+          || (r.reference_ao||'').toLowerCase().indexOf(q)>=0
+          || (r.lieu_execution||'').toLowerCase().indexOf(q)>=0;
+    });
+  }
+  if(S._vstatut){
+    rows=rows.filter(function(r){return (r.statut||'a_etudier')===S._vstatut;});
+  }
+  if(S._vscoremin>0){
+    rows=rows.filter(function(r){return (r.score||0)>=S._vscoremin;});
+  }
+  if(S._vurgence==='3'){
+    rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0 && j<=3;});
+  } else if(S._vurgence==='7'){
+    rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0 && j<=7;});
+  } else if(S._vurgence==='14'){
+    rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0 && j<=14;});
+  } else if(S._vurgence==='actifs'){
+    rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0;});
+  }
+
+  /* Tri : score desc, mais no_go en bas, gagne tout en haut */
+  rows.sort(function(a,b){
+    var sa=(a.statut||'a_etudier'),sb=(b.statut||'a_etudier');
+    var rankA=sa==='no_go'?2:(sa==='gagne'?0:1);
+    var rankB=sb==='no_go'?2:(sb==='gagne'?0:1);
+    if(rankA!==rankB) return rankA-rankB;
+    return (b.score||0)-(a.score||0);
+  });
+
+  /* Stats */
+  var st={a_etudier:0,en_analyse:0,go:0,no_go:0,soumissionne:0,gagne:0};
+  S.veille.forEach(function(r){var k=r.statut||'a_etudier';if(st[k]!=null)st[k]++;});
+  var nbVerts=S.veille.filter(function(r){return (r.score||0)>=60;}).length;
+  var nbActifs=S.veille.filter(function(r){
+    var j=veilleJoursRestants(r.date_limite);
+    return j!==null && j>=0 && (r.statut||'a_etudier')==='a_etudier';
+  }).length;
+
+  var kpi='<div class="krow" style="grid-template-columns:repeat(6,1fr)">'+
+    '<div class="kpi k1"><div class="kl">A etudier</div><div class="kv">'+st.a_etudier+'</div><div class="kf">non decides</div></div>'+
+    '<div class="kpi k3"><div class="kl">En analyse</div><div class="kv">'+st.en_analyse+'</div></div>'+
+    '<div class="kpi k2"><div class="kl">Go</div><div class="kv">'+st.go+'</div></div>'+
+    '<div class="kpi k4"><div class="kl">No go</div><div class="kv">'+st.no_go+'</div></div>'+
+    '<div class="kpi k1"><div class="kl">Soumissionnes</div><div class="kv">'+st.soumissionne+'</div></div>'+
+    '<div class="kpi k2"><div class="kl">Gagnes</div><div class="kv">'+st.gagne+'</div></div>'+
+  '</div>'+
+  '<div class="krow" style="grid-template-columns:repeat(3,1fr)">'+
+    '<div class="kpi k1"><div class="kl">Total veille</div><div class="kv">'+S.veille.length+'</div></div>'+
+    '<div class="kpi k2"><div class="kl">VERTS (>=60)</div><div class="kv">'+nbVerts+'</div></div>'+
+    '<div class="kpi k3"><div class="kl">Actifs a etudier</div><div class="kv">'+nbActifs+'</div></div>'+
+  '</div>';
+
+  /* Toolbar filtres */
+  var toolbar='<div class="tb"><div class="tb-l">'+
+    '<input class="si" placeholder="Rechercher (objet, acheteur, ref, lieu)..." value="'+esc(S._vsearch)+'" oninput="S._vsearch=this.value;render()">'+
+    '<select class="fl" onchange="S._vstatut=this.value;render()"><option value="">Tous statuts</option>'+
+      objEnts(SMVA).map(function(e){return '<option value="'+e[0]+'"'+(S._vstatut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+
+    '</select>'+
+    '<select class="fl" onchange="S._vscoremin=parseInt(this.value)||0;render()">'+
+      '<option value="0"'+(S._vscoremin===0?' selected':'')+'>Score min: 0</option>'+
+      '<option value="35"'+(S._vscoremin===35?' selected':'')+'>Score min: 35</option>'+
+      '<option value="50"'+(S._vscoremin===50?' selected':'')+'>Score min: 50</option>'+
+      '<option value="60"'+(S._vscoremin===60?' selected':'')+'>Score min: 60 (VERTS)</option>'+
+      '<option value="80"'+(S._vscoremin===80?' selected':'')+'>Score min: 80</option>'+
+    '</select>'+
+    '<select class="fl" onchange="S._vurgence=this.value;render()">'+
+      '<option value=""'+(S._vurgence===''?' selected':'')+'>Toutes deadlines</option>'+
+      '<option value="3"'+(S._vurgence==='3'?' selected':'')+'>J-3</option>'+
+      '<option value="7"'+(S._vurgence==='7'?' selected':'')+'>J-7</option>'+
+      '<option value="14"'+(S._vurgence==='14'?' selected':'')+'>J-14</option>'+
+      '<option value="actifs"'+(S._vurgence==='actifs'?' selected':'')+'>Encore actifs</option>'+
+    '</select>'+
+  '</div><div style="display:flex;align-items:center;gap:10px">'+
+    '<span style="font-size:12px;color:#7A7369">'+rows.length+' / '+S.veille.length+' AO veille</span>'+
+  '</div></div>';
+
+  /* Aide */
+  var aide='<div class="info-box info-blue" style="margin-bottom:10px;font-size:12px">'+
+    '<strong>Veille automatique</strong> - Pipeline GitHub Actions (cron 7h + 15h) qui scrape marchespublics.gov.ma et alimente cette page. '+
+    'Score &ge;60 = VERT (haute priorite metier). Pour telecharger un DCE, copier la commande puis coller dans PowerShell sur ton PC.'+
+  '</div>';
+
+  /* Lignes table */
+  var tbody;
+  if(rows.length===0){
+    tbody='<tr><td colspan="9"><div class="empty">Aucun AO veille avec ces filtres</div></td></tr>';
+  } else {
+    tbody=rows.map(function(r){
+      var col=veilleScoreColor(r.score||0);
+      var jrest=veilleJoursRestants(r.date_limite);
+      var dlCell;
+      if(jrest===null){
+        dlCell='<span style="color:#7A7369;font-size:11px">-</span>';
+      } else if(jrest<0){
+        dlCell='<span style="color:#7A7369;font-size:11px;text-decoration:line-through">'+esc(r.date_limite||'')+'</span>';
+      } else if(jrest<=3){
+        dlCell='<span style="color:#dc2626;font-weight:600;font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
+      } else if(jrest<=7){
+        dlCell='<span style="color:#d97706;font-weight:600;font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
+      } else {
+        dlCell='<span style="font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
+      }
+      var heure=r.heure_limite?'<div style="font-size:10px;color:#7A7369">'+esc(r.heure_limite)+'</div>':'';
+
+      var st=SMVA[r.statut||'a_etudier']||SMVA.a_etudier;
+      var statutCell='<span class="badge '+st.c+'">'+st.l+'</span>';
+
+      var marcheLink=r.marche_id_lie?'<div style="font-size:10px;margin-top:2px"><a href="#" onclick="event.preventDefault();veilleGotoMarche(\''+esc(r.marche_id_lie)+'\')" style="color:#1F4E78;text-decoration:underline">Voir marche</a></div>':'';
+
+      var notes=r.notes?'<div style="font-size:10px;color:#7A7369;margin-top:2px;font-style:italic">'+esc(r.notes.substring(0,60))+(r.notes.length>60?'...':'')+'</div>':'';
+
+      var fiche=r.lien_fiche?'<a href="'+esc(r.lien_fiche)+'" target="_blank" rel="noopener" class="act" title="Ouvrir fiche portail">&#128279;</a>':'';
+      var copyDce=(r.ref_consultation && r.org_acronyme)?'<button class="act" title="Copier commande DL DCE" onclick="veilleCopyDceCmd(\''+esc(r.ref_consultation)+'\',\''+esc(r.org_acronyme)+'\')">&#128203;</button>':'';
+      var actStatut='<button class="act" title="Changer statut" onclick="veilleChangeStatut(\''+esc(r.id)+'\')" style="color:#1F4E78">&#9998;</button>';
+      var actNotes='<button class="act" title="Notes" onclick="veilleEditNotes(\''+esc(r.id)+'\')">&#128221;</button>';
+      var actLink='<button class="act" title="Lier a un marche" onclick="veilleLinkMarche(\''+esc(r.id)+'\')" style="color:#7c3aed">&#128279;</button>';
+
+      return '<tr>'+
+        '<td style="background:'+col.bg+';color:'+col.fg+';font-weight:bold;text-align:center;font-size:18px;padding:6px">'+
+          (r.score||0)+
+        '</td>'+
+        '<td><div style="font-family:monospace;font-size:11px;font-weight:600">'+esc(r.reference_ao||'-')+'</div><div style="font-size:10px;color:#7A7369">'+esc(r.categorie||'')+'</div></td>'+
+        '<td style="max-width:380px"><div style="font-size:12px;line-height:1.3">'+esc((r.objet||'').substring(0,250))+((r.objet||'').length>250?'...':'')+'</div>'+notes+marcheLink+'</td>'+
+        '<td style="font-size:11px;color:#5a5650">'+esc((r.acheteur||'').substring(0,100))+'</td>'+
+        '<td style="font-size:11px;text-align:center">'+esc((r.lieu_execution||'').substring(0,40))+'</td>'+
+        '<td>'+dlCell+heure+'</td>'+
+        '<td>'+statutCell+'</td>'+
+        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+copyDce+actStatut+actNotes+actLink+'</div></td>'+
+      '</tr>';
+    }).join('');
+  }
+
+  var table='<div class="card" style="padding:0"><div class="tw"><table>'+
+    '<thead><tr>'+
+      '<th style="width:50px">Score</th>'+
+      '<th>Reference</th>'+
+      '<th>Objet</th>'+
+      '<th>Acheteur</th>'+
+      '<th>Lieu</th>'+
+      '<th>Date limite</th>'+
+      '<th>Statut</th>'+
+      '<th>Actions</th>'+
+    '</tr></thead><tbody>'+tbody+'</tbody></table></div></div>';
+
+  return aide+kpi+toolbar+table;
+}
+
+/* === Actions === */
+function veilleCopyDceCmd(ref, org){
+  var cmd='python -m src.dce_download '+ref+' '+org;
+  if(navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(cmd).then(function(){
+      toast('Commande copiee : '+cmd);
+    }).catch(function(){
+      veilleCopyFallback(cmd);
+    });
+  } else {
+    veilleCopyFallback(cmd);
+  }
+}
+
+function veilleCopyFallback(cmd){
+  var ta=document.createElement('textarea');
+  ta.value=cmd;
+  ta.style.position='fixed';
+  ta.style.left='-9999px';
+  document.body.appendChild(ta);
+  ta.select();
+  try{
+    document.execCommand('copy');
+    toast('Commande copiee : '+cmd);
+  } catch(e){
+    prompt('Copier cette commande :', cmd);
+  }
+  document.body.removeChild(ta);
+}
+
+function veilleChangeStatut(id){
+  if(!veilleCanEdit()){toast('Action reservee aux utilisateurs autorises');return;}
+  var r=S.veille.find(function(x){return x.id===id;});
+  if(!r){toast('AO introuvable');return;}
+
+  var options=objEnts(SMVA).map(function(e){
+    return '<option value="'+e[0]+'"'+((r.statut||'a_etudier')===e[0]?' selected':'')+'>'+e[1].l+'</option>';
+  }).join('');
+
+  var html='<div class="fg"><label>Reference</label><input class="fc" value="'+esc(r.reference_ao||r.ref_consultation||'-')+'" readonly></div>'+
+    '<div class="fg"><label>Objet</label><textarea class="fc" rows="3" readonly>'+esc(r.objet||'')+'</textarea></div>'+
+    '<div class="fg"><label>Score</label><input class="fc" value="'+(r.score||0)+'" readonly></div>'+
+    '<div class="fg"><label>Nouveau statut *</label><select class="fc" id="va_statut">'+options+'</select></div>'+
+    '<div class="fg"><label>Notes (optionnel)</label><textarea class="fc" id="va_notes" rows="3" placeholder="Raison de la decision...">'+esc(r.notes||'')+'</textarea></div>';
+
+  openMod('Changer statut - '+(r.reference_ao||r.ref_consultation), html, function(){
+    var nouveau=v('va_statut');
+    if(!nouveau){toast('Statut requis');return;}
+    r.statut=nouveau;
+    r.notes=v('va_notes');
+    r.decision_par=(typeof _user!=='undefined' && _user && _user.email)?_user.email:'';
+    r.decision_le=new Date().toISOString();
+    r.date_derniere_mise_a_jour=new Date().toISOString();
+    veilleApiSave(r).then(function(){
+      var idx=S.veille.findIndex(function(x){return x.id===r.id;});
+      if(idx>=0) S.veille[idx]=r;
+      render();
+      toast('Statut mis a jour : '+(SMVA[nouveau]?SMVA[nouveau].l:nouveau));
+    }).catch(function(e){
+      toast('Erreur sauvegarde : '+e.message);
+    });
+  });
+}
+
+function veilleEditNotes(id){
+  if(!veilleCanEdit()){toast('Action reservee');return;}
+  var r=S.veille.find(function(x){return x.id===id;});
+  if(!r){return;}
+  var html='<div class="fg"><label>Notes</label><textarea class="fc" id="vn_notes" rows="6" placeholder="Annotations libres sur cet AO...">'+esc(r.notes||'')+'</textarea></div>';
+  openMod('Notes - '+(r.reference_ao||r.ref_consultation), html, function(){
+    r.notes=v('vn_notes');
+    r.date_derniere_mise_a_jour=new Date().toISOString();
+    veilleApiSave(r).then(function(){
+      var idx=S.veille.findIndex(function(x){return x.id===r.id;});
+      if(idx>=0) S.veille[idx]=r;
+      render();
+      toast('Notes enregistrees');
+    }).catch(function(e){
+      toast('Erreur : '+e.message);
+    });
+  });
+}
+
+function veilleLinkMarche(id){
+  if(!veilleCanEdit()){toast('Action reservee');return;}
+  var r=S.veille.find(function(x){return x.id===id;});
+  if(!r){return;}
+
+  var marchesOpts='<option value="">-- Aucun (delier) --</option>'+
+    S.marches.map(function(m){
+      return '<option value="'+esc(m.id)+'"'+(r.marche_id_lie===m.id?' selected':'')+'>'+esc(m.ref)+' - '+esc((m.titre||m.objet||'').substring(0,80))+'</option>';
+    }).join('');
+
+  var html='<div class="info-box info-blue" style="font-size:12px">Lier cet AO veille a un marche existant dans MP Manager (ex: marche gagne).</div>'+
+    '<div class="fg"><label>Reference AO</label><input class="fc" value="'+esc(r.reference_ao||r.ref_consultation||'')+'" readonly></div>'+
+    '<div class="fg"><label>Objet</label><textarea class="fc" rows="2" readonly>'+esc(r.objet||'')+'</textarea></div>'+
+    '<div class="fg"><label>Marche MP a lier</label><select class="fc" id="vl_marche">'+marchesOpts+'</select></div>';
+
+  openMod('Lier a un marche - '+(r.reference_ao||r.ref_consultation), html, function(){
+    var mid=v('vl_marche')||null;
+    r.marche_id_lie=mid;
+    r.date_derniere_mise_a_jour=new Date().toISOString();
+    /* Si on lie ET le statut est encore a_etudier/en_analyse, on passe a gagne */
+    if(mid && (r.statut==='a_etudier' || r.statut==='en_analyse' || r.statut==='soumissionne')){
+      r.statut='gagne';
+      r.decision_par=(typeof _user!=='undefined' && _user && _user.email)?_user.email:'';
+      r.decision_le=new Date().toISOString();
+    }
+    veilleApiSave(r).then(function(){
+      var idx=S.veille.findIndex(function(x){return x.id===r.id;});
+      if(idx>=0) S.veille[idx]=r;
+      render();
+      toast(mid?'AO lie au marche':'Lien retire');
+    }).catch(function(e){
+      toast('Erreur : '+e.message);
+    });
+  });
+}
+
+function veilleGotoMarche(mid){
+  if(!mid) return;
+  /* Filtre par ref si possible et passe sur la page marches */
+  var m=S.marches.find(function(x){return x.id===mid;});
+  if(m){
+    S.search=(m.ref||'').toLowerCase();
+  }
+  nav('marches');
+}
+
+/* === Hook render pour gerer la page 'veille' === */
+var _originalRender_veille = render;
+render = function(){
+  if(S.page==='veille'){
+    document.getElementById('pb').innerHTML=pgVeille();
+    return;
+  }
+  _originalRender_veille();
+};
+
+/* === Hook TITLES === */
+if(typeof TITLES!=='undefined') TITLES.veille='Veille AO';
+
+/* === Ajouter le lien sidebar === */
+function addVeilleNavLink(){
+  if(document.querySelector('.ni[data-page="veille"]')) return;
+  /* Inserer apres "Appels d'offres" */
+  var aoLink=document.querySelector('.ni[data-page="ao"]');
+  if(!aoLink) return;
+  var newLink=document.createElement('div');
+  newLink.className='ni';
+  newLink.setAttribute('data-page','veille');
+  newLink.innerHTML='<span class="ni-ic">&#128269;</span>Veille AO <span id="veille-counter" style="display:none;background:#107C41;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px"></span>';
+  aoLink.parentNode.insertBefore(newLink, aoLink.nextSibling);
+  newLink.addEventListener('click', function(){nav('veille');});
+}
+
+/* === Mise a jour du compteur sidebar === */
+function veilleUpdateCounter(){
+  var el=document.getElementById('veille-counter');
+  if(!el) return;
+  var n=S.veille.filter(function(r){
+    var j=veilleJoursRestants(r.date_limite);
+    return (r.statut||'a_etudier')==='a_etudier' && j!==null && j>=0;
+  }).length;
+  if(n>0){
+    el.style.display='inline-block';
+    el.textContent=n;
+  } else {
+    el.style.display='none';
+  }
+}
+
+/* === Hook apiLoadAll pour charger aussi la veille === */
+var _originalApiLoadAll_veille = apiLoadAll;
+apiLoadAll = function(){
+  return _originalApiLoadAll_veille().then(function(){
+    return veilleApiList();
+  }).then(function(items){
+    S.veille=items||[];
+    veilleUpdateCounter();
+  });
+};
+
+/* Init injection sidebar (au chargement window) */
+(function(){
+  var _origOnload = window.onload;
+  window.onload = function(){
+    if(_origOnload) _origOnload();
+    addVeilleNavLink();
+    /* Le compteur sera mis a jour apres apiLoadAll via le hook ci-dessus */
+  };
+})();
+
+/* ========================================================================
+   FIN VEILLE AO
+   ======================================================================== */
+
 window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>

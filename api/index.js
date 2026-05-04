@@ -3,7 +3,8 @@
 const ALLOWED = new Set([
   "mp_marches", "mp_aos", "mp_cautions", "mp_paiements",
   "mp_bordereau", "mp_avancements", "mp_indices", "mp_banques",
-  "mp_avenants"
+  "mp_avenants",
+  "mp_veille_ao"
 ]);
 
 // Partition key field par container
@@ -16,7 +17,8 @@ const PK_PATH = {
   "mp_avancements": "marcheId",
   "mp_indices":     "type",
   "mp_banques":     "id",
-  "mp_avenants":    "marcheId"
+  "mp_avenants":    "marcheId",
+  "mp_veille_ao":   "source"
 };
 
 let _db = null;
