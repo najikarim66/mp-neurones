@@ -812,7 +812,7 @@ function renderAvenantsSection(m){
     html+='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Montant HT</th><th>Delai sup.</th><th>Garantie</th><th></th></tr></thead><tbody>';
     avs.forEach(function(a){
       var sign=Number(a.montant_ht)>=0?'+':'';
-      html+='<tr><td><span class="badge bi" style="font-size:10px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:11px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:11px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:11px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:11px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td><button class="act red" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
+      html+='<tr><td><span class="badge bi" style="font-size:10px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:11px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:11px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:11px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:11px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td style="white-space:nowrap"><button class="act" title="Modifier" onclick="showEditAvenant(\''+a.id+'\')" style="color:#1F4E78">&#9998;</button> <button class="act red" title="Supprimer" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
     });
     html+='</tbody></table>';
     // Recap
@@ -867,6 +867,37 @@ function recalcDateFinMarche(marcheId){
   if(nouvelleDateFin===m.date_fin_calculee)return Promise.resolve();
   m.date_fin_calculee=nouvelleDateFin;
   return saveItem('marches',m);
+}
+
+// ─── Modal modifier avenant existant ────────────────────────────
+function showEditAvenant(id){
+  var av=(S.avenants||[]).find(function(a){return a.id===id;});
+  if(!av){toast('Avenant introuvable');return;}
+  var marcheId=av.marche_id;
+  var html='<div class="fr2"><div class="fg"><label>Numero avenant *</label><input class="fc" id="av_numero" type="number" value="'+(av.numero||1)+'" min="1"></div><div class="fg"><label>Date de signature *</label><input class="fc" id="av_date" type="date" value="'+esc(av.date_signature||'')+'"></div></div>';
+  html+='<div class="fg"><label>Objet de l\'avenant *</label><textarea class="fc" id="av_objet" rows="2" placeholder="Ex: Augmentation de la prestation X">'+esc(av.objet||'')+'</textarea></div>';
+  html+='<div class="fr2"><div class="fg"><label>Montant HT (MAD)</label><input class="fc" id="av_montant" type="number" value="'+(av.montant_ht!=null?av.montant_ht:'')+'" placeholder="0 (peut etre negatif)"></div><div class="fg"><label>Delai supplementaire (jours)</label><input class="fc" id="av_delai" type="number" min="0" value="'+(av.delai_supplementaire_jours!=null?av.delai_supplementaire_jours:'')+'" placeholder="0"></div></div>';
+  html+='<div class="fg"><label>Delai de garantie modifie (mois) - optionnel</label><input class="fc" id="av_garantie" type="number" min="0" max="60" value="'+(av.delai_garantie_mois!=null?av.delai_garantie_mois:'')+'" placeholder="Laisser vide si pas de changement"></div>';
+  openMod('Modifier avenant Av. '+(av.numero||'?'),html,function(){
+    var numero=parseInt(v('av_numero'));
+    var dateSig=v('av_date');
+    var objet=v('av_objet');
+    if(!numero||!dateSig||!objet){alert('Numero, date et objet sont obligatoires');return;}
+    av.numero=numero;
+    av.date_signature=dateSig;
+    av.objet=objet;
+    av.montant_ht=parseFloat(v('av_montant'))||0;
+    av.delai_supplementaire_jours=parseInt(v('av_delai'))||0;
+    av.delai_garantie_mois=v('av_garantie')!==''?parseInt(v('av_garantie')):null;
+    av.updated_at=new Date().toISOString();
+    saveItem('avenants',av).then(function(){
+      return recalcDateFinMarche(marcheId);
+    }).then(function(){
+      toast('Avenant modifie');
+      refreshAvenantsInModal(marcheId);
+      if(_editingMarcheId===marcheId){updateDFC();}
+    }).catch(function(e){toast('Erreur: '+e.message);});
+  });
 }
 
 // ─── Suppression avenant ─────────────────────────────────────────
