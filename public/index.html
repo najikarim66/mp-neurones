@@ -1200,7 +1200,7 @@ function printEtat(type){
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL</td><td class="mono" style="text-align:right">'+fmad(totM)+'</td><td colspan="8"></td></tr></tfoot></table>';
   }else if(type==='cautions'){
     titre='Etat des cautions bancaires';
-    var cs=S.cautions;if(S.search)cs=cs.filter(function(c){return [c.num,c.banque,gm(c.marche_id).ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)cs=cs.filter(function(c){return c.statut===S.sf;});if(S.bf)cs=cs.filter(function(c){return c.banque===S.bf;});
+    var cs=S.cautions;if(S.search)cs=cs.filter(function(c){return [c.num,c.banque,gm(c.marche_id).ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)cs=cs.filter(function(c){return c.statut===S.sf;});if(S.tf)cs=cs.filter(function(c){return c.type===S.tf;});if(S.bf)cs=cs.filter(function(c){return c.banque===S.bf;});
     var totCA=cs.filter(function(c){return c.statut==='active';}).reduce(function(a,c){return a+c.montant;},0);
     body+='<table><thead><tr><th>#</th><th>N Caution</th><th>Marche</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Statut</th></tr></thead><tbody>';
     cs.forEach(function(c,i){var stS=(SMC[c.statut]||{l:c.statut,c:'bn'});body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+c.num+'</b></td><td>'+gm(c.marche_id).ref+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'">'+(TC[c.type]||c.type)+'</span></td><td>'+c.banque+'</td><td class="mono" style="text-align:right">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
