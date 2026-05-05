@@ -2859,10 +2859,9 @@ function importHistCommit(){
 
 
 /* ========================================================================
-   VEILLE AO - module auto-injectif
-   v12 : ajout onglet "Veille AO" lie au container Cosmos mp_veille_ao.
-   Pipeline Python (najikarim66/neurones-veille-ao) ecrit, MP Manager lit
-   et permet la decision go/no-go.
+   VEILLE AO - module auto-injectif v14
+   v13 : ajout onglet "Veille AO" lie au container Cosmos mp_veille_ao.
+   v14 : ajout bouton "Demander DCE" / "Telecharger ZIP" via Azure Blob.
    ======================================================================== */
 
 /* Container PK /source (different des autres : /id ou /marcheId) */
@@ -2925,8 +2924,6 @@ function veilleApiList(){
 }
 
 function veilleApiSave(item){
-  /* PK = item.source. apiUpsert standard fonctionne car le serveur lit la PK
-     du body via la config du container Cosmos. */
   var body=JSON.parse(JSON.stringify(item));
   if(body.id!=null) body.id=String(body.id);
   return apiFetch(API_BASE+'/'+CONTAINERS.veille, {
@@ -2937,9 +2934,6 @@ function veilleApiSave(item){
 }
 
 /* === Permissions === */
-/* Pour MVP : tous les utilisateurs M365 connectes peuvent voir,
-   tous peuvent aussi modifier (le tenant est restreint a neurones.ma).
-   Si on veut restreindre plus tard, brancher ici sur _user.role */
 function veilleCanEdit(){return true;}
 
 /* === Rendu === */
@@ -3030,8 +3024,8 @@ function pgVeille(){
 
   /* Aide */
   var aide='<div class="info-box info-blue" style="margin-bottom:10px;font-size:12px">'+
-    '<strong>Veille automatique</strong> - Pipeline GitHub Actions (cron 7h + 15h) qui scrape marchespublics.gov.ma et alimente cette page. '+
-    'Score &ge;60 = VERT (haute priorite metier). Pour telecharger un DCE, copier la commande puis coller dans PowerShell sur ton PC.'+
+    '<strong>Veille automatique</strong> - Pipeline GitHub Actions (cron 7h + 15h) qui scrape marchespublics.gov.ma. '+
+    'Score &ge;60 = VERT. Bouton <strong>DCE</strong> : telecharge le ZIP via le cloud (~2 min, marche partout).'+
   '</div>';
 
   /* Lignes table */
@@ -3063,8 +3057,12 @@ function pgVeille(){
 
       var notes=r.notes?'<div style="font-size:10px;color:#7A7369;margin-top:2px;font-style:italic">'+esc(r.notes.substring(0,60))+(r.notes.length>60?'...':'')+'</div>':'';
 
+      /* Actions */
       var fiche=r.lien_fiche?'<a href="'+esc(r.lien_fiche)+'" target="_blank" rel="noopener" class="act" title="Ouvrir fiche portail">&#128279;</a>':'';
-      var copyDce=(r.ref_consultation && r.org_acronyme)?'<button class="act" title="Copier commande DL DCE" onclick="veilleCopyDceCmd(\''+esc(r.ref_consultation)+'\',\''+esc(r.org_acronyme)+'\')">&#128203;</button>':'';
+
+      /* DCE button : 4 etats selon r.dce_status */
+      var dceBtn=veilleRenderDceButton(r);
+
       var actStatut='<button class="act" title="Changer statut" onclick="veilleChangeStatut(\''+esc(r.id)+'\')" style="color:#1F4E78">&#9998;</button>';
       var actNotes='<button class="act" title="Notes" onclick="veilleEditNotes(\''+esc(r.id)+'\')">&#128221;</button>';
       var actLink='<button class="act" title="Lier a un marche" onclick="veilleLinkMarche(\''+esc(r.id)+'\')" style="color:#7c3aed">&#128279;</button>';
@@ -3079,7 +3077,7 @@ function pgVeille(){
         '<td style="font-size:11px;text-align:center">'+esc((r.lieu_execution||'').substring(0,40))+'</td>'+
         '<td>'+dlCell+heure+'</td>'+
         '<td>'+statutCell+'</td>'+
-        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+copyDce+actStatut+actNotes+actLink+'</div></td>'+
+        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+actStatut+actNotes+actLink+'</div></td>'+
       '</tr>';
     }).join('');
   }
@@ -3099,38 +3097,84 @@ function pgVeille(){
   return aide+kpi+toolbar+table;
 }
 
-/* === Actions === */
-function veilleCopyDceCmd(ref, org){
-  var cmd='python -m src.dce_download '+ref+' '+org;
-  if(navigator.clipboard && navigator.clipboard.writeText){
-    navigator.clipboard.writeText(cmd).then(function(){
-      toast('Commande copiee : '+cmd);
-    }).catch(function(){
-      veilleCopyFallback(cmd);
-    });
-  } else {
-    veilleCopyFallback(cmd);
+/* === Bouton DCE adaptatif selon dce_status === */
+function veilleRenderDceButton(r){
+  if(!r.ref_consultation || !r.org_acronyme){
+    return ''; /* Pas de ref, on ne peut rien faire */
   }
+  var status=r.dce_status||'';
+  if(status==='ready' && r.dce_url){
+    /* Lien direct vers Azure Blob (SAS valide 35j) */
+    return '<a href="'+esc(r.dce_url)+'" target="_blank" rel="noopener" class="act" title="Telecharger ZIP DCE" style="color:#107C41;font-weight:bold">&#11015;</a>';
+  }
+  if(status==='downloading' || status==='queued'){
+    /* En cours - indicator visuel */
+    return '<span class="act" title="DCE en cours de telechargement..." style="color:#d97706;cursor:wait">&#9203;</span>';
+  }
+  if(status==='failed'){
+    /* Echec - afficher l'erreur en tooltip + bouton reessayer */
+    var err=r.dce_error?esc(r.dce_error.substring(0,200)):'Echec inconnu';
+    return '<button class="act" title="Echec : '+err+' - Cliquer pour reessayer" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#dc2626">&#10060;</button>';
+  }
+  /* Pas encore demande - bouton 'Demander DCE' */
+  return '<button class="act" title="Telecharger DCE (via cloud, ~2 min)" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#1F4E78">&#128229;</button>';
 }
 
-function veilleCopyFallback(cmd){
-  var ta=document.createElement('textarea');
-  ta.value=cmd;
-  ta.style.position='fixed';
-  ta.style.left='-9999px';
-  document.body.appendChild(ta);
-  ta.select();
-  try{
-    document.execCommand('copy');
-    toast('Commande copiee : '+cmd);
-  } catch(e){
-    prompt('Copier cette commande :', cmd);
+/* === Action : declencher le DL DCE via API SWA -> GitHub Actions === */
+function veilleRequestDce(id){
+  if(!veilleCanEdit()){toast('Action reservee');return;}
+  var r=S.veille.find(function(x){return x.id===id;});
+  if(!r){toast('AO introuvable');return;}
+  if(!r.ref_consultation || !r.org_acronyme){
+    toast('Ref ou org manquant pour cet AO');
+    return;
   }
-  document.body.removeChild(ta);
+
+  if(!confirm('Demander le telechargement du DCE pour '+ (r.reference_ao||r.ref_consultation) +' ?\n\nLe ZIP sera disponible dans ~2 minutes via le bouton de telechargement.')){
+    return;
+  }
+
+  toast('Demande envoyee - DCE en cours de preparation...');
+
+  /* Mise a jour optimiste de l'UI : on marque queued tout de suite */
+  r.dce_status='queued';
+  r.dce_started_at=new Date().toISOString();
+  r.dce_error=null;
+  render();
+
+  /* Appel API */
+  fetch('/api/dce-trigger', {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({
+      ref_consultation:r.ref_consultation,
+      org_acronyme:r.org_acronyme,
+      cosmos_doc_id:r.id
+    })
+  }).then(function(resp){
+    if(!resp.ok){
+      return resp.text().then(function(t){throw new Error('HTTP '+resp.status+': '+t.substring(0,200));});
+    }
+    return resp.json();
+  }).then(function(data){
+    toast('Workflow declenche - DCE pret dans ~2 min (rafraichissement automatique)');
+    /* Le polling 5min va faire le reste, mais on peut declencher un refresh apres 60s */
+    setTimeout(function(){
+      if(typeof manualRefresh==='function'){
+        manualRefresh();
+      }
+    }, 90000); /* 90s : workflow termine probablement */
+  }).catch(function(e){
+    toast('Erreur : '+e.message);
+    r.dce_status='failed';
+    r.dce_error=e.message;
+    render();
+  });
 }
 
+/* === Actions existantes === */
 function veilleChangeStatut(id){
-  if(!veilleCanEdit()){toast('Action reservee aux utilisateurs autorises');return;}
+  if(!veilleCanEdit()){toast('Action reservee');return;}
   var r=S.veille.find(function(x){return x.id===id;});
   if(!r){toast('AO introuvable');return;}
 
@@ -3201,7 +3245,6 @@ function veilleLinkMarche(id){
     var mid=v('vl_marche')||null;
     r.marche_id_lie=mid;
     r.date_derniere_mise_a_jour=new Date().toISOString();
-    /* Si on lie ET le statut est encore a_etudier/en_analyse, on passe a gagne */
     if(mid && (r.statut==='a_etudier' || r.statut==='en_analyse' || r.statut==='soumissionne')){
       r.statut='gagne';
       r.decision_par=(typeof _user!=='undefined' && _user && _user.email)?_user.email:'';
@@ -3220,7 +3263,6 @@ function veilleLinkMarche(id){
 
 function veilleGotoMarche(mid){
   if(!mid) return;
-  /* Filtre par ref si possible et passe sur la page marches */
   var m=S.marches.find(function(x){return x.id===mid;});
   if(m){
     S.search=(m.ref||'').toLowerCase();
@@ -3244,7 +3286,6 @@ if(typeof TITLES!=='undefined') TITLES.veille='Veille AO';
 /* === Ajouter le lien sidebar === */
 function addVeilleNavLink(){
   if(document.querySelector('.ni[data-page="veille"]')) return;
-  /* Inserer apres "Appels d'offres" */
   var aoLink=document.querySelector('.ni[data-page="ao"]');
   if(!aoLink) return;
   var newLink=document.createElement('div');
@@ -3288,13 +3329,11 @@ apiLoadAll = function(){
 (function(){
   function veilleInit(){
     addVeilleNavLink();
-    /* Si la sidebar est deja active sur 'veille' au chargement, force render */
     if(S.page==='veille') render();
   }
   if(document.readyState==='loading'){
     document.addEventListener('DOMContentLoaded', veilleInit);
   } else {
-    /* DOM deja pret (script en fin de body) - inject sur le prochain tick */
     setTimeout(veilleInit, 0);
   }
 })();
@@ -3302,6 +3341,7 @@ apiLoadAll = function(){
 /* ========================================================================
    FIN VEILLE AO
    ======================================================================== */
+
 
 window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
