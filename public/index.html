@@ -528,9 +528,10 @@ function render(){
 }
 
 // CALCULS DATE FIN + AUTO-STATUT
-function calcDateFin(dc,delai,os){
+function calcDateFin(dc,delai,os,delaiSup){
   if(!dc||!delai)return null;
   var start=new Date(dc);var d=parseInt(delai)||0;
+  var dSup=parseInt(delaiSup)||0;
   var sorted=(os||[]).slice().sort(function(a,b){return new Date(a.date)-new Date(b.date);});
   var suspended=0,arret=null;
   sorted.forEach(function(o){
@@ -538,8 +539,13 @@ function calcDateFin(dc,delai,os){
     else if(o.type==='reprise'&&arret){suspended+=Math.round((new Date(o.date)-arret)/86400000);arret=null;}
   });
   if(arret)suspended+=Math.round((Date.now()-arret)/86400000);
-  var fin=new Date(start);fin.setDate(fin.getDate()+d+suspended);
+  var fin=new Date(start);fin.setDate(fin.getDate()+d+dSup+suspended);
   return fin.toISOString().slice(0,10);
+}
+/* Helper: somme des delais supplementaires des avenants d'un marche */
+function getAvenantsDelaiSup(marcheId){
+  if(!marcheId||!S.avenants)return 0;
+  return S.avenants.filter(function(a){return a.marche_id===marcheId;}).reduce(function(s,a){return s+(Number(a.delai_supplementaire_jours)||0);},0);
 }
 function checkAutoTermine(mid){
   var m=S.marches.find(function(x){return x.id===mid;});
@@ -727,14 +733,15 @@ function updateDFC(){
   var dc=v('mdcom'),del=parseInt(v('mdelai'))||0;
   if(!dc||!del){var el=document.getElementById('mdfin_calc');if(el)el.value='';return;}
   var tmpOS=S._osTemp.map(function(o){return {type:o.type,date:document.getElementById('os_date_'+o.id)?document.getElementById('os_date_'+o.id).value||'':''};}).filter(function(o){return o.date;});
-  var dfin=calcDateFin(dc,del,tmpOS);
+  var delaiSup=getAvenantsDelaiSup(_editingMarcheId);
+  var dfin=calcDateFin(dc,del,tmpOS,delaiSup);
   var el=document.getElementById('mdfin_calc');if(el)el.value=dfin?fdat(dfin):'';
   var sorted=tmpOS.slice().sort(function(a,b){return new Date(a.date)-new Date(b.date);});
   var susp=0,arr=null;
   sorted.forEach(function(o){if(o.type==='arret')arr=new Date(o.date);else if(o.type==='reprise'&&arr){susp+=Math.round((new Date(o.date)-arr)/86400000);arr=null;}});
   if(arr)susp+=Math.round((Date.now()-arr)/86400000);
   var inf=document.getElementById('os-info');
-  if(inf){if(susp>0){inf.style.display='block';inf.textContent='Total jours d\'arret: '+susp+' jours - Date fin reportee d\'autant.';}else inf.style.display='none';}
+  if(inf){if(susp>0||delaiSup>0){inf.style.display='block';var msg='';if(delaiSup>0)msg+='Delai avenants: +'+delaiSup+' jours. ';if(susp>0)msg+='Total jours d\'arret: '+susp+' jours. ';msg+='Date fin reportee d\'autant.';inf.textContent=msg;}else inf.style.display='none';}
 }
 
 // ─── Calcul automatique reception definitive = reception provisoire + delai garantie ───
@@ -841,8 +848,25 @@ function showAddAvenant(marcheId){
     var newAv={id:nidStr('av'),marche_id:marcheId,numero:numero,date_signature:dateSig,objet:objet,montant_ht:montantHT,delai_supplementaire_jours:delaiSup,delai_garantie_mois:garantieMois,created_at:new Date().toISOString()};
     if(!S.avenants)S.avenants=[];
     S.avenants.push(newAv);
-    saveItem('avenants',newAv).then(function(){toast('Avenant cree');refreshAvenantsInModal(marcheId);}).catch(function(e){toast('Erreur: '+e.message);});
+    saveItem('avenants',newAv).then(function(){
+      return recalcDateFinMarche(marcheId);
+    }).then(function(){
+      toast('Avenant cree');
+      refreshAvenantsInModal(marcheId);
+      /* Si la modal d'edition est ouverte, mettre a jour le champ date fin affiche */
+      if(_editingMarcheId===marcheId){updateDFC();}
+    }).catch(function(e){toast('Erreur: '+e.message);});
   });
+}
+
+/* Recalcule + sauvegarde date_fin_calculee d'un marche en tenant compte des avenants */
+function recalcDateFinMarche(marcheId){
+  var m=S.marches.find(function(x){return x.id===marcheId;});
+  if(!m||!m.date_commencement||!m.delai_execution)return Promise.resolve();
+  var nouvelleDateFin=calcDateFin(m.date_commencement,m.delai_execution,m.ordres_service||[],getAvenantsDelaiSup(marcheId));
+  if(nouvelleDateFin===m.date_fin_calculee)return Promise.resolve();
+  m.date_fin_calculee=nouvelleDateFin;
+  return saveItem('marches',m);
 }
 
 // ─── Suppression avenant ─────────────────────────────────────────
@@ -853,7 +877,10 @@ function delAvenant(id){
   var marcheId=av.marche_id;
   deleteItem('avenants',id,marcheId).then(function(){
     S.avenants=(S.avenants||[]).filter(function(a){return a.id!==id;});
+    return recalcDateFinMarche(marcheId);
+  }).then(function(){
     refreshAvenantsInModal(marcheId);
+    if(_editingMarcheId===marcheId){updateDFC();}
     toast('Avenant supprime');
   }).catch(function(e){toast('Erreur: '+e.message);});
 }
@@ -884,7 +911,7 @@ function newMarche(){
     var ref=v('mref'),titre=v('mtitre'),maitre_ouvrage=v('mmo'),montant=vn('mmnt');
     if(!ref||!titre||!maitre_ouvrage||!montant){alert('Champs obligatoires manquants');return;}
     var osData=collectOS();
-    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
+    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData,0);
     var newId=nidStr('m');
     S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_soumission:v('mdsoum')||null,date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,delai_garantie_mois:v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
     var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,statut:c.statut};});
@@ -898,7 +925,7 @@ function editMarche(id){
   S._osTemp=cp(m.ordres_service||[]);
   openMod('Modifier - '+m.ref,marcheFormHTML(m),function(){
     var osData=collectOS();
-    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
+    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData,getAvenantsDelaiSup(id));
     m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.delai_garantie_mois=v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
     saveItem('marches',m).then(function(){sbStats();render();toast('Marche mis a jour');});
   });
@@ -1187,13 +1214,13 @@ function printEtat(type){
   var titre='';var body='';
   if(type==='ao'){
     titre="Etat des appels d'offres";
-    var aos=S.aos;if(S.search)aos=aos.filter(function(a){return [a.ref,a.objet,a.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
+    var aos=S.aos;if(S.search)aos=aos.filter(function(a){return [a.ref,a.objet,a.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)aos=aos.filter(function(a){return a.statut===S.sf;});
     body+='<table><thead><tr><th>#</th><th>Reference</th><th>Objet</th><th>Maitre ouvrage</th><th>Type</th><th>Budget estime</th><th>Date lancement</th><th>Date limite</th><th>Caution prov.</th><th>Marche</th><th>Statut</th></tr></thead><tbody>';
     aos.forEach(function(a,i){var m=a.marche_id?gm(a.marche_id):null;var st=(SMAO[a.statut]||{l:a.statut,c:'bn'});var cp=a.caution_prov;body+='<tr><td>'+( i+1)+'</td><td class="mono"><b>'+a.ref+'</b></td><td>'+a.objet+'</td><td>'+a.maitre_ouvrage+'</td><td>'+a.type+'</td><td class="mono" style="text-align:right">'+fmad(a.budget_estime)+'</td><td>'+fdat(a.date_lancement)+'</td><td>'+fdat(a.date_limite)+'</td><td style="font-size:9.5px">'+(cp?cp.num+' / '+cp.banque+' / '+fmad(cp.montant)+' ['+(SMC[cp.statut]||{l:cp.statut}).l+']':'-')+'</td><td>'+(m?m.ref:'-')+'</td><td><span class="badge '+st.c+'">'+st.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL ('+aos.length+' AO)</td><td class="mono" style="text-align:right">'+fmad(aos.reduce(function(a,o){return a+(o.budget_estime||0);},0))+'</td><td colspan="5"></td></tr></tfoot></table>';
   }else if(type==='marches'){
     titre='Etat des marches publics';
-    var ms=S.marches;if(S.search)ms=ms.filter(function(m){return [m.ref,m.titre,m.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
+    var ms=S.marches;if(S.search)ms=ms.filter(function(m){return [m.ref,m.titre,m.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)ms=ms.filter(function(m){return m.statut===S.sf;});if(S.tf)ms=ms.filter(function(m){return m.type===S.tf;});
     var totM=ms.reduce(function(a,m){return a+m.montant;},0);
     body+='<table><thead><tr><th>#</th><th>Reference</th><th>Intitule</th><th>Maitre ouvrage</th><th>Type</th><th>Montant</th><th>Avanc.</th><th>Commencement</th><th>Delai</th><th>Date fin calc.</th><th>Recept. prov.</th><th>Rec. def.</th><th>OS</th><th>Cautions</th><th>Statut</th></tr></thead><tbody>';
     ms.forEach(function(m,i){var mc=S.cautions.filter(function(c){return c.marche_id===m.id;});var stS=(SMM[m.statut]||{l:m.statut,c:'bn'});var osTxt=(m.ordres_service||[]).map(function(o){return (o.type==='arret'?'Arret':'Reprise')+' '+fdat(o.date);}).join(' / ')||'-';var cauTxt=mc.map(function(c){return (TC[c.type]||c.type)+': '+fmad(c.montant)+' ['+(SMC[c.statut]||{l:c.statut}).l+']';}).join(' | ')||'-';body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+m.ref+'</b></td><td>'+m.titre+'</td><td>'+m.maitre_ouvrage+'</td><td>'+m.type+'</td><td class="mono" style="text-align:right">'+fmad(m.montant)+'</td><td style="text-align:center">'+m.avancement+'%</td><td>'+fdat(m.date_commencement)+'</td><td style="text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td>'+(m.date_fin_calculee?fdat(m.date_fin_calculee):'-')+'</td><td>'+fdat(m.date_reception_provisoire)+'</td><td>'+fdat(m.date_reception_definitive)+'</td><td style="font-size:9.5px">'+osTxt+'</td><td style="font-size:9.5px">'+cauTxt+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
@@ -1207,7 +1234,7 @@ function printEtat(type){
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL ACTIF</td><td class="mono" style="text-align:right">'+fmad(totCA)+'</td><td colspan="3"></td></tr></tfoot></table>';
   }else if(type==='paiements'){
     titre='Etat des paiements et decomptes';
-    var ps=S.paiements;if(S.search)ps=ps.filter(function(p){return [p.numero,gm(p.marche_id).ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
+    var ps=S.paiements;if(S.search)ps=ps.filter(function(p){return [p.numero,gm(p.marche_id).ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)ps=ps.filter(function(p){return p.statut===S.sf;});
     body+='<table><thead><tr><th>#</th><th>N Decompte</th><th>Marche</th><th>Type</th><th>Montant brut</th><th>Mode RG</th><th>Retenue</th><th>Net</th><th>Depot</th><th>Paiement</th><th>Statut</th></tr></thead><tbody>';
     ps.forEach(function(p,i){var stS=(SMP[p.statut]||{l:p.statut,c:'bn'});var crg=p.caution_rg_id?gc(p.caution_rg_id):null;body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+p.numero+'</b></td><td>'+gm(p.marche_id).ref+'</td><td>'+(p.type==='definitif'?'Definitif':'Provisoire')+'</td><td class="mono" style="text-align:right">'+fmad(p.montant_brut)+'</td><td>'+(p.mode_retenue||'-')+'</td><td class="mono" style="text-align:right">'+(p.mode_retenue==='caution'?'Caution: '+(crg?crg.num:'RG'):p.retenue?fmad(p.retenue):'-')+'</td><td class="mono" style="text-align:right;font-weight:bold">'+fmad(p.net)+'</td><td>'+fdat(p.date_depot)+'</td><td>'+fdat(p.date_paiement)+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td class="mono" style="text-align:right">'+fmad(ps.reduce(function(a,p){return a+p.montant_brut;},0))+'</td><td colspan="2"></td><td class="mono" style="text-align:right">'+fmad(ps.reduce(function(a,p){return a+p.net;},0))+'</td><td colspan="3"></td></tr></tfoot></table>';
@@ -1796,7 +1823,7 @@ editMarche = function(id){
   openMod('Modifier - '+m.ref, marcheEditWithTabsHTML(m, existingBordereau), function(){
     // Onglet Info : save marche
     var osData=collectOS();
-    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData);
+    var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData,getAvenantsDelaiSup(id));
     m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.delai_garantie_mois=v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
     var savePromises=[saveItem('marches',m)];
     // Onglet Bordereau : save si modifie
