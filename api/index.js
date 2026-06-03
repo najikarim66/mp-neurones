@@ -59,6 +59,27 @@ module.exports = async function (context, req) {
     return;
   }
 
+  // Route health : test reel de connectivite Cosmos (lecture metadata DB).
+  // Anonyme (voir exception dans staticwebapp.config.json) -> sert de sonde apres rotation de cle.
+  if (fn === "health") {
+    try {
+      await getDb().read();
+      context.res = {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+        body: { ok: true, cosmos: "ok", now: new Date().toISOString() }
+      };
+    } catch (e) {
+      // On expose seulement le code d'erreur (jamais la cle ni la connection string)
+      context.res = {
+        status: 503,
+        headers: { "Content-Type": "application/json" },
+        body: { ok: false, cosmos: "error", code: e.code || null }
+      };
+    }
+    return;
+  }
+
   // Route dce-trigger : POST /api/dce-trigger
   // Body: { ref_consultation, org_acronyme, cosmos_doc_id }
   // Declenche le workflow GitHub neurones-veille-ao/.github/workflows/download-dce.yml
