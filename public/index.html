@@ -2929,6 +2929,8 @@ if(typeof CONTAINERS!=='undefined' && !CONTAINERS.veille){
 
 /* Etat dedie veille (separe pour ne pas polluer S.search/sf/tf de MP) */
 S.veille=[];
+S.veilleConfig=null;   /* doc config mots-cles (lu par le pipeline) */
+S._vkwOpen=false;      /* etat ouvert/ferme du panneau mots-cles */
 S._vsearch='';
 S._vstatut='';
 S._vscoremin=0;
@@ -2993,6 +2995,66 @@ function veilleApiSave(item){
 
 /* === Permissions === */
 function veilleCanEdit(){return true;}
+
+/* === Mots-cles de recherche (doc config dans mp_veille_ao, lu par le pipeline Python) === */
+function veilleGetConfig(){
+  if(!S.veilleConfig) S.veilleConfig={id:'veille_config',source:'marchespublics_gov_ma',type:'config',keywords:[]};
+  if(!Array.isArray(S.veilleConfig.keywords)) S.veilleConfig.keywords=[];
+  return S.veilleConfig;
+}
+function veilleKwAdd(){
+  var inp=document.getElementById('vkw-input');
+  if(!inp) return;
+  var v=(inp.value||'').trim().toLowerCase().replace(/\s+/g,' ');
+  if(!v) return;
+  var cfg=veilleGetConfig();
+  if(cfg.keywords.indexOf(v)>=0){ toast('Mot-cle deja present', false); return; }
+  cfg.keywords.push(v);
+  S._vkwOpen=true;
+  inp.value='';
+  render();
+}
+function veilleKwRemove(i){
+  var cfg=veilleGetConfig();
+  if(i>=0 && i<cfg.keywords.length){ cfg.keywords.splice(i,1); S._vkwOpen=true; render(); }
+}
+function veilleKwSave(){
+  var cfg=veilleGetConfig();
+  cfg.id='veille_config'; cfg.source='marchespublics_gov_ma'; cfg.type='config';
+  cfg.updated_at=new Date().toISOString();
+  var btn=document.getElementById('vkw-save');
+  if(btn){ btn.disabled=true; btn.textContent='Enregistrement...'; }
+  veilleApiSave(cfg).then(function(saved){
+    if(saved && typeof saved==='object') S.veilleConfig=saved;
+    toast('Mots-cles enregistres - pris en compte au prochain scrape (7h / 15h)', true);
+    S._vkwOpen=true;
+    render();
+  }).catch(function(e){
+    toast('Erreur enregistrement mots-cles: '+e.message, false);
+    if(btn){ btn.disabled=false; btn.textContent='Enregistrer'; }
+  });
+}
+function veilleKeywordsCard(){
+  var cfg=veilleGetConfig();
+  var chips=cfg.keywords.length
+    ? cfg.keywords.map(function(k,i){
+        return '<span class="badge bw" style="font-size:12px">'+esc(k)+
+          ' <button onclick="veilleKwRemove('+i+')" title="Retirer" style="border:0;background:none;cursor:pointer;color:#B7472A;font-weight:bold;font-size:14px;line-height:1;padding:0 2px">&times;</button></span>';
+      }).join(' ')
+    : '<span style="color:#7A7369;font-size:12px;font-style:italic">Aucun mot-cle enregistre - le scrape utilisera la liste de secours de config.json.</span>';
+  return '<details class="card" style="margin-bottom:10px;padding:12px"'+(S._vkwOpen?' open':'')+' ontoggle="S._vkwOpen=this.open">'+
+    '<summary style="cursor:pointer;font-weight:600;color:#1F4E78">&#128270; Mots-cles de recherche ('+cfg.keywords.length+')</summary>'+
+    '<div style="margin-top:10px">'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">'+chips+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">'+
+        '<input id="vkw-input" class="si" placeholder="Nouveau mot-cle (ex: panneaux solaires)" style="width:320px;max-width:100%" onkeydown="if(event.key===\'Enter\'){event.preventDefault();veilleKwAdd();}">'+
+        '<button class="btn" onclick="veilleKwAdd()">+ Ajouter</button>'+
+        '<button id="vkw-save" class="btn btn-prim" onclick="veilleKwSave()">Enregistrer</button>'+
+      '</div>'+
+      '<div style="font-size:11px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (7h / 15h).</div>'+
+    '</div>'+
+  '</details>';
+}
 
 /* === Rendu === */
 function pgVeille(){
@@ -3152,7 +3214,7 @@ function pgVeille(){
       '<th>Actions</th>'+
     '</tr></thead><tbody>'+tbody+'</tbody></table></div></div>';
 
-  return aide+kpi+toolbar+table;
+  return aide+veilleKeywordsCard()+kpi+toolbar+table;
 }
 
 /* === Bouton DCE adaptatif selon dce_status === */
@@ -3376,7 +3438,14 @@ apiLoadAll = function(){
   return _originalApiLoadAll_veille().then(function(){
     return veilleApiList();
   }).then(function(items){
-    S.veille=items||[];
+    items=items||[];
+    /* On extrait le doc de config (mots-cles) pour ne pas l'afficher comme un AO */
+    var aos=[], cfg=null;
+    items.forEach(function(it){
+      if(it && (it.type==='config' || it.id==='veille_config')) cfg=it; else aos.push(it);
+    });
+    S.veille=aos;
+    S.veilleConfig=cfg;
     veilleUpdateCounter();
   });
 };
