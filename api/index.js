@@ -25,6 +25,7 @@ const PK_PATH = {
 const GH_OWNER = "najikarim66";
 const GH_REPO = "neurones-veille-ao";
 const GH_WORKFLOW = "download-dce.yml";
+const GH_VEILLE_WORKFLOW = "veille-ao.yml";
 
 let _db = null;
 function getDb() {
@@ -190,6 +191,64 @@ module.exports = async function (context, req) {
       return;
     } catch (e) {
       context.log.error("dceTrigger error:", e.message, e.stack);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route scrape-trigger : POST /api/scrape-trigger
+  // Declenche le workflow Veille AO (scrape complet) a la demande, sans inputs.
+  if (fn === "scrapeTrigger") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        context.res = { status: 401, body: { error: "Authentification requise" } };
+        return;
+      }
+      if ((req.method || "GET").toUpperCase() !== "POST") {
+        context.res = { status: 405, body: { error: "Method not allowed (use POST)" } };
+        return;
+      }
+      const ghPat = process.env.GH_PAT;
+      if (!ghPat) {
+        context.res = { status: 500, body: { error: "GH_PAT non configure cote serveur" } };
+        return;
+      }
+
+      const ghUrl = `https://api.github.com/repos/${GH_OWNER}/${GH_REPO}/actions/workflows/${GH_VEILLE_WORKFLOW}/dispatches`;
+      const fetch = (typeof globalThis.fetch === "function")
+        ? globalThis.fetch
+        : require("node-fetch");
+
+      const ghResp = await fetch(ghUrl, {
+        method: "POST",
+        headers: {
+          "Authorization": "Bearer " + ghPat,
+          "Accept": "application/vnd.github+json",
+          "X-GitHub-Api-Version": "2022-11-28",
+          "Content-Type": "application/json",
+          "User-Agent": "mp-neurones-api"
+        },
+        body: JSON.stringify({ ref: "main" })
+      });
+
+      if (ghResp.status === 204) {
+        context.res = {
+          status: 202,
+          body: { ok: true, message: "Scrape Veille AO declenche", user: user.userDetails }
+        };
+        return;
+      }
+
+      const ghErr = await ghResp.text();
+      context.log.error("GitHub veille dispatch failed: HTTP " + ghResp.status + " - " + ghErr);
+      context.res = {
+        status: 502,
+        body: { error: "Echec declenchement workflow Veille AO", detail: ghErr.substring(0, 500) }
+      };
+      return;
+    } catch (e) {
+      context.log.error("scrapeTrigger error:", e.message);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }

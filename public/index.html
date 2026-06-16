@@ -3056,6 +3056,27 @@ function veilleKeywordsCard(){
   '</details>';
 }
 
+/* === Relancer le scrape a la demande (workflow_dispatch via l'API) === */
+function veilleRelancerScrape(){
+  if(!confirm('Relancer le scrape maintenant ?\n\nLe pipeline va tourner (~2 min) puis envoyer l\'email de veille avec les mots-cles actuels.')) return;
+  var btn=document.getElementById('vrl-btn');
+  if(btn){ btn.disabled=true; btn.textContent='Lancement...'; }
+  apiFetch('/api/scrape-trigger', {method:'POST', headers:{'Content-Type':'application/json'}, body:'{}'})
+    .then(function(){
+      toast('Scrape declenche - resultats et email dans ~2 min', true);
+      if(btn){ btn.textContent='✓ Scrape lance'; }
+    })
+    .catch(function(e){
+      toast('Erreur lancement scrape: '+e.message, false);
+      if(btn){ btn.disabled=false; btn.innerHTML='↻ Relancer le scrape maintenant'; }
+    });
+}
+function veilleScrapeBar(){
+  return '<div style="margin-bottom:10px;display:flex;justify-content:flex-end">'+
+    '<button id="vrl-btn" class="btn" onclick="veilleRelancerScrape()" title="Declenche le pipeline GitHub Actions maintenant (sans attendre 7h / 15h)">↻ Relancer le scrape maintenant</button>'+
+  '</div>';
+}
+
 /* === Rendu === */
 function pgVeille(){
   var rows=S.veille.slice();
@@ -3214,7 +3235,7 @@ function pgVeille(){
       '<th>Actions</th>'+
     '</tr></thead><tbody>'+tbody+'</tbody></table></div></div>';
 
-  return aide+veilleKeywordsCard()+kpi+toolbar+table;
+  return aide+veilleKeywordsCard()+veilleScrapeBar()+kpi+toolbar+table;
 }
 
 /* === Bouton DCE adaptatif selon dce_status === */
