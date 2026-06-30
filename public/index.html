@@ -2917,9 +2917,11 @@ function importHistCommit(){
 
 
 /* ========================================================================
-   VEILLE AO - module auto-injectif v14
+   VEILLE AO - module auto-injectif v15
    v13 : ajout onglet "Veille AO" lie au container Cosmos mp_veille_ao.
    v14 : ajout bouton "Demander DCE" / "Telecharger ZIP" via Azure Blob.
+   v15 : transfert AO 'go' -> fiche Appels d'offres (mp_aos) avec anti-doublon
+         (double back-ref ref_consultation + veille_id, flag veille ao_id_lie).
    ======================================================================== */
 
 /* Container PK /source (different des autres : /id ou /marcheId) */
@@ -3208,6 +3210,14 @@ function pgVeille(){
       var actNotes='<button class="act" title="Notes" onclick="veilleEditNotes(\''+esc(r.id)+'\')">&#128221;</button>';
       var actLink='<button class="act" title="Lier a un marche" onclick="veilleLinkMarche(\''+esc(r.id)+'\')" style="color:#7c3aed">&#128279;</button>';
 
+      /* Transfert vers Appels d'offres : bouton sur 'go' non transfere ; lien si deja transfere */
+      var actTransfer='';
+      if(r.ao_id_lie){
+        actTransfer='<button class="act" title="Voir la fiche Appel d offres creee" onclick="veilleGotoAo(\''+esc(r.ao_id_lie)+'\')" style="color:#059669;font-weight:600">Voir la fiche AO</button>';
+      } else if(r.statut==='go'){
+        actTransfer='<button class="act" title="Transferer vers Appels d offres" onclick="veilleTransfererVersAO(\''+esc(r.id)+'\')" style="color:#0d9488;font-weight:600">Transferer vers AO</button>';
+      }
+
       return '<tr>'+
         '<td style="background:'+col.bg+';color:'+col.fg+';font-weight:bold;text-align:center;font-size:18px;padding:6px">'+
           (r.score||0)+
@@ -3218,7 +3228,7 @@ function pgVeille(){
         '<td style="font-size:11px;text-align:center">'+esc((r.lieu_execution||'').substring(0,40))+'</td>'+
         '<td>'+dlCell+heure+'</td>'+
         '<td>'+statutCell+'</td>'+
-        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+actStatut+actNotes+actLink+'</div></td>'+
+        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+actStatut+actNotes+actLink+actTransfer+'</div></td>'+
       '</tr>';
     }).join('');
   }
@@ -3409,6 +3419,91 @@ function veilleGotoMarche(mid){
     S.search=(m.ref||'').toLowerCase();
   }
   nav('marches');
+}
+
+/* === Transfert d'un AO veille (statut 'go') vers le module Appels d'offres (mp_aos) === */
+/* Convertit 'DD/MM/YYYY' -> 'YYYY-MM-DD' (sans objet Date, pas de souci de fuseau). null si vide/invalide. */
+function veilleFrDateToISO(s){
+  if(!s) return null;
+  var p=String(s).split('/');
+  if(p.length!==3) return null;
+  var d=p[0], m=p[1], y=p[2];
+  if(!/^\d{1,2}$/.test(d) || !/^\d{1,2}$/.test(m) || !/^\d{4}$/.test(y)) return null;
+  if(d.length<2) d='0'+d;
+  if(m.length<2) m='0'+m;
+  return y+'-'+m+'-'+d;
+}
+/* Normalise la categorie veille vers le type AO (minuscule). '' si inconnu. */
+function veilleNormalizeType(cat){
+  var c=(cat||'').toLowerCase();
+  if(c.indexOf('travaux')>=0) return 'travaux';
+  if(c.indexOf('fourniture')>=0) return 'fournitures';
+  if(c.indexOf('service')>=0) return 'services';
+  return '';
+}
+/* Construit l'objet fiche mp_aos a partir d'un AO veille. */
+function veilleBuildAoFromVeille(r){
+  var prov='Importe depuis Veille AO le '+new Date().toLocaleDateString('fr-FR')
+    +' | score '+(r.score||0)
+    +' | ref consultation '+(r.ref_consultation||'-')
+    +(r.lien_fiche?' | '+r.lien_fiche:'');
+  var notes=(r.notes?r.notes+'\n':'')+prov;
+  return {
+    id:nidStr('ao'),
+    ref:r.reference_ao||r.ref_consultation||'',
+    objet:r.objet||'',
+    maitre_ouvrage:r.acheteur||'',
+    type:veilleNormalizeType(r.categorie),
+    budget_estime:null,
+    date_lancement:veilleFrDateToISO(r.date_publication),
+    date_limite:veilleFrDateToISO(r.date_limite),
+    statut:'en_cours',
+    marche_id:null,
+    caution_prov:null,
+    notes:notes,
+    ref_consultation:r.ref_consultation||null,
+    veille_id:r.id
+  };
+}
+/* Marque l'AO veille comme transfere (double marquage cote veille). */
+function veilleMarkTransfered(r, aoId){
+  r.ao_id_lie=aoId;
+  r.transfere_le=new Date().toISOString();
+  r.transfere_par=(typeof _user!=='undefined' && _user && _user.email)?_user.email:'';
+  r.date_derniere_mise_a_jour=new Date().toISOString();
+}
+/* Orchestration : cree la fiche mp_aos (ou re-lie si deja presente) puis marque la veille. */
+function veilleTransfererVersAO(id){
+  var r=S.veille.find(function(x){return String(x.id)===String(id);});
+  if(!r) return;
+  if(r.ao_id_lie){ toast('Deja transfere vers Appels d offres', false); return; }
+  if(r.statut!=='go'){ toast('Transfert reserve aux AO en statut Go', false); return; }
+  if(!confirm("Transferer cet AO vers le module Appels d'offres ?\n\n"+(r.reference_ao||r.ref_consultation||'')+"\n"+(r.objet||'').substring(0,120))) return;
+  /* Anti-doublon N2 : fiche mp_aos existante avec le meme ref_consultation ? */
+  var existing=null;
+  if(r.ref_consultation){
+    existing=S.aos.find(function(a){return a.ref_consultation && String(a.ref_consultation)===String(r.ref_consultation);});
+  }
+  if(existing){
+    veilleMarkTransfered(r, existing.id);
+    veilleApiSave(r).then(function(){toast('AO deja present - re-lie a la fiche existante', true); render();})
+      .catch(function(e){toast('Erreur re-liaison: '+e.message, false);});
+    return;
+  }
+  var newAo=veilleBuildAoFromVeille(r);
+  saveItem('aos', newAo).then(function(saved){
+    veilleMarkTransfered(r, saved.id);
+    return veilleApiSave(r);
+  }).then(function(){ sbStats(); render(); toast('Transfere vers Appels d offres', true); })
+    .catch(function(e){ toast('Erreur transfert: '+e.message, false); render(); });
+}
+/* Navigue vers le module Appels d'offres, filtre sur la fiche creee. */
+function veilleGotoAo(aoId){
+  if(!aoId) return;
+  var a=S.aos.find(function(x){return String(x.id)===String(aoId);});
+  S.sf='';
+  S.search=a?(a.ref||'').toLowerCase():'';
+  nav('ao');
 }
 
 /* === Hook render pour gerer la page 'veille' === */
