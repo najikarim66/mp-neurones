@@ -3272,29 +3272,22 @@ function veilleRenderDceButton(r){
 }
 
 /* === Action : declencher le DL DCE via API SWA -> GitHub Actions === */
-function veilleRequestDce(id){
-  if(!veilleCanEdit()){toast('Action reservee');return;}
-  var r=S.veille.find(function(x){return x.id===id;});
-  if(!r){toast('AO introuvable');return;}
+function _veilleDoRequestDce(r){
+  /* Coeur SANS confirm : lance le workflow DCE. Idempotent (skip si deja en cours/pret).
+     Retourne une promesse -> {launched:true} | {skipped:true,status} ; rejette en cas d'erreur. */
   if(!r.ref_consultation || !r.org_acronyme){
-    toast('Ref ou org manquant pour cet AO');
-    return;
+    return Promise.reject(new Error('Ref ou org manquant'));
   }
-
-  if(!confirm('Demander le telechargement du DCE pour '+ (r.reference_ao||r.ref_consultation) +' ?\n\nLe ZIP sera disponible dans ~2 minutes via le bouton de telechargement.')){
-    return;
+  var st=r.dce_status;
+  if(st==='queued' || st==='downloading' || st==='ready'){
+    return Promise.resolve({skipped:true, status:st});
   }
-
-  toast('Demande envoyee - DCE en cours de preparation...');
-
   /* Mise a jour optimiste de l'UI : on marque queued tout de suite */
   r.dce_status='queued';
   r.dce_started_at=new Date().toISOString();
   r.dce_error=null;
   render();
-
-  /* Appel API */
-  fetch('/api/dce-trigger', {
+  return fetch('/api/dce-trigger', {
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({
@@ -3307,19 +3300,41 @@ function veilleRequestDce(id){
       return resp.text().then(function(t){throw new Error('HTTP '+resp.status+': '+t.substring(0,200));});
     }
     return resp.json();
-  }).then(function(data){
-    toast('Workflow declenche - DCE pret dans ~2 min (rafraichissement automatique)');
-    /* Le polling 5min va faire le reste, mais on peut declencher un refresh apres 60s */
+  }).then(function(){
+    /* refresh apres ~90s (workflow probablement termine) ; le polling 5min complete */
     setTimeout(function(){
-      if(typeof manualRefresh==='function'){
-        manualRefresh();
-      }
-    }, 90000); /* 90s : workflow termine probablement */
+      if(typeof manualRefresh==='function'){ manualRefresh(); }
+    }, 90000);
+    return {launched:true};
   }).catch(function(e){
-    toast('Erreur : '+e.message);
     r.dce_status='failed';
     r.dce_error=e.message;
     render();
+    throw e;
+  });
+}
+
+function veilleRequestDce(id){
+  if(!veilleCanEdit()){toast('Action reservee');return;}
+  var r=S.veille.find(function(x){return x.id===id;});
+  if(!r){toast('AO introuvable');return;}
+  if(!r.ref_consultation || !r.org_acronyme){
+    toast('Ref ou org manquant pour cet AO');
+    return;
+  }
+  if(r.dce_status==='queued' || r.dce_status==='downloading' || r.dce_status==='ready'){
+    toast('DCE deja en cours ou pret', false);
+    return;
+  }
+  if(!confirm('Demander le telechargement du DCE pour '+ (r.reference_ao||r.ref_consultation) +' ?\n\nLe ZIP sera disponible dans ~2 minutes via le bouton de telechargement.')){
+    return;
+  }
+  toast('Demande envoyee - DCE en cours de preparation...');
+  _veilleDoRequestDce(r).then(function(res){
+    if(res && res.skipped){ toast('DCE deja '+res.status, false); }
+    else { toast('Workflow declenche - DCE pret dans ~2 min (rafraichissement automatique)'); }
+  }).catch(function(e){
+    toast('Erreur : '+e.message, false);
   });
 }
 
@@ -3328,6 +3343,7 @@ function veilleChangeStatut(id){
   if(!veilleCanEdit()){toast('Action reservee');return;}
   var r=S.veille.find(function(x){return x.id===id;});
   if(!r){toast('AO introuvable');return;}
+  var oldStatut=r.statut;
 
   var options=objEnts(SMVA).map(function(e){
     return '<option value="'+e[0]+'"'+((r.statut||'a_etudier')===e[0]?' selected':'')+'>'+e[1].l+'</option>';
@@ -3352,6 +3368,8 @@ function veilleChangeStatut(id){
       if(idx>=0) S.veille[idx]=r;
       render();
       toast('Statut mis a jour : '+(SMVA[nouveau]?SMVA[nouveau].l:nouveau));
+      /* Chainage GO : au passage a 'go' (transition uniquement), transfert + DCE auto */
+      if(nouveau==='go' && oldStatut!=='go'){ veilleChainerGo(r); }
     }).catch(function(e){
       toast('Erreur sauvegarde : '+e.message);
     });
@@ -3473,29 +3491,68 @@ function veilleMarkTransfered(r, aoId){
   r.date_derniere_mise_a_jour=new Date().toISOString();
 }
 /* Orchestration : cree la fiche mp_aos (ou re-lie si deja presente) puis marque la veille. */
-function veilleTransfererVersAO(id){
-  var r=S.veille.find(function(x){return String(x.id)===String(id);});
-  if(!r) return;
-  if(r.ao_id_lie){ toast('Deja transfere vers Appels d offres', false); return; }
-  if(r.statut!=='go'){ toast('Transfert reserve aux AO en statut Go', false); return; }
-  if(!confirm("Transferer cet AO vers le module Appels d'offres ?\n\n"+(r.reference_ao||r.ref_consultation||'')+"\n"+(r.objet||'').substring(0,120))) return;
-  /* Anti-doublon N2 : fiche mp_aos existante avec le meme ref_consultation ? */
+function _veilleDoTransfer(r){
+  /* Coeur SANS confirm : cree la fiche mp_aos (ou re-lie si existante). Suppose statut 'go'
+     et !ao_id_lie (verifie par l'appelant). Retourne une promesse -> {action:'created'|'relinked'}. */
   var existing=null;
   if(r.ref_consultation){
     existing=S.aos.find(function(a){return a.ref_consultation && String(a.ref_consultation)===String(r.ref_consultation);});
   }
   if(existing){
     veilleMarkTransfered(r, existing.id);
-    veilleApiSave(r).then(function(){toast('AO deja present - re-lie a la fiche existante', true); render();})
-      .catch(function(e){toast('Erreur re-liaison: '+e.message, false);});
-    return;
+    return veilleApiSave(r).then(function(){ render(); return {action:'relinked', aoId:existing.id}; });
   }
   var newAo=veilleBuildAoFromVeille(r);
-  saveItem('aos', newAo).then(function(saved){
+  return saveItem('aos', newAo).then(function(saved){
     veilleMarkTransfered(r, saved.id);
-    return veilleApiSave(r);
-  }).then(function(){ sbStats(); render(); toast('Transfere vers Appels d offres', true); })
-    .catch(function(e){ toast('Erreur transfert: '+e.message, false); render(); });
+    return veilleApiSave(r).then(function(){ sbStats(); render(); return {action:'created', aoId:saved.id}; });
+  });
+}
+
+function veilleTransfererVersAO(id){
+  var r=S.veille.find(function(x){return String(x.id)===String(id);});
+  if(!r) return;
+  if(r.ao_id_lie){ toast('Deja transfere vers Appels d offres', false); return; }
+  if(r.statut!=='go'){ toast('Transfert reserve aux AO en statut Go', false); return; }
+  if(!confirm("Transferer cet AO vers le module Appels d'offres ?\n\n"+(r.reference_ao||r.ref_consultation||'')+"\n"+(r.objet||'').substring(0,120))) return;
+  _veilleDoTransfer(r).then(function(res){
+    toast(res.action==='relinked'?'AO deja present - re-lie a la fiche existante':'Transfere vers Appels d offres', true);
+  }).catch(function(e){ toast('Erreur transfert: '+e.message, false); render(); });
+}
+
+function veilleChainerGo(r){
+  /* Au passage a 'go' : transfert PUIS DCE, SERIALISE (ao_id_lie persiste avant le
+     DCE-trigger -> evite le clobber du doc cote serveur). Actions independantes : un
+     echec n'empeche pas l'autre. Toast HONNETE refletant ce qui a reellement reussi. */
+  var transferMsg='';
+  var transferErr=null;
+  var pTransfer = r.ao_id_lie ? Promise.resolve({action:'already'}) : _veilleDoTransfer(r);
+  pTransfer.then(function(res){
+    if(res.action==='created'){ transferMsg='fiche AO creee'; }
+    else if(res.action==='relinked'){ transferMsg='fiche AO re-liee'; }
+    else { transferMsg='fiche AO deja liee'; }
+  }, function(e){
+    transferErr=e;
+  }).then(function(){
+    /* DCE : independant du resultat du transfert */
+    var st=r.dce_status;
+    if(st==='queued' || st==='downloading' || st==='ready'){
+      return {dce:'skipped', status:st};
+    }
+    return _veilleDoRequestDce(r).then(function(res){
+      return (res && res.skipped) ? {dce:'skipped', status:res.status} : {dce:'launched'};
+    }, function(e){
+      return {dce:'error', err:e};
+    });
+  }).then(function(dceRes){
+    var parts=[];
+    parts.push(transferErr ? ('transfert ECHOUE ('+transferErr.message+')') : transferMsg);
+    if(dceRes.dce==='launched'){ parts.push('DCE lance'); }
+    else if(dceRes.dce==='skipped'){ parts.push('DCE deja '+dceRes.status); }
+    else if(dceRes.dce==='error'){ parts.push('DCE ECHOUE ('+dceRes.err.message+')'); }
+    var okAll = !transferErr && dceRes.dce!=='error';
+    toast('AO passe GO : '+parts.join(' + '), okAll);
+  });
 }
 /* Navigue vers le module Appels d'offres, filtre sur la fiche creee. */
 function veilleGotoAo(aoId){
