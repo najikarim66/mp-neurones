@@ -662,7 +662,26 @@ function attribuerAO(id){
   }
   var newMarche=S.marches[S.marches.length-1];Promise.all([saveItem('marches',newMarche), saveItem('aos',a)]).then(function(){try{fetch('https://erp.neurones.ma/api/marches-mp/auto-link-or-create-client',{method:'POST',headers:{'Content-Type':'application/json','X-MP-Autolink-Secret':'OV_+Nza*>(M5}gG@U85z630|jXGy#G^U'},body:JSON.stringify({marche_id:newMarche.id,maitre_ouvrage:newMarche.maitre_ouvrage,ville:newMarche.ville||null,lieu_chantier:newMarche.lieu_chantier||null})}).then(function(r){return r.ok?r.json():null;}).then(function(d){if(!d)return;if(d.action==='created_new'){toast('Marche cree + nouveau client ERP : '+d.client.raison_sociale+' (ICE a completer)');}else if(d.action==='linked_existing'){toast('Marche cree + lie au client ERP : '+d.client.raison_sociale);}}).catch(function(e){console.warn('Auto-link ERP echoue:',e);});}catch(e){console.warn('Auto-link ERP echoue:',e);}return Promise.resolve();}).then(function(){sbStats();render();toast('Marche cree - caution prov. en attente de liberation effective');closeMod();}).catch(function(e){toast('Erreur creation marche');});
 }
-function delAO(id){if(!confirm('Supprimer cet AO?'))return;deleteItem('aos',id).then(function(){sbStats();render();toast('AO supprime');});}
+function delAO(id){
+  if(!confirm('Supprimer cet AO?'))return;
+  var f=S.aos.find(function(a){return String(a.id)===String(id);});
+  deleteItem('aos',id).then(function(){
+    sbStats();render();toast('AO supprime');
+    /* Delier l'AO veille lie (evite un lien orphelin ao_id_lie -> fiche supprimee) */
+    var vid=f&&f.veille_id;
+    var v=null;
+    if(vid){ v=S.veille.find(function(x){return String(x.id)===String(vid);}); }
+    if(!v){ v=S.veille.find(function(x){return x.ao_id_lie&&String(x.ao_id_lie)===String(id);}); }
+    if(v&&v.ao_id_lie){
+      v.ao_id_lie=null; v.transfere_le=null; v.transfere_par=null;
+      v.date_derniere_mise_a_jour=new Date().toISOString();
+      veilleApiSave(v).then(function(saved){
+        var idx=S.veille.findIndex(function(x){return x.id===v.id;});
+        if(idx>=0&&saved&&typeof saved==='object') S.veille[idx]=saved;
+      }).catch(function(e){ console.warn('Deliaison veille echouee:', e&&e.message); });
+    }
+  });
+}
 
 // PAGE MARCHES
 function pgMarches(){
@@ -3547,12 +3566,12 @@ function veilleBuildAoFromVeille(r){
     objet:r.objet||'',
     maitre_ouvrage:r.acheteur||'',
     type:veilleNormalizeType(r.categorie),
-    budget_estime:null,
+    budget_estime:(r.estimation_mo!=null?r.estimation_mo:null),
     date_lancement:veilleFrDateToISO(r.date_publication),
     date_limite:veilleFrDateToISO(r.date_limite),
     statut:'en_cours',
     marche_id:null,
-    caution_prov:null,
+    caution_prov:(r.caution_provisoire!=null?{montant:r.caution_provisoire,statut:'en_attente',banque:'',num:'',date_emission:null}:null),
     notes:notes,
     ref_consultation:r.ref_consultation||null,
     veille_id:r.id
@@ -3587,7 +3606,7 @@ function _veilleDoTransfer(r){
 function veilleTransfererVersAO(id){
   var r=S.veille.find(function(x){return String(x.id)===String(id);});
   if(!r) return;
-  if(r.ao_id_lie){ toast('Deja transfere vers Appels d offres', false); return; }
+  if(r.ao_id_lie && S.aos.find(function(a){return String(a.id)===String(r.ao_id_lie);})){ toast('Deja transfere vers Appels d offres', false); return; }
   if(r.statut!=='go'){ toast('Transfert reserve aux AO en statut Go', false); return; }
   if(!confirm("Transferer cet AO vers le module Appels d'offres ?\n\n"+(r.reference_ao||r.ref_consultation||'')+"\n"+(r.objet||'').substring(0,120))) return;
   _veilleDoTransfer(r).then(function(res){
@@ -3601,7 +3620,8 @@ function veilleChainerGo(r){
      echec n'empeche pas l'autre. Toast HONNETE refletant ce qui a reellement reussi. */
   var transferMsg='';
   var transferErr=null;
-  var pTransfer = r.ao_id_lie ? Promise.resolve({action:'already'}) : _veilleDoTransfer(r);
+  var lie = r.ao_id_lie && S.aos.find(function(a){return String(a.id)===String(r.ao_id_lie);});
+  var pTransfer = lie ? Promise.resolve({action:'already'}) : _veilleDoTransfer(r);
   pTransfer.then(function(res){
     if(res.action==='created'){ transferMsg='fiche AO creee'; }
     else if(res.action==='relinked'){ transferMsg='fiche AO re-liee'; }
