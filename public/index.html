@@ -2933,6 +2933,7 @@ if(typeof CONTAINERS!=='undefined' && !CONTAINERS.veille){
 S.veille=[];
 S.veilleConfig=null;   /* doc config mots-cles (lu par le pipeline) */
 S._vkwOpen=false;      /* etat ouvert/ferme du panneau mots-cles */
+S._vdceOpen=false;     /* etat ouvert/ferme du panneau destinataires DCE */
 S._vsearch='';
 S._vstatut='';
 S._vscoremin=0;
@@ -3002,6 +3003,8 @@ function veilleCanEdit(){return true;}
 function veilleGetConfig(){
   if(!S.veilleConfig) S.veilleConfig={id:'veille_config',source:'marchespublics_gov_ma',type:'config',keywords:[]};
   if(!Array.isArray(S.veilleConfig.keywords)) S.veilleConfig.keywords=[];
+  if(!Array.isArray(S.veilleConfig.dce_email_to)) S.veilleConfig.dce_email_to=[];
+  if(!Array.isArray(S.veilleConfig.dce_email_cc)) S.veilleConfig.dce_email_cc=[];
   return S.veilleConfig;
 }
 function veilleKwAdd(){
@@ -3054,6 +3057,78 @@ function veilleKeywordsCard(){
         '<button id="vkw-save" class="btn btn-prim" onclick="veilleKwSave()">Enregistrer</button>'+
       '</div>'+
       '<div style="font-size:11px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (7h / 15h).</div>'+
+    '</div>'+
+  '</details>';
+}
+
+/* === Destinataires email DCE (memes doc config veille_config, lu par le workflow DCE) === */
+function _veilleDceList(kind){
+  var cfg=veilleGetConfig();
+  return kind==='cc' ? cfg.dce_email_cc : cfg.dce_email_to;
+}
+function veilleDceEmailAdd(kind){
+  var inp=document.getElementById(kind==='cc'?'vdce-cc-input':'vdce-to-input');
+  if(!inp) return;
+  var v=(inp.value||'').trim().toLowerCase();
+  if(!v) return;
+  if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v)){ toast('Email invalide', false); return; }
+  var list=_veilleDceList(kind);
+  if(list.indexOf(v)>=0){ toast('Email deja present', false); return; }
+  list.push(v);
+  S._vdceOpen=true;
+  inp.value='';
+  render();
+}
+function veilleDceEmailRemove(kind,i){
+  var list=_veilleDceList(kind);
+  if(i>=0 && i<list.length){ list.splice(i,1); S._vdceOpen=true; render(); }
+}
+function veilleDceEmailSave(){
+  var cfg=veilleGetConfig();
+  cfg.id='veille_config'; cfg.source='marchespublics_gov_ma'; cfg.type='config';
+  cfg.updated_at=new Date().toISOString();
+  var btn=document.getElementById('vdce-save');
+  if(btn){ btn.disabled=true; btn.textContent='Enregistrement...'; }
+  veilleApiSave(cfg).then(function(saved){
+    if(saved && typeof saved==='object') S.veilleConfig=saved;
+    toast('Destinataires email DCE enregistres', true);
+    S._vdceOpen=true;
+    render();
+  }).catch(function(e){
+    toast('Erreur enregistrement destinataires: '+e.message, false);
+    if(btn){ btn.disabled=false; btn.textContent='Enregistrer'; }
+  });
+}
+function _veilleDceChips(kind){
+  var list=_veilleDceList(kind);
+  if(!list.length){
+    return '<span style="color:#7A7369;font-size:12px;font-style:italic">'+(kind==='cc'?'Aucun CC':'Aucun destinataire - fallback imane@neurones.ma')+'</span>';
+  }
+  return list.map(function(e,i){
+    return '<span class="badge bi" style="font-size:12px">'+esc(e)+
+      ' <button onclick="veilleDceEmailRemove(\''+kind+'\','+i+')" title="Retirer" style="border:0;background:none;cursor:pointer;color:#B7472A;font-weight:bold;font-size:14px;line-height:1;padding:0 2px">&times;</button></span>';
+  }).join(' ');
+}
+function veilleDceEmailCard(){
+  var cfg=veilleGetConfig();
+  var nb=cfg.dce_email_to.length+cfg.dce_email_cc.length;
+  return '<details class="card" style="margin-bottom:10px;padding:12px"'+(S._vdceOpen?' open':'')+' ontoggle="S._vdceOpen=this.open">'+
+    '<summary style="cursor:pointer;font-weight:600;color:#1F4E78">&#128231; Destinataires email DCE ('+nb+')</summary>'+
+    '<div style="margin-top:10px">'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:4px">Destinataires (To)</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+_veilleDceChips('to')+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'+
+        '<input id="vdce-to-input" class="si" placeholder="email@neurones.ma" style="width:280px;max-width:100%" onkeydown="if(event.key===\'Enter\'){event.preventDefault();veilleDceEmailAdd(\'to\');}">'+
+        '<button class="btn" onclick="veilleDceEmailAdd(\'to\')">+ Ajouter</button>'+
+      '</div>'+
+      '<div style="font-size:12px;font-weight:600;margin-bottom:4px">Copie (CC) - optionnel</div>'+
+      '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px">'+_veilleDceChips('cc')+'</div>'+
+      '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:12px">'+
+        '<input id="vdce-cc-input" class="si" placeholder="email@neurones.ma" style="width:280px;max-width:100%" onkeydown="if(event.key===\'Enter\'){event.preventDefault();veilleDceEmailAdd(\'cc\');}">'+
+        '<button class="btn" onclick="veilleDceEmailAdd(\'cc\')">+ Ajouter</button>'+
+      '</div>'+
+      '<button id="vdce-save" class="btn btn-prim" onclick="veilleDceEmailSave()">Enregistrer</button>'+
+      '<div style="font-size:11px;color:#7A7369;margin-top:8px">Email envoye a la secretaire quand un DCE est pret. Si aucun destinataire (To), fallback sur imane@neurones.ma.</div>'+
     '</div>'+
   '</details>';
 }
@@ -3245,7 +3320,7 @@ function pgVeille(){
       '<th>Actions</th>'+
     '</tr></thead><tbody>'+tbody+'</tbody></table></div></div>';
 
-  return aide+veilleKeywordsCard()+veilleScrapeBar()+kpi+toolbar+table;
+  return aide+veilleKeywordsCard()+veilleDceEmailCard()+veilleScrapeBar()+kpi+toolbar+table;
 }
 
 /* === Bouton DCE adaptatif selon dce_status === */
