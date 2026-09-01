@@ -1,0 +1,31 @@
+name: Gate echeances de depot
+
+# Garde-fou : une erreur d'une heure sur une date limite de depot peut faire
+# rater un marche. Ce job rejoue une echeance a plusieurs instants (la veille,
+# le matin, une heure avant, une minute apres) + la bascule d'heure legale du
+# 20/09, et echoue si l'affichage ne dit pas la verite. Deterministe (offset et
+# "maintenant" injectes) : independant du tzdata de l'hote CI.
+
+on:
+  push:
+    paths:
+      - 'public/echeances.js'
+      - 'public/index.html'
+      - 'test/echeances.test.js'
+      - '.github/workflows/echeances-gate.yml'
+  pull_request:
+    paths:
+      - 'public/echeances.js'
+      - 'public/index.html'
+      - 'test/echeances.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate echeances (node, sans dependances)
+        run: node test/echeances.test.js

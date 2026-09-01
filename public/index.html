@@ -289,6 +289,7 @@ input,select,textarea{font-family:inherit}
 <input type="file" id="fi" accept=".json" style="display:none" onchange="handleImport(event)">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="echeances.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
@@ -582,23 +583,65 @@ function pgDash(){
 }
 
 // PAGE AO
+/* Libelle d'echeance de depot pour un AO (source unique MPEch). null si pas de date. */
+function aoEch(a){ return a.date_limite?MPEch.libelleEcheance(a.date_limite,a.heure_limite||null):null; }
+/* Couleur selon urgence de depot. */
+function aoDlColor(u){return (u==='passe'||u==='aujourdhui')?'#dc2626':(u==='imminent'?'#d97706':(u==='proche'?'#b45309':'#4A453F'));}
+/* Rang de tri AO : depot en_cours a heure ESTIMEE et encore ouvert = tout en haut. */
+function aoRank(a,L){return (a.statut==='en_cours'&&L&&L.sortRank===0)?0:1;}
+/* Sous-ligne provenance pour une echeance a heure estimee : rend visible si le
+   portail avait une heure (donc perdue) ou non (donc pas un oubli de notre part). */
+function aoSourceSub(a){
+  if(!a.veille_id)return '<div style="font-size:10px;color:#b45309">heure non renseignee - a saisir</div>';
+  var vr=S.veille&&S.veille.find(function(x){return String(x.id)===String(a.veille_id);});
+  if(!vr)return '';
+  var quand=vr.date_derniere_mise_a_jour?fdat(String(vr.date_derniere_mise_a_jour).slice(0,10)):(vr.date_publication||'?');
+  var src=(String(vr.source||'').indexOf('marchespublics')>=0)?'marchespublics.gov.ma':(vr.source||'portail');
+  var h=vr.heure_limite?(' - heure au portail : '+esc(vr.heure_limite)):' - aucune heure au portail';
+  return '<div style="font-size:10px;color:#7A7369">vu le '+quand+' sur '+src+h+'</div>';
+}
 function pgAO(){
   var aos=S.aos;
   if(S.search)aos=aos.filter(function(a){return [a.ref,a.objet,a.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
   if(S.sf)aos=aos.filter(function(a){return a.statut===S.sf;});
-  var expAO=S.aos.filter(function(a){return a.statut==='en_cours'&&a.date_limite&&days(a.date_limite)<0;});
-  var alerts=expAO.map(function(a){return '<div class="ai-box ai-r"><div class="ai-t">AO '+a.ref+' - Date limite depassee depuis '+Math.abs(days(a.date_limite))+' jours</div><div class="ai-s">'+a.objet+' - '+a.maitre_ouvrage+'</div></div>';}).join('');
+  /* Tri : heure estimee & ouverte en tete (a verifier en priorite), puis plus urgent d'abord.
+     Le pin est la cle PRIMAIRE : il tient meme si un autre critere s'active ensuite. */
+  aos=aos.slice().sort(function(x,y){
+    var lx=aoEch(x),ly=aoEch(y);
+    var rx=aoRank(x,lx),ry=aoRank(y,ly);
+    if(rx!==ry)return rx-ry;
+    var ex=(x.statut==='en_cours'&&lx)?lx.epoch:Infinity;
+    var ey=(y.statut==='en_cours'&&ly)?ly.epoch:Infinity;
+    return ex-ey;
+  });
+  /* Alertes : instant reel. Aujourd'hui (encore ouvert, urgent) puis depassees. */
+  var alertItems=S.aos.filter(function(a){return a.statut==='en_cours'&&a.date_limite;})
+    .map(function(a){return {a:a,L:aoEch(a)};})
+    .filter(function(o){return o.L&&(o.L.urgence==='aujourdhui'||o.L.passe);})
+    .sort(function(p,q){var rp=p.L.passe?1:0,rq=q.L.passe?1:0;return rp-rq;});
+  var alerts=alertItems.map(function(o){var a=o.a,L=o.L;
+    var msg=L.passe?('AO '+a.ref+' - depot '+L.text):('AO '+a.ref+' - '+L.text);
+    var warn=L.transitionWarn?' <b>(changement d\'heure legale - verifier le portail)</b>':'';
+    return '<div class="ai-box ai-r"><div class="ai-t">'+esc(msg)+warn+'</div><div class="ai-s">'+esc(a.objet||'')+' - '+esc(a.maitre_ouvrage||'')+'</div></div>';}).join('');
   var rows=aos.length?aos.map(function(a){
     var m=a.marche_id?gm(a.marche_id):null;
-    var dl=a.date_limite?days(a.date_limite):null;
-    var dlWarn=a.statut==='en_cours'&&dl!==null&&dl<0;
-    var dlSoon=a.statut==='en_cours'&&dl!==null&&dl>=0&&dl<=7;
+    var L=aoEch(a);
     var cpS=a.caution_prov?(SMC[a.caution_prov.statut]||{l:a.caution_prov.statut,c:'bn'}):null;
-    var dlCell=dlWarn?'<span style="color:#dc2626;font-weight:600">'+fdat(a.date_limite)+' (!)</span>':dlSoon?'<span style="color:#d97706;font-weight:600">'+fdat(a.date_limite)+' (J-'+dl+')</span>':fdat(a.date_limite);
+    var dlCell;
+    if(!L){dlCell='<span style="color:#7A7369;font-size:11px">-</span>';}
+    else{
+      var actif=(a.statut==='en_cours');
+      var col=actif?aoDlColor(L.urgence):'#7A7369';
+      var strong=(actif&&(L.passe||L.urgence==='aujourdhui'||L.urgence==='imminent'))?'font-weight:600':'';
+      var warn=(actif&&L.transitionWarn)?'<div style="font-size:10px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
+      var sub=(actif&&L.estimee)?aoSourceSub(a):'';
+      dlCell='<div style="font-size:12px">'+esc(L.dateFR)+(a.heure_limite?(' '+esc(a.heure_limite)):'')+'</div>'+
+             '<div style="font-size:11px;color:'+col+';'+strong+'">'+esc(L.text)+'</div>'+warn+sub;
+    }
     var cpCell=a.caution_prov?'<div style="font-size:11px;font-weight:600">'+a.caution_prov.num+'</div><div style="font-size:10px;color:#7A7369">'+a.caution_prov.banque+'</div><div>'+fmad(a.caution_prov.montant)+' <span class="badge '+cpS.c+'" style="font-size:9px">'+cpS.l+'</span></div>':'<span style="color:#7A7369;font-size:11px">-</span>';
     var marcheCell=m?'<span class="badge bi" style="font-size:10px;cursor:pointer" onclick="nav(\'marches\')">'+m.ref+'</span>':'<span style="color:#7A7369;font-size:11px">-</span>';
     var attribBtn=(a.statut!=='attribue')?'<button class="act" onclick="attribuerAO(\''+a.id+'\')" title="Attribuer" style="color:#059669">&#10003;</button>':'';
-    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:10px;color:#7A7369">'+a.notes.substring(0,50)+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td style="font-size:12px">'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
+    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:10px;color:#7A7369">'+a.notes.substring(0,50)+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td>'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="11"><div class="empty">Aucun appel d\'offres</div></td></tr>';
   return (alerts?'<div style="margin-bottom:12px">'+alerts+'</div>':'')+
   '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k3"><div class="kl">En cours</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='en_cours';}).length+'</div></div><div class="kpi k2"><div class="kl">Attribues</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='attribue';}).length+'</div></div><div class="kpi k4"><div class="kl">Infructueux/Annules</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='infructueux'||a.statut==='annule';}).length+'</div></div><div class="kpi k1"><div class="kl">Budget total</div><div class="kv sm">'+fmad(S.aos.reduce(function(a,o){return a+(o.budget_estime||0);},0))+'</div></div></div>'+
@@ -609,7 +652,7 @@ function pgAO(){
 function aoFormHTML(a){
   var hasProv=a&&a.caution_prov;
   var cpFields='<div class="fr2"><div class="fg"><label>Banque *</label>'+banqueSelectHTML('cp', hasProv?a.caution_prov.banque:'')+'</div><div class="fg"><label>N Caution *</label><input class="fc" id="cp_num" value="'+(hasProv?esc(a.caution_prov.num):'')+'"></div></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cp_montant" type="number" value="'+(hasProv?a.caution_prov.montant:'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="cp_statut">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(hasProv&&a.caution_prov.statut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date emission</label><input class="fc" id="cp_emission" type="date" value="'+(hasProv&&a.caution_prov.date_emission?a.caution_prov.date_emission:'')+'"></div><div class="fg"></div></div><div id="cp_suggest" class="info-box info-amber" style="display:none"></div>';
-  return '<div class="fr2"><div class="fg"><label>Reference AO *</label><input class="fc" id="aref" value="'+esc(a?a.ref:'AO-'+new Date().getFullYear()+'-XXX')+'"></div><div class="fg"><label>Type</label><select class="fc" id="atype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(a&&a.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Objet *</label><input class="fc" id="aobjet" value="'+esc(a?a.objet:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="amo" value="'+esc(a?a.maitre_ouvrage:'')+'"></div><div class="fr2"><div class="fg"><label>Budget estime (MAD)</label><input class="fc" id="abud" type="number" value="'+(a?a.budget_estime||'':'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="astat">'+objEnts(SMAO).map(function(e){return '<option value="'+e[0]+'"'+(a&&a.statut===e[0]?' selected':!a&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date lancement</label><input class="fc" id="adl" type="date" value="'+(a&&a.date_lancement?a.date_lancement:'')+'"></div><div class="fg"><label>Date limite</label><input class="fc" id="adlim" type="date" value="'+(a&&a.date_limite?a.date_limite:'')+'"></div></div><div class="fg"><label>Notes</label><input class="fc" id="anotes" value="'+esc(a?a.notes||'':'')+'"></div><div class="sec"><div class="sec-t">Caution provisoire (soumission)</div><div class="info-box info-amber">La caution provisoire garantit le serieux de l\'offre. Elle est restituee apres attribution.</div>'+(hasProv?cpFields:'<div id="no-cp" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:#7A7369">Aucune caution provisoire.</span><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showCPForm()">+ Ajouter</button></div><div id="cp-form" style="display:none">'+cpFields+'</div>')+'</div>'+banquesDatalistHTML();
+  return '<div class="fr2"><div class="fg"><label>Reference AO *</label><input class="fc" id="aref" value="'+esc(a?a.ref:'AO-'+new Date().getFullYear()+'-XXX')+'"></div><div class="fg"><label>Type</label><select class="fc" id="atype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(a&&a.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Objet *</label><input class="fc" id="aobjet" value="'+esc(a?a.objet:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="amo" value="'+esc(a?a.maitre_ouvrage:'')+'"></div><div class="fr2"><div class="fg"><label>Budget estime (MAD)</label><input class="fc" id="abud" type="number" value="'+(a?a.budget_estime||'':'')+'" oninput="suggestProvMnt()"></div><div class="fg"><label>Statut</label><select class="fc" id="astat">'+objEnts(SMAO).map(function(e){return '<option value="'+e[0]+'"'+(a&&a.statut===e[0]?' selected':!a&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date lancement</label><input class="fc" id="adl" type="date" value="'+(a&&a.date_lancement?a.date_lancement:'')+'"></div><div class="fg"><label>Date limite depot</label><div style="display:flex;gap:6px"><input class="fc" id="adlim" type="date" style="flex:1" value="'+(a&&a.date_limite?a.date_limite:'')+'"><input class="fc" id="adlimh" type="time" style="width:100px" value="'+(a&&a.heure_limite?esc(a.heure_limite):'')+'" title="Heure limite de depot. Vide = a confirmer sur le portail."></div></div></div><div class="fg"><label>Notes</label><input class="fc" id="anotes" value="'+esc(a?a.notes||'':'')+'"></div><div class="sec"><div class="sec-t">Caution provisoire (soumission)</div><div class="info-box info-amber">La caution provisoire garantit le serieux de l\'offre. Elle est restituee apres attribution.</div>'+(hasProv?cpFields:'<div id="no-cp" style="display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:#7A7369">Aucune caution provisoire.</span><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showCPForm()">+ Ajouter</button></div><div id="cp-form" style="display:none">'+cpFields+'</div>')+'</div>'+banquesDatalistHTML();
 }
 function showCPForm(){document.getElementById('no-cp').style.display='none';document.getElementById('cp-form').style.display='block';suggestProvMnt();}
 function suggestProvMnt(){
@@ -626,7 +669,8 @@ function newAO(){
     var cpNum=v('cp_num');
     var cp=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,statut:v('cp_statut')||'active'}:null;
     if(cp && cp.banque) ensureBanqueExists(cp.banque);
-    var newAo={id:nidStr('ao'),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')};
+    var heureLim=v('adlimh')||null;
+    var newAo={id:nidStr('ao'),ref:ref,objet:objet,maitre_ouvrage:maitre_ouvrage,type:v('atype'),budget_estime:vn('abud'),date_lancement:v('adl')||null,date_limite:v('adlim')||null,heure_limite:heureLim,heure_estimee:!heureLim,statut:v('astat'),marche_id:null,caution_prov:cp,notes:v('anotes')};
     saveItem('aos',newAo).then(function(){sbStats();render();toast('AO cree');});
   });
 }
@@ -637,7 +681,8 @@ function editAO(id){
     var cpNum=v('cp_num');
     var cpNew=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
     if(cpNew && cpNew.banque) ensureBanqueExists(cpNew.banque);
-    a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
+    var heureLimE=v('adlimh')||null;
+    a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.heure_limite=heureLimE;a.heure_estimee=!heureLimE;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
     // Si AO devient infructueux/annule ET caution prov encore active, basculer en mainlevee_demandee
     var cautionAutoUpdated=false;
     if((a.statut==='infructueux'||a.statut==='annule') && oldStatut!==a.statut && a.caution_prov && a.caution_prov.statut==='active'){
@@ -2975,20 +3020,10 @@ function veilleScoreColor(s){
   return {bg:'#F2F2F2',fg:'#666666'};
 }
 
-/* Parse "DD/MM/YYYY" -> Date */
-function veilleParseDateLimite(s){
-  if(!s) return null;
-  var p=s.split('/');
-  if(p.length!==3) return null;
-  var d=new Date(parseInt(p[2],10), parseInt(p[1],10)-1, parseInt(p[0],10));
-  return isNaN(d.getTime())?null:d;
-}
-
-/* Jours restants jusqu'a date_limite (negatif si passe) */
-function veilleJoursRestants(s){
-  var d=veilleParseDateLimite(s);
-  if(!d) return null;
-  return Math.ceil((d-Date.now())/86400000);
+/* Jours CALENDAIRES restants jusqu'a date_limite (0 = aujourd'hui, <0 = passe).
+   Delegue a la source unique MPEch (heure Casablanca, meme calcul que le module AO). */
+function veilleJoursRestants(s,heure){
+  return MPEch.joursRestants(s, heure||null);
 }
 
 /* === API : load/save specifique veille (PK = source) === */
@@ -3203,8 +3238,16 @@ function pgVeille(){
     rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0;});
   }
 
-  /* Tri : score desc, mais no_go en bas, gagne tout en haut */
+  /* Tri : (0) heure de depot ESTIMEE & encore ouverte = tout en haut, cle PRIMAIRE
+     qui tient meme avec le tri metier actif ; puis no_go en bas, gagne en haut, score desc. */
+  function veilleEstimeeOpen(r){
+    if(!r.date_limite) return false;
+    var L=MPEch.libelleEcheance(r.date_limite,r.heure_limite||null);
+    return L.sortRank===0;
+  }
   rows.sort(function(a,b){
+    var pa=veilleEstimeeOpen(a)?0:1, pb=veilleEstimeeOpen(b)?0:1;
+    if(pa!==pb) return pa-pb;
     var sa=(a.statut||'a_etudier'),sb=(b.statut||'a_etudier');
     var rankA=sa==='no_go'?2:(sa==='gagne'?0:1);
     var rankB=sb==='no_go'?2:(sb==='gagne'?0:1);
@@ -3272,18 +3315,17 @@ function pgVeille(){
   } else {
     tbody=rows.map(function(r){
       var col=veilleScoreColor(r.score||0);
-      var jrest=veilleJoursRestants(r.date_limite);
+      var L=r.date_limite?MPEch.libelleEcheance(r.date_limite,r.heure_limite||null):null;
       var dlCell;
-      if(jrest===null){
+      if(!L){
         dlCell='<span style="color:#7A7369;font-size:11px">-</span>';
-      } else if(jrest<0){
-        dlCell='<span style="color:#7A7369;font-size:11px;text-decoration:line-through">'+esc(r.date_limite||'')+'</span>';
-      } else if(jrest<=3){
-        dlCell='<span style="color:#dc2626;font-weight:600;font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
-      } else if(jrest<=7){
-        dlCell='<span style="color:#d97706;font-weight:600;font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
       } else {
-        dlCell='<span style="font-size:12px">'+esc(r.date_limite||'')+' (J-'+jrest+')</span>';
+        var vcol=L.passe?'#7A7369':aoDlColor(L.urgence);
+        var deco=L.passe?'text-decoration:line-through;':'';
+        var vfw=(L.passe||L.urgence==='aujourdhui'||L.urgence==='imminent')?'600':'400';
+        var vwarn=L.transitionWarn?'<div style="font-size:9px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
+        dlCell='<div style="font-size:12px;color:'+vcol+';'+deco+'font-weight:'+vfw+'">'+esc(L.dateFR)+'</div>'+
+               '<div style="font-size:10px;color:'+vcol+'">'+esc(L.text)+'</div>'+vwarn;
       }
       var heure=r.heure_limite?'<div style="font-size:10px;color:#7A7369">'+esc(r.heure_limite)+'</div>':'';
 
@@ -3537,10 +3579,12 @@ function veilleGotoMarche(mid){
 /* Convertit 'DD/MM/YYYY' -> 'YYYY-MM-DD' (sans objet Date, pas de souci de fuseau). null si vide/invalide. */
 function veilleFrDateToISO(s){
   if(!s) return null;
-  var p=String(s).split('/');
-  if(p.length!==3) return null;
-  var d=p[0], m=p[1], y=p[2];
-  if(!/^\d{1,2}$/.test(d) || !/^\d{1,2}$/.test(m) || !/^\d{4}$/.test(y)) return null;
+  /* Tolerant : "JJ/MM/AAAA" avec un eventuel suffixe horaire ("JJ/MM/AAAA 10:00").
+     On extrait la date sans jamais renvoyer null a cause de l'heure collee
+     (l'heure vit dans heure_limite, mais on ne perd plus la date si elle glisse ici). */
+  var mm=/^\s*(\d{1,2})\/(\d{1,2})\/(\d{4})/.exec(String(s));
+  if(!mm) return null;
+  var d=mm[1], m=mm[2], y=mm[3];
   if(d.length<2) d='0'+d;
   if(m.length<2) m='0'+m;
   return y+'-'+m+'-'+d;
@@ -3569,6 +3613,8 @@ function veilleBuildAoFromVeille(r){
     budget_estime:(r.estimation_mo!=null?r.estimation_mo:null),
     date_lancement:veilleFrDateToISO(r.date_publication),
     date_limite:veilleFrDateToISO(r.date_limite),
+    heure_limite:(r.heure_limite||null),
+    heure_estimee:!(r.heure_limite),
     statut:'en_cours',
     marche_id:null,
     caution_prov:(r.caution_provisoire!=null?{montant:r.caution_provisoire,statut:'en_attente',banque:'',num:'',date_emission:null}:null),
