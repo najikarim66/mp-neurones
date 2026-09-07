@@ -290,6 +290,7 @@ input,select,textarea{font-family:inherit}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="echeances.js"></script>
+<script src="cautions-calc.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
@@ -1144,77 +1145,92 @@ function provRestituer(aoId){
   saveItem('aos',a).then(function(){sbStats();render();toast('Provisoire restituee le '+fdat(a.caution_prov.date_restitution));});
 }
 
-// PAGE CAUTIONS
-function pgCautions(){
-  // Liste UNIFIEE : cautions de collection (_src 'col') + provisoires portees par les AO
-  // (_src 'ao', normalisees au format caution, type 'provisoire'). Aucune migration.
-  var allC=S.cautions.map(function(c){var m=gm(c.marche_id);return {_src:'col',id:c.id,num:c.num,type:c.type,banque:c.banque,montant:+c.montant||0,date_emission:c.date_emission,statut:c.statut,marche_id:c.marche_id,_ref:m.ref||'',_titre:m.titre||''};})
-    .concat(S.aos.filter(function(a){return a.caution_prov;}).map(function(a){var p=a.caution_prov;return {_src:'ao',_aoId:a.id,id:'prov_'+a.id,num:p.num||'-',type:'provisoire',banque:p.banque||'',montant:+p.montant||0,date_emission:p.date_emission||null,statut:p.statut||'',_ref:a.ref||''};}));
-  var typeLabel=function(t){return TC[t]||(t==='provisoire'?'Caution provisoire':t);};
-  // Encore engagee a la banque : collection = active ; provisoire = active OU mainlevee demandee.
-  var isBlocked=function(c){return c._src==='ao'?(c.statut==='active'||c.statut==='mainlevee_demandee'):(c.statut==='active');};
-
-  var cs=allC;
-  if(S.search)cs=cs.filter(function(c){return [c.num,c.banque,c._ref].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});
-  if(S.sf)cs=cs.filter(function(c){return c.statut===S.sf;});
-  if(S.tf)cs=cs.filter(function(c){return c.type===S.tf;});
-  if(S.bf)cs=cs.filter(function(c){return c.banque===S.bf;});
-
-  // Situation par banque et par type, calculee sur l'ENSEMBLE FILTRE (engagements en cours).
+// Matrice banque x type (engagements en cours), calculee sur l'ensemble recu (deja filtre).
+function renderCautionMatrix(cs,typeLabel){
   var TORD=['bonne_execution','retenue_garantie','soumission','avance_demarrage','provisoire'];
   var banques=uniqueArr(cs.map(function(c){return c.banque;}).filter(Boolean)).sort();
-  var typesActifs=TORD.filter(function(t){return cs.some(function(c){return c.type===t;});});
-  var mat={};var tActifT={};var tActifB={};var gTotActif=0;
-  banques.forEach(function(b){mat[b]={};tActifB[b]=0;TORD.forEach(function(t){mat[b][t]={nb:0,mnt:0};});});
-  typesActifs.forEach(function(t){tActifT[t]=0;});
-  cs.forEach(function(c){
-    if(!c.banque||!mat[c.banque]||!mat[c.banque][c.type])return;
-    if(isBlocked(c)){mat[c.banque][c.type].nb++;mat[c.banque][c.type].mnt+=c.montant;tActifB[c.banque]+=c.montant;tActifT[c.type]+=c.montant;gTotActif+=c.montant;}
-  });
-  var sitHead='<th>Banque</th>'+typesActifs.map(function(t){return '<th style="text-align:center">'+typeLabel(t)+'</th>';}).join('')+'<th style="text-align:right">TOTAL</th>';
-  var sitRows=banques.map(function(b){
-    var hasAny=typesActifs.some(function(t){return mat[b][t].nb>0;});if(!hasAny)return'';
-    return '<tr><td style="font-weight:600">'+esc(b)+'</td>'+typesActifs.map(function(t){var cell=mat[b][t];return '<td style="text-align:right;font-family:monospace;font-size:12px">'+(cell.mnt?fmad(cell.mnt)+'<div style="font-size:10px;color:#7A7369">'+cell.nb+' caution(s)</div>':'-')+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(tActifB[b])+'</td></tr>';
-  }).join('');
-  var sitFoot='<tr style="background:#f0fdf4;border-top:2px solid #1A5C3A"><td style="font-weight:700">TOTAL</td>'+typesActifs.map(function(t){return '<td style="text-align:right;font-family:monospace;font-weight:700">'+fmad(tActifT[t])+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(gTotActif)+'</td></tr>';
+  var types=TORD.filter(function(t){return cs.some(function(c){return c.type===t;});});
+  if(!banques.length)return '<div style="font-size:12px;color:var(--ink-muted)">Aucun engagement en cours.</div>';
+  var mat={},tB={},tT={},tot=0;
+  banques.forEach(function(b){mat[b]={};tB[b]=0;types.forEach(function(t){mat[b][t]={nb:0,mnt:0};});});
+  types.forEach(function(t){tT[t]=0;});
+  cs.forEach(function(c){if(!c.banque||!mat[c.banque]||!mat[c.banque][c.type])return;if(MPCaution.isBlocked(c)){mat[c.banque][c.type].nb++;mat[c.banque][c.type].mnt+=c.montant;tB[c.banque]+=c.montant;tT[c.type]+=c.montant;tot+=c.montant;}});
+  var head='<th>Banque</th>'+types.map(function(t){return '<th style="text-align:right">'+typeLabel(t)+'</th>';}).join('')+'<th style="text-align:right">TOTAL</th>';
+  var body=banques.map(function(b){return '<tr><td style="font-weight:600">'+esc(b)+'</td>'+types.map(function(t){var cell=mat[b][t];return '<td style="text-align:right;font-family:var(--FM)">'+(cell.mnt?fmad(cell.mnt)+'<div style="font-size:12px;color:var(--ink-muted)">'+cell.nb+' caution(s)</div>':'—')+'</td>';}).join('')+'<td style="text-align:right;font-family:var(--FM);font-weight:600;color:var(--green-soft)">'+fmad(tB[b])+'</td></tr>';}).join('');
+  var foot='<tr style="border-top:2px solid var(--green-soft)"><td style="font-weight:700">TOTAL</td>'+types.map(function(t){return '<td style="text-align:right;font-family:var(--FM);font-weight:700">'+fmad(tT[t])+'</td>';}).join('')+'<td style="text-align:right;font-family:var(--FM);font-weight:700;color:var(--green-soft)">'+fmad(tot)+'</td></tr>';
+  return '<div class="tw"><table><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table></div>';
+}
 
-  // Contexte de filtre (pour ne jamais lire un total partiel comme un total global)
+// PAGE CAUTIONS — registre unifie (collection + provisoires portees par les AO).
+// Logique pure = MPCaution (public/cautions-calc.js), testee par test/cautions.test.js.
+function pgCautions(){
+  var typeLabel=function(t){return TC[t]||(t==='provisoire'?'Caution provisoire':t);};
+  var allC=MPCaution.unify(S.cautions,S.aos,gm);
+  var cs=MPCaution.applyFilters(allC,{search:S.search,statut:S.sf,type:S.tf,banque:S.bf});
+  var agg=MPCaution.aggregate(cs);
+  var aggAll=MPCaution.aggregate(allC);
+  var restit=MPCaution.aRestituer(allC);
+
+  // Contexte de filtre : un total partiel ne se lit jamais comme un total global.
   var fparts=[];
   if(S.tf)fparts.push('type '+typeLabel(S.tf));
   if(S.sf)fparts.push('statut '+((SMC[S.sf]||{}).l||S.sf));
   if(S.bf)fparts.push('banque '+S.bf);
-  if(S.search)fparts.push('recherche "'+S.search+'"');
-  var fctx=fparts.length?' (filtre : '+fparts.join(', ')+')':' (tout)';
-  var nbA=cs.filter(function(c){return c.statut==='active';}).length;
-  var nbM=cs.filter(function(c){return c.statut==='mainlevee_demandee';}).length;
-  var nbE=cs.filter(function(c){return c.statut==='expiree';}).length;
-  var nbL=cs.filter(function(c){return c.statut==='liberee'||c.statut==='restituee';}).length;
+  if(S.search)fparts.push('recherche « '+S.search+' »');
+  var fctx=fparts.length?'filtre : '+fparts.join(', '):'tout le registre';
+
+  // Bloc "A restituer" : provisoires (AO decide) + definitives en mainlevee demandee.
+  var restBand='';
+  if(restit.items.length){
+    var lignes=restit.items.map(function(c){
+      var act=c.src==='ao'
+        ? '<button class="btn btn-sm" style="background:var(--terra);color:var(--cream);border-color:var(--terra)" onclick="provRestituer(\''+esc(c._aoId)+'\')">Restituer</button>'
+        : '<button class="btn btn-sm" style="background:var(--forest);color:var(--cream);border-color:var(--forest)" onclick="libereCaution(\''+c.id+'\')">Confirmer libération</button>';
+      var nature=c.src==='ao'?'Provisoire':typeLabel(c.type);
+      return '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:9px 0;border-top:1px solid var(--terra-mid)"><span style="font-weight:600;min-width:96px">'+nature+'</span><span>'+esc(c.banque||'banque non renseignée')+'</span><span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span><span style="color:var(--ink-muted)">'+esc(c.ref)+'</span>'+bdg(c.statut,SMC)+'<span style="margin-left:auto">'+act+'</span></div>';
+    }).join('');
+    restBand='<div class="card" style="background:var(--terra-pale);border-color:var(--terra-mid)"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:17px;font-weight:600;color:var(--terra)">À restituer — '+restit.items.length+'</span><span style="font-family:var(--FM);font-size:16px;font-weight:600">'+fmad(restit.total)+'</span><span style="font-size:12px;color:var(--ink-soft)">argent immobilisé : mainlevée à demander ou à confirmer</span></div>'+lignes+'</div>';
+  }
+
+  // Hero engagement (suit le filtre).
+  var hero='<div class="card" style="background:var(--forest);color:var(--cream);border-color:var(--forest)"><div style="font-size:12px;text-transform:uppercase;letter-spacing:.05em;color:var(--green-mid)">Engagé à la banque</div><div style="font-family:var(--FM);font-size:28px;font-weight:500;line-height:1.1">'+fmad(agg.engage)+'</div><div style="font-size:12px;color:var(--green-mid);margin-top:3px">'+cs.filter(MPCaution.isBlocked).length+' caution(s) en cours &middot; '+fctx+'</div></div>';
+
+  // Tuiles par banque, CLIQUABLES (filtrent) — vue globale, la banque active est mise en avant.
+  var tiles='<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:12px;margin-bottom:14px">'+
+    aggAll.banksSorted.map(function(e){var b=e[0],v=e[1],on=S.bf===b;
+      return '<div role="button" tabindex="0" onclick="S.bf=(S.bf===\''+esc(b)+'\'?\'\':\''+esc(b)+'\');render()" title="Filtrer sur '+esc(b)+'" style="cursor:pointer;background:var(--cream);border:1px solid '+(on?'var(--forest)':'var(--line)')+';border-radius:6px;padding:12px 14px'+(on?';box-shadow:0 0 0 2px rgba(31,58,46,.15)':'')+'"><div style="font-family:var(--FT);font-size:15px;font-weight:600">'+esc(b)+'</div><div style="font-family:var(--FM);font-size:17px;color:var(--green-soft);margin-top:2px">'+fmad(v.eng)+'</div><div style="font-size:12px;color:var(--ink-muted);margin-top:2px">'+v.nb+' caution(s)'+(on?' &middot; filtré':'')+'</div></div>';
+    }).join('')+'</div>';
+
+  // KPI (suivent le filtre).
+  var kpis='<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+agg.kpi.active+'</div></div><div class="kpi k1"><div class="kl">Mainlevée demandée</div><div class="kv">'+agg.kpi.mainlevee+'</div></div><div class="kpi k4"><div class="kl">Expirées</div><div class="kv">'+agg.kpi.expiree+'</div></div><div class="kpi k3"><div class="kl">Libérées / restituées</div><div class="kv">'+agg.kpi.liberee+'</div></div></div>';
+
+  var toolbar='<div class="tb" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px"><input class="si" placeholder="Rechercher (n°, banque, réf)…" value="'+esc(S.search)+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'<option value="provisoire"'+(S.tf==='provisoire'?' selected':'')+'>Caution provisoire</option></select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+aggAll.banksSorted.map(function(e){return '<option value="'+esc(e[0])+'"'+(S.bf===e[0]?' selected':'')+'>'+esc(e[0])+'</option>';}).join('')+'</select><span style="margin-left:auto;font-size:12px;color:var(--ink-muted)">'+cs.length+' / '+allC.length+' cautions</span><button class="btn btn-sm" onclick="exportCSV(\'cautions\')">Export CSV</button><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div>';
+
+  // Table : plancher 12px, intitules ENTIERS (jamais tronques).
   var rows=cs.length?cs.map(function(c){
-    if(c._src==='ao'){
-      // Provisoire portee par un AO : refs/actions propres, jamais editCaution/delCaution.
-      var actP='';
-      if(c.statut==='active')actP='<button class="act" title="Marquer mainlevee demandee" onclick="provMainlevee(\''+esc(c._aoId)+'\')">M</button>';
-      else if(c.statut==='mainlevee_demandee')actP='<button class="act" style="color:#065f46;font-weight:bold" title="Confirmer la restitution (argent revenu)" onclick="provRestituer(\''+esc(c._aoId)+'\')">Restituee</button>';
-      var banqueP=c.banque?esc(c.banque):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
-      var emP=c.date_emission?fdat(c.date_emission):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
-      return '<tr style="background:#fffdf7"><td style="font-family:monospace;font-size:12px;font-weight:600">'+esc(c.num)+'</td><td style="font-size:12px"><div style="font-weight:500">'+esc(c._ref)+'</div><div style="color:#7A7369;font-size:11px">AO &middot; provisoire</div></td><td><span class="badge bw" style="font-size:11px">Provisoire</span></td><td style="font-size:12px">'+banqueP+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td style="font-size:12px">'+emP+'</td><td style="font-size:11px;color:#7A7369">&mdash;</td><td>'+bdg(c.statut,SMC)+'</td><td><div style="display:flex;gap:4px">'+actP+'</div></td></tr>';
+    if(c.src==='ao'){
+      var actP=c.statut==='active'?'<button class="act" title="Marquer mainlevée demandée" onclick="provMainlevee(\''+esc(c._aoId)+'\')">Mainlevée</button>':(c.statut==='mainlevee_demandee'?'<button class="act" style="color:var(--green-soft);font-weight:600" title="Confirmer restitution" onclick="provRestituer(\''+esc(c._aoId)+'\')">Restituer</button>':'');
+      var banqueP=c.banque?esc(c.banque):'<span style="color:var(--terra);font-style:italic">non renseignée</span>';
+      var emP=c.date_emission?fdat(c.date_emission):'<span style="color:var(--terra);font-style:italic">non renseignée</span>';
+      return '<tr style="background:#FFFDF7"><td style="font-family:var(--FM);font-weight:600">'+esc(c.num||'—')+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-muted)">AO &middot; provisoire</div></td><td><span class="badge bw" style="font-size:12px">Provisoire</span></td><td>'+banqueP+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+emP+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span></td><td><div style="display:flex;gap:4px">'+actP+'</div></td></tr>';
     }
     var payUse=c.type==='retenue_garantie'?S.paiements.filter(function(p){return p.caution_rg_id===c.id;}):[];
+    var usedNote=payUse.length?'<div style="font-size:12px;color:var(--ink-muted)">Utilisée : '+payUse.map(function(p){return esc(p.numero);}).join(', ')+'</div>':'';
     var libBtn='';
-    if(c.statut==='active'){
-      libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Demander la mainlevee">M</button>'+
-             '<button class="act" onclick="libereCautionDirect(\''+c.id+'\')" title="Liberer directement (cas rapide)" style="color:#065f46">L</button>';
-    } else if(c.statut==='mainlevee_demandee'){
-      libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Confirmer liberation effective" style="color:#065f46;font-weight:bold">OK</button>';
-    }
-    return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+c.num+'</td><td style="font-size:12px"><div style="font-weight:500">'+esc(c._ref)+'</div><div style="color:#7A7369;font-size:11px">'+esc((c._titre||'').substring(0,28))+'</div></td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:11px">'+typeLabel(c.type)+'</span></td><td style="font-size:12px">'+esc(c.banque)+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td style="font-size:12px">'+fdat(c.date_emission)+'</td><td style="font-size:11px">'+(payUse.length?payUse.map(function(p){return '<span class="badge bn">'+p.numero+'</span>';}).join(' '):'-')+'</td><td>'+bdg(c.statut,SMC)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editCaution(\''+c.id+'\')">&#9998;</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')">&#128465;</button></div></td></tr>';
-  }).join(''):'<tr><td colspan="9"><div class="empty">Aucune caution</div></td></tr>';
-  return renderProvisoiresBlock()+
-  '<div style="margin:2px 0 10px;font-size:13px;font-weight:600">'+cs.length+' caution(s) &middot; '+fmad(gTotActif)+' engagés'+fctx+'</div>'+
-  '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+nbA+'</div><div class="kf">'+fmad(gTotActif)+'</div></div><div class="kpi k1"><div class="kl">Mainlevee demandee</div><div class="kv">'+nbM+'</div></div><div class="kpi k4"><div class="kl">Expirees</div><div class="kv">'+nbE+'</div></div><div class="kpi k3"><div class="kl">Liberees / restituees</div><div class="kv">'+nbL+'</div></div></div>'+
-  '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 10px;border-bottom:1px solid #DDD5C4;font-size:14px;font-weight:600">Situation par banque et par type (engagements en cours)</div><div class="tw"><table><thead><tr>'+sitHead+'</tr></thead><tbody>'+sitRows+'</tbody><tfoot>'+sitFoot+'</tfoot></table></div></div>'+
-  '<div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'<option value="provisoire"'+(S.tf==='provisoire'?' selected':'')+'>Caution provisoire</option></select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+uniqueArr(allC.map(function(c){return c.banque;}).filter(Boolean)).sort().map(function(b){return '<option'+(S.bf===b?' selected':'')+'>'+esc(b)+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+cs.length+' caution(s)</span><button class="btn btn-sm" onclick="exportCSV(\'cautions\')">Export CSV</button><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div></div>'+
-  '<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N Caution</th><th>Marche / AO</th><th>Type</th><th>Banque</th><th>Montant</th><th>Emission</th><th>Utilisee dans</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL ENGAGE'+fctx+'</td><td style="font-family:monospace">'+fmad(gTotActif)+'</td><td colspan="4"></td></tr></tfoot></table></div></div>';
+    if(c.statut==='active'){libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Demander la mainlevée">M</button><button class="act" onclick="libereCautionDirect(\''+c.id+'\')" title="Libérer directement" style="color:var(--green-soft)">L</button>';}
+    else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Confirmer libération" style="color:var(--green-soft);font-weight:600">OK</button>';}
+    return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span></td><td><div style="display:flex;gap:4px"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">&#9998;</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">&#128465;</button></div></td></tr>';
+  }).join(''):'<tr><td colspan="8"><div class="empty">Aucune caution avec ce filtre</div></td></tr>';
+  var table='<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N°</th><th>Marché / AO</th><th>Type</th><th>Banque</th><th>Montant</th><th>Émission</th><th>État</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">Engagé ('+fctx+')</td><td style="font-family:var(--FM);font-weight:600">'+fmad(agg.engage)+'</td><td colspan="3"></td></tr></tfoot></table></div></div>';
+
+  // Detail replie : matrice + liberees/restituees (hors du flux quotidien).
+  var libs=allC.filter(function(c){return c.statut==='liberee'||c.statut==='restituee';});
+  var libTable=libs.length?'<div class="tw"><table><thead><tr><th>N°</th><th>Marché / AO</th><th>Banque</th><th>Montant</th><th>État</th></tr></thead><tbody>'+libs.map(function(c){return '<tr><td style="font-family:var(--FM)">'+esc(c.num||'—')+'</td><td>'+esc(c.ref)+'</td><td>'+esc(c.banque||'—')+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span></td></tr>';}).join('')+'</tbody></table></div>':'<div style="font-size:12px;color:var(--ink-muted)">Aucune.</div>';
+  var details='<details style="border:1px solid var(--line);border-radius:5px;margin-bottom:12px;background:var(--cream)"><summary style="cursor:pointer;padding:11px 16px;font-weight:600;color:var(--forest)">Situation détaillée par banque × type</summary><div style="padding:4px 16px 14px">'+renderCautionMatrix(cs,typeLabel)+'</div></details><details style="border:1px solid var(--line);border-radius:5px;margin-bottom:12px;background:var(--cream)"><summary style="cursor:pointer;padding:11px 16px;font-weight:600;color:var(--forest)">Libérées / restituées ('+libs.length+')</summary><div style="padding:4px 16px 14px">'+libTable+'</div></details>';
+
+  // Plancher 12px scope a l'ecran (sans toucher aux tokens globaux des autres ecrans).
+  var floor12='<style>.cauv2 th{font-size:12px}.cauv2 .kl{font-size:12px}.cauv2 .kf{font-size:12px}.cauv2 .badge{font-size:12px}.cauv2 .act{font-size:12px}</style>';
+  return floor12+'<div class="cauv2">'+restBand+hero+tiles+kpis+toolbar+table+details+'</div>';
 }
 
 function cautionFormHTML(c){

@@ -1,0 +1,31 @@
+name: Gate cautions
+
+# Garde-fou du registre des cautions : rejoue la fusion collection + provisoires
+# portees par les AO sur une fixture piegee et verifie que "encore engage a la
+# banque", les agregats qui suivent le filtre, et le bloc "a restituer"
+# (provisoires sur AO decide + definitives en mainlevee demandee) disent la verite.
+# Deterministe, sans dependances (node pur).
+
+on:
+  push:
+    paths:
+      - 'public/cautions-calc.js'
+      - 'public/index.html'
+      - 'test/cautions.test.js'
+      - '.github/workflows/cautions-gate.yml'
+  pull_request:
+    paths:
+      - 'public/cautions-calc.js'
+      - 'public/index.html'
+      - 'test/cautions.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate cautions (node, sans dependances)
+        run: node test/cautions.test.js
