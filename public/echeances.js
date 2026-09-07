@@ -210,8 +210,37 @@
     };
   }
 
+  /* ── Tri de la liste Veille par echeance ────────────────────────────────
+   * Statut HORS tri (ordre chronologique pur). Groupes, dans l'ordre :
+   *   0 = heure estimee & encore ouverte  -> action portail, epinglees en tete
+   *   1 = ouvert (heure connue)           -> instant reel CROISSANT (proche en 1er)
+   *   2 = depasse                         -> instant reel DECROISSANT (recent en 1er)
+   *   3 = sans date / invalide            -> tout en bas
+   * nowMs et offsetResolver injectables (tests deterministes). */
+  function echeanceSortKey(row, nowMs, opts) {
+    opts = opts || {};
+    var L = row && row.date_limite
+      ? libelleEcheance(row.date_limite, row.heure_limite || null,
+          { nowMs: nowMs, offsetResolver: opts.offsetResolver })
+      : null;
+    if (!L || !L.valide) return { grp: 3, epoch: 0 };
+    if (L.sortRank === 0) return { grp: 0, epoch: L.epoch }; // estimee & ouverte
+    if (!L.passe) return { grp: 1, epoch: L.epoch };         // ouvert, heure connue
+    return { grp: 2, epoch: L.epoch };                        // depasse
+  }
+  function compareEcheance(a, b, nowMs, opts) {
+    if (nowMs == null) nowMs = Date.now();
+    var ka = echeanceSortKey(a, nowMs, opts), kb = echeanceSortKey(b, nowMs, opts);
+    if (ka.grp !== kb.grp) return ka.grp - kb.grp;
+    if (ka.grp === 2) return kb.epoch - ka.epoch; // depasses : recemment rate d'abord
+    if (ka.grp === 3) return 0;                    // sans date : ordre stable
+    return ka.epoch - kb.epoch;                    // groupes 0 et 1 : proche d'abord
+  }
+
   return {
     MP_TZ_OVERRIDES: MP_TZ_OVERRIDES,
+    echeanceSortKey: echeanceSortKey,
+    compareEcheance: compareEcheance,
     offsetForCasaDate: offsetForCasaDate,
     offsetForCasaInstant: offsetForCasaInstant,
     casaComponents: casaComponents,

@@ -160,6 +160,33 @@ check('ISO sans heure -> estimee 23:59 + libelle "heure a confirmer"',
   (function () { var L = MPEch.libelleEcheance('2026-09-25', null, { nowMs: casa(2026, 9, 25, 8, 0, 60), offsetResolver: R60 });
     return L.estimee === true && L.text === "echeance aujourd'hui - heure a confirmer sur le portail"; })(), '');
 
+console.log('\n=== 7. Tri Veille par echeance (compareEcheance) - statut HORS tri ===');
+var nowT = casa(2026, 9, 25, 8, 0, 60); // 25/09 08:00 heure Casa
+var optT = { offsetResolver: R60 };
+function vrow(id, date, heure, score, statut) {
+  return { id: id, date_limite: date, heure_limite: heure, score: score, statut: statut };
+}
+var vlist = [
+  vrow('P1-passe-vieux',   '24/09/2026', '10:00', 90, 'a_etudier'),
+  vrow('O1-ouvert-loin',   '28/09/2026', '11:00', 99, 'no_go'),     // gros score + no_go
+  vrow('E1-estim-27',      '27/09/2026', null,     5, 'a_etudier'),
+  vrow('N1-sans-date',     null,         null,    88, 'a_etudier'),
+  vrow('O2-ouvert-proche', '25/09/2026', '10:00',  1, 'no_go'),     // petit score + no_go
+  vrow('P2-passe-recent',  '25/09/2026', '07:00', 70, 'a_etudier'),
+  vrow('E2-estim-26',      '26/09/2026', null,    50, 'a_etudier')
+];
+vlist.sort(function (a, b) { return MPEch.compareEcheance(a, b, nowT, optT); });
+var order = vlist.map(function (x) { return x.id; }).join(',');
+check('ordre : estimees-ouvertes (proche 1er) -> ouverts croissant -> depasses decroissant -> sans date',
+  order === 'E2-estim-26,E1-estim-27,O2-ouvert-proche,O1-ouvert-loin,P2-passe-recent,P1-passe-vieux,N1-sans-date',
+  order);
+check('le statut ne joue pas : O2 (no_go, score 1) passe avant O1 (no_go, score 99) par sa seule date',
+  order.indexOf('O2-ouvert-proche') < order.indexOf('O1-ouvert-loin'), order);
+check('un depasse ne remonte jamais au-dessus d\'un ouvert',
+  order.indexOf('O1-ouvert-loin') < order.indexOf('P2-passe-recent'), order);
+check('sans date : toujours en dernier',
+  order.split(',').pop() === 'N1-sans-date', order);
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) {
   console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | '));

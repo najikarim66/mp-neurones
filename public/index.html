@@ -3295,22 +3295,22 @@ function pgVeille(){
     rows=rows.filter(function(r){var j=veilleJoursRestants(r.date_limite);return j!==null && j>=0;});
   }
 
-  /* Tri : (0) heure de depot ESTIMEE & encore ouverte = tout en haut, cle PRIMAIRE
-     qui tient meme avec le tri metier actif ; puis no_go en bas, gagne en haut, score desc. */
-  function veilleEstimeeOpen(r){
-    if(!r.date_limite) return false;
-    var L=MPEch.libelleEcheance(r.date_limite,r.heure_limite||null);
-    return L.sortRank===0;
+  /* Masquer les AO decides (no_go / gagne / soumissionne) par defaut : ils n'ont
+     plus d'echeance qui compte. Neutralise si un statut est explicitement filtre. */
+  if(S._vhideDecides!==false && !S._vstatut){
+    rows=rows.filter(function(r){var s=r.statut||'a_etudier';return s!=='no_go'&&s!=='gagne'&&s!=='soumissionne';});
   }
-  rows.sort(function(a,b){
-    var pa=veilleEstimeeOpen(a)?0:1, pb=veilleEstimeeOpen(b)?0:1;
-    if(pa!==pb) return pa-pb;
-    var sa=(a.statut||'a_etudier'),sb=(b.statut||'a_etudier');
-    var rankA=sa==='no_go'?2:(sa==='gagne'?0:1);
-    var rankB=sb==='no_go'?2:(sb==='gagne'?0:1);
-    if(rankA!==rankB) return rankA-rankB;
-    return (b.score||0)-(a.score||0);
-  });
+
+  /* Tri : chronologique par echeance (defaut) ou par score. STATUT HORS TRI.
+     Estimees-ouvertes epinglees en tete (action portail), puis ouverts par instant
+     reel croissant, depasses par instant decroissant, sans date en bas.
+     compareEcheance = source unique MPEch (testee dans echeances.test.js). */
+  var nowMs=Date.now();
+  if(S._vsort==='score'){
+    rows.sort(function(a,b){return ((b.score||0)-(a.score||0)) || MPEch.compareEcheance(a,b,nowMs);});
+  } else {
+    rows.sort(function(a,b){return MPEch.compareEcheance(a,b,nowMs);});
+  }
 
   /* Stats */
   var st={a_etudier:0,en_analyse:0,go:0,no_go:0,soumissionne:0,gagne:0};
@@ -3337,6 +3337,10 @@ function pgVeille(){
 
   /* Toolbar filtres */
   var toolbar='<div class="tb"><div class="tb-l">'+
+    '<select class="fl" onchange="S._vsort=this.value;render()" title="Ordre de la liste">'+
+      '<option value="echeance"'+(S._vsort!=='score'?' selected':'')+'>Tri : par echeance</option>'+
+      '<option value="score"'+(S._vsort==='score'?' selected':'')+'>Tri : par score</option>'+
+    '</select>'+
     '<input class="si" placeholder="Rechercher (objet, acheteur, ref, lieu)..." value="'+esc(S._vsearch)+'" oninput="S._vsearch=this.value;render()">'+
     '<select class="fl" onchange="S._vstatut=this.value;render()"><option value="">Tous statuts</option>'+
       objEnts(SMVA).map(function(e){return '<option value="'+e[0]+'"'+(S._vstatut===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+
@@ -3356,6 +3360,7 @@ function pgVeille(){
       '<option value="actifs"'+(S._vurgence==='actifs'?' selected':'')+'>Encore actifs</option>'+
     '</select>'+
   '</div><div style="display:flex;align-items:center;gap:10px">'+
+    '<label style="font-size:12px;color:#5A544B;display:flex;align-items:center;gap:5px;cursor:pointer" title="Masque no_go / gagne / soumissionne (ignore si un statut est filtre)"><input type="checkbox"'+(S._vhideDecides!==false?' checked':'')+' onchange="S._vhideDecides=this.checked;render()">Masquer les decides</label>'+
     '<span style="font-size:12px;color:#7A7369">'+rows.length+' / '+S.veille.length+' AO veille</span>'+
   '</div></div>';
 
