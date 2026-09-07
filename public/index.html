@@ -26,13 +26,13 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 #sb{width:230px;background:var(--forest-bg);flex-shrink:0;display:flex;flex-direction:column;overflow-y:auto;border-right:1px solid rgba(255,255,255,.05)}
 .sb-hd{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.07)}
 .sb-brand{font-family:var(--FT);font-size:15px;font-weight:600;color:var(--cream);letter-spacing:-.2px}
-.sb-sub{font-size:10px;color:rgba(246,242,234,.3);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
+.sb-sub{font-size:12px;color:rgba(246,242,234,.3);margin-top:3px;letter-spacing:.4px;text-transform:uppercase}
 .sb-user{margin-top:auto;padding:14px 18px;border-top:1px solid rgba(255,255,255,.07);background:rgba(0,0,0,.15)}
 .sb-user-name{font-size:12px;color:var(--cream);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-user-mail{font-size:10px;color:rgba(246,242,234,.4);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-logout{margin-top:10px;display:block;width:100%;padding:7px 10px;background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(246,242,234,.7);font-size:11px;border-radius:4px;cursor:pointer;text-align:center;text-decoration:none;font-family:var(--F);transition:all .15s}
+.sb-user-mail{font-size:12px;color:rgba(246,242,234,.4);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sb-logout{margin-top:10px;display:block;width:100%;padding:7px 10px;background:transparent;border:1px solid rgba(255,255,255,.15);color:rgba(246,242,234,.7);font-size:12px;border-radius:4px;cursor:pointer;text-align:center;text-decoration:none;font-family:var(--F);transition:all .15s}
 .sb-logout:hover{background:rgba(255,255,255,.08);color:var(--cream);border-color:rgba(255,255,255,.3)}
-.sb-lbl{padding:14px 18px 4px;font-size:9px;color:rgba(246,242,234,.22);text-transform:uppercase;letter-spacing:1.1px;font-weight:600}
+.sb-lbl{padding:14px 18px 4px;font-size:12px;color:rgba(246,242,234,.22);text-transform:uppercase;letter-spacing:1.1px;font-weight:600}
 .ni{display:flex;align-items:center;gap:9px;margin:1px 10px;padding:8px 10px;border-radius:4px;color:rgba(246,242,234,.48);cursor:pointer;transition:color .12s,background .12s;font-size:13px;user-select:none;border-left:2px solid transparent;border-radius:0;margin:0}
 .ni:hover{background:rgba(246,242,234,.05);color:var(--cream)}
 .ni.on{background:rgba(181,84,58,.14);color:var(--cream);border-left-color:var(--terra)}
@@ -46,7 +46,7 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 #main{flex:1;display:flex;flex-direction:column;overflow:hidden}
 .ph{background:var(--cream);border-bottom:1px solid var(--line);padding:12px 22px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;gap:8px;flex-wrap:wrap}
 .ph-t{font-family:var(--FT);font-size:17px;font-weight:600;color:var(--ink);letter-spacing:-.3px}
-.ph-s{font-size:11px;color:var(--ink-muted);margin-top:2px}
+.ph-s{font-size:12px;color:var(--ink-muted);margin-top:2px}
 .ph-r{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 #sync-indicator.stale{color:#c2410c;font-weight:600}
 #btn-refresh.syncing{opacity:.6;pointer-events:none}
@@ -60,10 +60,10 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 .kpi::after{content:'';position:absolute;top:14px;bottom:14px;left:0;width:2px;border-radius:0 1px 1px 0}
 .kpi.k1::after{background:var(--forest)}.kpi.k2::after{background:var(--gold)}
 .kpi.k3::after{background:var(--terra)}.kpi.k4::after{background:var(--ink-soft)}
-.kl{font-size:10px;color:var(--ink-muted);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.kl{font-size:12px;color:var(--ink-muted);font-weight:500;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
 .kv{font-family:var(--FM);font-size:24px;font-weight:500;color:var(--ink);line-height:1.1;letter-spacing:-1px}
 .kv.sm{font-family:var(--FM);font-size:15px;font-weight:500;letter-spacing:-.3px}
-.kf{font-size:11px;color:var(--ink-muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
+.kf{font-size:12px;color:var(--ink-muted);margin-top:6px;padding-top:6px;border-top:1px solid var(--line)}
 
 /* CARDS */
 .card{background:var(--cream);border:1px solid var(--line);border-radius:5px;padding:16px 20px;margin-bottom:16px}
@@ -74,18 +74,18 @@ body{font-family:var(--F);background:var(--cream);min-height:100vh;color:var(--i
 
 /* TABLE */
 table{width:100%;border-collapse:collapse;font-size:13px}
-th{text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;font-size:9.5px;text-transform:uppercase;letter-spacing:.7px;background:var(--cream-dark);border-bottom:1px solid var(--line);white-space:nowrap;font-family:var(--F)}
+th{text-align:left;padding:8px 12px;color:var(--ink-muted);font-weight:600;font-size:12px;text-transform:uppercase;letter-spacing:.5px;background:var(--cream-dark);border-bottom:1px solid var(--line);white-space:nowrap;font-family:var(--F)}
 td{padding:10px 12px;border-bottom:1px solid var(--line);color:var(--ink-soft);vertical-align:middle}
 tr:last-child td{border-bottom:none}
 tr:hover td{background:var(--cream-dark)}
 .tfoot td{background:var(--cream-dark);font-weight:600;font-size:12px;border-top:1px solid var(--line);border-bottom:none;color:var(--ink)}
 .mini-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}
-.mini-table th{padding:6px 8px;background:var(--cream-dark);color:var(--ink-muted);font-weight:600;text-align:left;font-size:10px;text-transform:uppercase;letter-spacing:.5px}
+.mini-table th{padding:6px 8px;background:var(--cream-dark);color:var(--ink-muted);font-weight:600;text-align:left;font-size:12px;text-transform:uppercase;letter-spacing:.3px}
 .mini-table td{padding:7px 8px;border-bottom:1px solid var(--line);vertical-align:middle;color:var(--ink-soft)}
 .mini-table tr:last-child td{border-bottom:none}
 
 /* BADGES — pastille colorée */
-.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 6px;border-radius:3px;font-size:10.5px;font-weight:500;white-space:nowrap;border:1px solid transparent}
+.badge{display:inline-flex;align-items:center;gap:4px;padding:3px 8px 3px 6px;border-radius:3px;font-size:12px;font-weight:500;white-space:nowrap;border:1px solid transparent}
 .badge::before{content:'';width:5px;height:5px;border-radius:50%;flex-shrink:0}
 .bs{background:var(--green-pale);color:var(--green-soft);border-color:var(--green-mid)}.bs::before{background:var(--green-soft)}
 .bw{background:var(--gold-pale);color:var(--gold);border-color:var(--gold-mid)}.bw::before{background:var(--gold)}
@@ -98,7 +98,7 @@ tr:hover td{background:var(--cream-dark)}
 .prw{display:flex;align-items:center;gap:7px}
 .prg{height:4px;background:var(--line);border-radius:2px;width:60px;overflow:hidden}
 .prf{height:100%;border-radius:2px;background:var(--forest)}
-.prw span{font-size:11px;color:var(--ink-muted);min-width:28px;font-family:var(--FM)}
+.prw span{font-size:12px;color:var(--ink-muted);min-width:28px;font-family:var(--FM)}
 .prog-bar-big{height:6px;background:var(--line);border-radius:3px;overflow:hidden;margin:6px 0}
 .prog-bar-fill{height:100%;border-radius:3px;background:var(--forest)}
 
@@ -117,7 +117,7 @@ input,select,textarea{font-family:inherit}
 .btn-prim{background:var(--forest);color:var(--cream);border-color:var(--forest)}
 .btn-prim:hover{background:var(--forest-mid)}
 .btn-sm{padding:4px 10px;font-size:12px}
-.act{padding:3px 8px;font-size:11px;border:1px solid var(--line);border-radius:3px;background:var(--cream);color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .1s}
+.act{padding:3px 8px;font-size:12px;border:1px solid var(--line);border-radius:3px;background:var(--cream);color:var(--ink-muted);cursor:pointer;font-family:inherit;transition:all .1s}
 .act:hover{background:var(--cream-dark);color:var(--ink)}
 .act.red{color:var(--terra)}.act.red:hover{background:var(--terra-pale);border-color:var(--terra-mid)}
 
@@ -134,7 +134,7 @@ input,select,textarea{font-family:inherit}
 
 /* FORM */
 .fg{margin-bottom:12px}
-.fg label{display:block;font-size:11.5px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
+.fg label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:4px;font-weight:600;text-transform:uppercase;letter-spacing:.3px}
 .fc{width:100%;padding:7px 11px;border:1px solid var(--line);border-radius:4px;font-size:13px;background:var(--cream);color:var(--ink);font-family:inherit}
 .fc:focus{outline:none;border-color:var(--forest);box-shadow:0 0 0 3px rgba(31,58,46,.1)}
 .fc[readonly]{background:var(--cream-dark);color:var(--ink-muted)}
@@ -147,7 +147,7 @@ input,select,textarea{font-family:inherit}
 /* INFO BOXES */
 .ai-box{border-left:3px solid var(--gold);background:var(--gold-pale);border-radius:3px;padding:10px 14px;margin-bottom:8px}
 .ai-t{font-size:12px;font-weight:600;color:var(--gold)}
-.ai-s{font-size:11px;color:#6B5A1E;margin-top:2px}
+.ai-s{font-size:12px;color:#6B5A1E;margin-top:2px}
 .ai-r{background:var(--red-pale);border-left-color:var(--terra)}
 .ai-r .ai-t{color:var(--terra)}.ai-r .ai-s{color:#7A3020}
 .info-box{border-radius:3px;padding:10px 14px;font-size:12px;margin-bottom:10px}
@@ -231,7 +231,7 @@ input,select,textarea{font-family:inherit}
   .os-row{grid-template-columns:auto 1fr;grid-template-rows:auto auto}
   .fr2{grid-template-columns:1fr!important}
   .toast{bottom:10px;right:10px;left:10px;text-align:center}
-  .mode-btn{font-size:11px;padding:8px 3px}
+  .mode-btn{font-size:12px;padding:8px 3px}
 }
 @media screen and (max-width:400px){
   .krow{grid-template-columns:1fr!important}
@@ -264,7 +264,7 @@ input,select,textarea{font-family:inherit}
       <button class="ham" id="ham" onclick="toggleSb()">&#9776;</button>
       <div><div class="ph-t" id="ph-t">Tableau de bord</div><div class="ph-s" id="ph-s"></div></div>
       <div class="ph-r">
-        <span id="sync-indicator" style="font-size:11px;color:#7A7369;font-family:var(--FM);white-space:nowrap" title="Derniere synchronisation avec le cloud">Chargement...</span>
+        <span id="sync-indicator" style="font-size:12px;color:#7A7369;font-family:var(--FM);white-space:nowrap" title="Derniere synchronisation avec le cloud">Chargement...</span>
         <button class="btn" id="btn-refresh" onclick="manualRefresh()" title="Rafraichir les donnees depuis le cloud">&#8635; Rafraichir</button>
         <div class="drop">
           <button class="btn" onclick="toggleDrop(this)">Exporter &#9660;</button>
@@ -521,7 +521,7 @@ function sbStats(){
   var ca=S.cautions.filter(function(c){return c.statut==='active';}).length;
   var pa=S.paiements.filter(function(p){return p.statut==='en_attente'||p.statut==='en_cours';}).length;
   var aoc=S.aos.filter(function(a){return a.statut==='en_cours';}).length;
-  document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:11px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div>';
+  document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:12px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div>';
 }
 function render(){
   var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,paiements:pgPaiements,rapports:pgRapports};
@@ -579,7 +579,7 @@ function pgDash(){
     var pct=S.marches.length?Math.round(ms.length/S.marches.length*100):0;
     return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>'+t+'</span><span style="color:#7A7369">'+ms.length+' - '+fmad(tot)+'</span></div><div class="prog-bar-big"><div class="prog-bar-fill" style="width:'+pct+'%"></div></div></div>';
   }).join('');
-  var recRows=rec.map(function(m){return '<tr style="cursor:pointer" onclick="editMarche(\''+m.id+'\')"><td><b style="font-size:12px">'+m.ref+'</b><div style="font-size:11px;color:#7A7369">'+m.titre.substring(0,35)+'</div></td><td style="font-size:12px">'+m.maitre_ouvrage+'</td><td>'+prg(m.avancement)+'</td><td>'+bdg(m.statut,SMM)+'</td></tr>';}).join('');
+  var recRows=rec.map(function(m){return '<tr style="cursor:pointer" onclick="editMarche(\''+m.id+'\')"><td><b style="font-size:12px">'+m.ref+'</b><div style="font-size:12px;color:#7A7369">'+m.titre.substring(0,35)+'</div></td><td style="font-size:12px">'+m.maitre_ouvrage+'</td><td>'+prg(m.avancement)+'</td><td>'+bdg(m.statut,SMM)+'</td></tr>';}).join('');
   return '<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
   '<div class="g2"><div class="card"><div class="sh"><div class="st">Repartition par type</div></div>'+byType+'</div><div class="card"><div class="sh"><div class="st">Marches recents</div><button class="btn btn-sm" onclick="nav(\'marches\')">Voir tout</button></div><div class="tw"><table><thead><tr><th>Reference</th><th>Maitre d\'ouvrage</th><th>Avanc.</th><th>Statut</th></tr></thead><tbody>'+recRows+'</tbody></table></div></div></div>';
 }
@@ -594,13 +594,13 @@ function aoRank(a,L){return (a.statut==='en_cours'&&L&&L.sortRank===0)?0:1;}
 /* Sous-ligne provenance pour une echeance a heure estimee : rend visible si le
    portail avait une heure (donc perdue) ou non (donc pas un oubli de notre part). */
 function aoSourceSub(a){
-  if(!a.veille_id)return '<div style="font-size:10px;color:#b45309">heure non renseignee - a saisir</div>';
+  if(!a.veille_id)return '<div style="font-size:12px;color:#b45309">heure non renseignee - a saisir</div>';
   var vr=S.veille&&S.veille.find(function(x){return String(x.id)===String(a.veille_id);});
   if(!vr)return '';
   var quand=vr.date_derniere_mise_a_jour?fdat(String(vr.date_derniere_mise_a_jour).slice(0,10)):(vr.date_publication||'?');
   var src=(String(vr.source||'').indexOf('marchespublics')>=0)?'marchespublics.gov.ma':(vr.source||'portail');
   var h=vr.heure_limite?(' - heure au portail : '+esc(vr.heure_limite)):' - aucune heure au portail';
-  return '<div style="font-size:10px;color:#7A7369">vu le '+quand+' sur '+src+h+'</div>';
+  return '<div style="font-size:12px;color:#7A7369">vu le '+quand+' sur '+src+h+'</div>';
 }
 function pgAO(){
   var aos=S.aos;
@@ -630,20 +630,20 @@ function pgAO(){
     var L=aoEch(a);
     var cpS=a.caution_prov?(SMC[a.caution_prov.statut]||{l:a.caution_prov.statut,c:'bn'}):null;
     var dlCell;
-    if(!L){dlCell='<span style="color:#7A7369;font-size:11px">-</span>';}
+    if(!L){dlCell='<span style="color:#7A7369;font-size:12px">-</span>';}
     else{
       var actif=(a.statut==='en_cours');
       var col=actif?aoDlColor(L.urgence):'#7A7369';
       var strong=(actif&&(L.passe||L.urgence==='aujourdhui'||L.urgence==='imminent'))?'font-weight:600':'';
-      var warn=(actif&&L.transitionWarn)?'<div style="font-size:10px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
+      var warn=(actif&&L.transitionWarn)?'<div style="font-size:12px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
       var sub=(actif&&L.estimee)?aoSourceSub(a):'';
       dlCell='<div style="font-size:12px">'+esc(L.dateFR)+(a.heure_limite?(' '+esc(a.heure_limite)):'')+'</div>'+
-             '<div style="font-size:11px;color:'+col+';'+strong+'">'+esc(L.text)+'</div>'+warn+sub;
+             '<div style="font-size:12px;color:'+col+';'+strong+'">'+esc(L.text)+'</div>'+warn+sub;
     }
-    var cpCell=a.caution_prov?'<div style="font-size:11px;font-weight:600">'+a.caution_prov.num+'</div><div style="font-size:10px;color:#7A7369">'+a.caution_prov.banque+'</div><div>'+fmad(a.caution_prov.montant)+' <span class="badge '+cpS.c+'" style="font-size:9px">'+cpS.l+'</span></div>':'<span style="color:#7A7369;font-size:11px">-</span>';
-    var marcheCell=m?'<span class="badge bi" style="font-size:10px;cursor:pointer" onclick="nav(\'marches\')">'+m.ref+'</span>':'<span style="color:#7A7369;font-size:11px">-</span>';
+    var cpCell=a.caution_prov?'<div style="font-size:12px;font-weight:600">'+a.caution_prov.num+'</div><div style="font-size:12px;color:#7A7369">'+a.caution_prov.banque+'</div><div>'+fmad(a.caution_prov.montant)+' <span class="badge '+cpS.c+'" style="font-size:12px">'+cpS.l+'</span></div>':'<span style="color:#7A7369;font-size:12px">-</span>';
+    var marcheCell=m?'<span class="badge bi" style="font-size:12px;cursor:pointer" onclick="nav(\'marches\')">'+m.ref+'</span>':'<span style="color:#7A7369;font-size:12px">-</span>';
     var attribBtn=(a.statut!=='attribue')?'<button class="act" onclick="attribuerAO(\''+a.id+'\')" title="Attribuer" style="color:#059669">&#10003;</button>':'';
-    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:10px;color:#7A7369">'+a.notes.substring(0,50)+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td>'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
+    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:12px;color:#7A7369">'+a.notes.substring(0,50)+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td>'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="11"><div class="empty">Aucun appel d\'offres</div></td></tr>';
   return (alerts?'<div style="margin-bottom:12px">'+alerts+'</div>':'')+
   '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k3"><div class="kl">En cours</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='en_cours';}).length+'</div></div><div class="kpi k2"><div class="kl">Attribues</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='attribue';}).length+'</div></div><div class="kpi k4"><div class="kl">Infructueux/Annules</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='infructueux'||a.statut==='annule';}).length+'</div></div><div class="kpi k1"><div class="kl">Budget total</div><div class="kv sm">'+fmad(S.aos.reduce(function(a,o){return a+(o.budget_estime||0);},0))+'</div></div></div>'+
@@ -745,12 +745,12 @@ function pgMarches(){
   });
   var rows=ms.length?ms.map(function(m){
     var mc=S.cautions.filter(function(c){return c.marche_id===m.id;});
-    var cauBadges=mc.map(function(c){return '<span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px;margin-right:2px" title="'+(TC[c.type]||c.type)+' - '+(SMC[c.statut]||{l:c.statut}).l+'">'+(c.type==='bonne_execution'?'Def':'RG')+'</span>';}).join('');
+    var cauBadges=mc.map(function(c){return '<span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px;margin-right:2px" title="'+(TC[c.type]||c.type)+' - '+(SMC[c.statut]||{l:c.statut}).l+'">'+(c.type==='bonne_execution'?'Def':'RG')+'</span>';}).join('');
     var os=m.ordres_service||[];
     var enArret=os.length&&os[os.length-1].type==='arret';
     var dfin=m.date_fin_calculee;
     var dfinWarn=dfin&&days(dfin)<0&&m.statut==='en_cours';
-    var dfinCell=dfin?(dfinWarn?'<span style="color:#dc2626;font-weight:600">'+fdat(dfin)+' (!)</span>':'<span style="color:#065f46;font-weight:500">'+fdat(dfin)+'</span>')+(enArret?'<br><span class="badge bw" style="font-size:9px">Arret</span>':''):'-';
+    var dfinCell=dfin?(dfinWarn?'<span style="color:#dc2626;font-weight:600">'+fdat(dfin)+' (!)</span>':'<span style="color:#065f46;font-weight:500">'+fdat(dfin)+'</span>')+(enArret?'<br><span class="badge bw" style="font-size:12px">Arret</span>':''):'-';
     // v13: cellule reception definitive avec warning rouge si <=30 jours et statut !== termine
     var drd=m.date_reception_definitive;
     var drdWarn=drd&&m.statut!=='termine'&&days(drd)<=30;
@@ -760,7 +760,7 @@ function pgMarches(){
     var oldCau=m.statut==='termine'&&mc.some(function(c){return (c.statut==='active'||c.statut==='mainlevee_demandee')&&c.date_emission&&(new Date()-new Date(c.date_emission))>FIVE_Y_MS;});
     var trStyle=oldCau?' style="background:#fee2e2"':'';
     var trTitle=oldCau?' title="Marche termine avec caution(s) en cours depuis plus de 5 ans"':'';
-    return '<tr'+trStyle+trTitle+'><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+m.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+m.titre+'</div></td><td style="font-size:12px;color:#7A7369">'+m.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+m.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(m.montant)+'</td><td>'+prg(m.avancement)+'</td><td style="font-size:12px">'+fdat(m.date_commencement)+'</td><td style="font-size:12px;text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td style="font-size:12px">'+dfinCell+'</td><td style="font-size:12px">'+fdat(m.date_reception_provisoire)+'</td><td style="font-size:12px">'+drdCell+'</td><td style="text-align:center">'+(os.length?'<span class="badge bn" style="font-size:10px">'+os.length+' OS</span>':'-')+'</td><td>'+(cauBadges||'-')+'</td><td>'+bdg(m.statut,SMM)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editMarche(\''+m.id+'\')">&#9998;</button><button class="act red" onclick="delMarche(\''+m.id+'\')">&#128465;</button></div></td></tr>';
+    return '<tr'+trStyle+trTitle+'><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+m.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+m.titre+'</div></td><td style="font-size:12px;color:#7A7369">'+m.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+m.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(m.montant)+'</td><td>'+prg(m.avancement)+'</td><td style="font-size:12px">'+fdat(m.date_commencement)+'</td><td style="font-size:12px;text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td style="font-size:12px">'+dfinCell+'</td><td style="font-size:12px">'+fdat(m.date_reception_provisoire)+'</td><td style="font-size:12px">'+drdCell+'</td><td style="text-align:center">'+(os.length?'<span class="badge bn" style="font-size:12px">'+os.length+' OS</span>':'-')+'</td><td>'+(cauBadges||'-')+'</td><td>'+bdg(m.statut,SMM)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editMarche(\''+m.id+'\')">&#9998;</button><button class="act red" onclick="delMarche(\''+m.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="15"><div class="empty">Aucun marche</div></td></tr>';
   return '<div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(S.tf===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+ms.length+' marche(s)</span><button class="btn btn-sm" onclick="printEtat(\'marches\')">Imprimer</button></div></div><div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>Reference</th><th>Intitule</th><th>Maitre ouvrage</th><th>Type</th><th>Montant</th><th>Avancement</th><th>Commencement</th><th>Delai</th><th>Date fin calc.</th><th>Recept. prov.</th><th>Rec. def.</th><th>OS</th><th>Cautions</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td style="font-family:monospace">'+fmad(ms.reduce(function(a,m){return a+m.montant;},0))+'</td><td colspan="10"></td></tr></tfoot></table></div></div>';
 }
@@ -770,9 +770,9 @@ function marcheFormHTML(m){
   var yr=new Date().getFullYear();
   var osHtml='';
   (S._osTemp||[]).forEach(function(o){
-    osHtml+='<div class="os-row '+(o.type==='arret'?'os-arret':'os-reprise')+'"><div><span class="badge '+(o.type==='arret'?'bw':'bs')+'" style="font-size:11px">'+(o.type==='arret'?'Arret':'Reprise')+'</span></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Date</label><input class="fc" style="margin-top:2px" type="date" value="'+(o.date||'')+'" id="os_date_'+o.id+'" oninput="updateDFC()"></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Motif</label><input class="fc" style="margin-top:2px" type="text" value="'+esc(o.motif||'')+'" id="os_motif_'+o.id+'"></div><div style="padding-bottom:2px"><button class="act red" onclick="removeOS('+o.id+')">X</button></div></div>';
+    osHtml+='<div class="os-row '+(o.type==='arret'?'os-arret':'os-reprise')+'"><div><span class="badge '+(o.type==='arret'?'bw':'bs')+'" style="font-size:12px">'+(o.type==='arret'?'Arret':'Reprise')+'</span></div><div><label style="font-size:12px;font-weight:600;color:#7A7369">Date</label><input class="fc" style="margin-top:2px" type="date" value="'+(o.date||'')+'" id="os_date_'+o.id+'" oninput="updateDFC()"></div><div><label style="font-size:12px;font-weight:600;color:#7A7369">Motif</label><input class="fc" style="margin-top:2px" type="text" value="'+esc(o.motif||'')+'" id="os_motif_'+o.id+'"></div><div style="padding-bottom:2px"><button class="act red" onclick="removeOS('+o.id+')">X</button></div></div>';
   });
-  var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('');
+  var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:12px">'+c.num+'</td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('');
   var dfin=m?m.date_fin_calculee||'':'';
   return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'" oninput="updateDRD()"></div></div><div class="fr2"><div class="fg"><label>Delai de garantie (mois)</label><input class="fc" id="mdgar_mois" type="number" min="0" max="60" value="'+(m&&m.delai_garantie_mois!=null?m.delai_garantie_mois:12)+'" placeholder="12" oninput="updateDRD()" title="Standard CCAG-T: 12 mois"></div><div class="fg"><label>Reception definitive (calculee)</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'" readonly style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: reception provisoire + delai de garantie"></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-totals">'+renderCautionTotals(m,mc)+'</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('nc', '')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+renderAvenantsSection(m)+banquesDatalistHTML();
 }
@@ -786,7 +786,7 @@ function reRenderOS(){
   if(!S._osTemp.length){cont.innerHTML='<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>';return;}
   var h='';
   S._osTemp.forEach(function(o){
-    h+='<div class="os-row '+(o.type==='arret'?'os-arret':'os-reprise')+'"><div><span class="badge '+(o.type==='arret'?'bw':'bs')+'" style="font-size:11px">'+(o.type==='arret'?'Arret':'Reprise')+'</span></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Date</label><input class="fc" style="margin-top:2px" type="date" value="'+(o.date||'')+'" id="os_date_'+o.id+'" oninput="updateDFC()"></div><div><label style="font-size:11px;font-weight:600;color:#7A7369">Motif</label><input class="fc" style="margin-top:2px" type="text" value="'+esc(o.motif||'')+'" id="os_motif_'+o.id+'"></div><div style="padding-bottom:2px"><button class="act red" onclick="removeOS('+o.id+')">X</button></div></div>';
+    h+='<div class="os-row '+(o.type==='arret'?'os-arret':'os-reprise')+'"><div><span class="badge '+(o.type==='arret'?'bw':'bs')+'" style="font-size:12px">'+(o.type==='arret'?'Arret':'Reprise')+'</span></div><div><label style="font-size:12px;font-weight:600;color:#7A7369">Date</label><input class="fc" style="margin-top:2px" type="date" value="'+(o.date||'')+'" id="os_date_'+o.id+'" oninput="updateDFC()"></div><div><label style="font-size:12px;font-weight:600;color:#7A7369">Motif</label><input class="fc" style="margin-top:2px" type="text" value="'+esc(o.motif||'')+'" id="os_motif_'+o.id+'"></div><div style="padding-bottom:2px"><button class="act red" onclick="removeOS('+o.id+')">X</button></div></div>';
   });
   cont.innerHTML=h;
 }
@@ -830,7 +830,7 @@ function updateDRD(){
 function renderCautionTotals(m,mc){
   if(!m)return '';
   var montantMarche=Number(m.montant)||0;
-  if(montantMarche<=0)return '<div style="font-size:11px;color:#7A7369;margin-bottom:8px">Saisir le montant du marche pour voir les totaux.</div>';
+  if(montantMarche<=0)return '<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Saisir le montant du marche pour voir les totaux.</div>';
   // Filtrer cautions actives uniquement
   var actives=mc.filter(function(c){return c.statut==='active';});
   // Totaux par type
@@ -853,14 +853,14 @@ function renderCautionTotals(m,mc){
   var msgRG=pctRG>7?' (DEPASSE 7% CCAG-T)':'';
   var html='<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">';
   if(totCD>0||true){
-    html+='<div style="'+styleCD+';padding:6px 10px;border-radius:4px;font-size:11px"><div style="font-weight:600">'+iconCD+'Total Caution Definitive</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totCD)+' <span style="font-size:10px">('+pctCD.toFixed(2)+'%)</span></div><div style="font-size:9px;margin-top:1px">Plafond CCAG-T: 3%'+msgCD+'</div></div>';
+    html+='<div style="'+styleCD+';padding:6px 10px;border-radius:4px;font-size:12px"><div style="font-weight:600">'+iconCD+'Total Caution Definitive</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totCD)+' <span style="font-size:12px">('+pctCD.toFixed(2)+'%)</span></div><div style="font-size:12px;margin-top:1px">Plafond CCAG-T: 3%'+msgCD+'</div></div>';
   }
   if(totRG>0||true){
-    html+='<div style="'+styleRG+';padding:6px 10px;border-radius:4px;font-size:11px"><div style="font-weight:600">'+iconRG+'Total Retenue de Garantie</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totRG)+' <span style="font-size:10px">('+pctRG.toFixed(2)+'%)</span></div><div style="font-size:9px;margin-top:1px">Plafond CCAG-T: 7%'+msgRG+'</div></div>';
+    html+='<div style="'+styleRG+';padding:6px 10px;border-radius:4px;font-size:12px"><div style="font-weight:600">'+iconRG+'Total Retenue de Garantie</div><div style="font-family:monospace;font-size:13px;margin-top:2px">'+fmad(totRG)+' <span style="font-size:12px">('+pctRG.toFixed(2)+'%)</span></div><div style="font-size:12px;margin-top:1px">Plafond CCAG-T: 7%'+msgRG+'</div></div>';
   }
   html+='</div>';
   if(totProv>0){
-    html+='<div style="background:#fffbeb;border:1px solid #fbbf24;color:#92400e;padding:5px 10px;border-radius:4px;font-size:11px;margin-bottom:8px"><strong>Caution Provisoire</strong> : '+fmad(totProv)+' ('+pctProv.toFixed(2)+'%) - Active uniquement avant attribution</div>';
+    html+='<div style="background:#fffbeb;border:1px solid #fbbf24;color:#92400e;padding:5px 10px;border-radius:4px;font-size:12px;margin-bottom:8px"><strong>Caution Provisoire</strong> : '+fmad(totProv)+' ('+pctProv.toFixed(2)+'%) - Active uniquement avant attribution</div>';
   }
   return html;
 }
@@ -878,11 +878,11 @@ function renderAvenantsSection(m){
     html+='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>N°</th><th>Date</th><th>Objet</th><th>Montant HT</th><th>Delai sup.</th><th>Garantie</th><th></th></tr></thead><tbody>';
     avs.forEach(function(a){
       var sign=Number(a.montant_ht)>=0?'+':'';
-      html+='<tr><td><span class="badge bi" style="font-size:10px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:11px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:11px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:11px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:11px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td style="white-space:nowrap"><button class="act" title="Modifier" onclick="showEditAvenant(\''+a.id+'\')" style="color:#1F4E78">&#9998;</button> <button class="act red" title="Supprimer" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
+      html+='<tr><td><span class="badge bi" style="font-size:12px">Av. '+(a.numero||'?')+'</span></td><td style="font-size:12px">'+(a.date_signature?fdat(a.date_signature):'-')+'</td><td style="font-size:12px;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="'+esc(a.objet||'')+'">'+esc(a.objet||'-')+'</td><td style="font-family:monospace;font-size:12px">'+sign+fmad(a.montant_ht||0)+'</td><td style="font-size:12px">'+(a.delai_supplementaire_jours?'+'+a.delai_supplementaire_jours+'j':'-')+'</td><td style="font-size:12px">'+(a.delai_garantie_mois!=null?a.delai_garantie_mois+' mois':'-')+'</td><td style="white-space:nowrap"><button class="act" title="Modifier" onclick="showEditAvenant(\''+a.id+'\')" style="color:#1F4E78">&#9998;</button> <button class="act red" title="Supprimer" onclick="delAvenant(\''+a.id+'\')">X</button></td></tr>';
     });
     html+='</tbody></table>';
     // Recap
-    html+='<div style="background:#f0fdf4;border:1px solid #86efac;color:#065f46;padding:8px 12px;border-radius:4px;font-size:11px;margin-bottom:10px">';
+    html+='<div style="background:#f0fdf4;border:1px solid #86efac;color:#065f46;padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:10px">';
     html+='<div>Montant initial: <strong>'+fmad(montantInitial)+'</strong></div>';
     html+='<div>Avenants cumules: <strong>'+(totalAvenants>=0?'+':'')+fmad(totalAvenants)+'</strong></div>';
     html+='<div style="border-top:1px solid #86efac;margin-top:4px;padding-top:4px;font-size:13px">Montant actuel: <strong>'+fmad(montantActuel)+'</strong></div>';
@@ -1078,7 +1078,7 @@ function confirmAddCaution(){
 function refreshCautionListInModal(mid){
   var mc=S.cautions.filter(function(c){return c.marche_id===mid;});
   var cont=document.getElementById('caution-list');if(!cont)return;
-  cont.innerHTML=mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('')+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';
+  cont.innerHTML=mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:12px">'+c.num+'</td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('')+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';
   // Mettre à jour aussi les totaux en haut
   var totDiv=document.getElementById('caution-totals');
   if(totDiv){var m=S.marches.find(function(x){return x.id===mid;});if(m)totDiv.innerHTML=renderCautionTotals(m,mc);}
@@ -1086,7 +1086,7 @@ function refreshCautionListInModal(mid){
 function refreshTmpCautionList(){
   var cont=document.getElementById('caution-list');if(!cont)return;
   if(!S._tmpC.length){cont.innerHTML='<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>';return;}
-  cont.innerHTML='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th></th></tr></thead><tbody>'+S._tmpC.map(function(c){return '<tr><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:10px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:11px">'+c.num+'</td><td style="font-size:11px">'+c.banque+'</td><td style="font-family:monospace;font-size:11px">'+fmad(c.montant)+'</td><td><button class="act red" onclick="delTmpCaution('+c._tid+')">X</button></td></tr>';}).join('')+'</tbody></table>';
+  cont.innerHTML='<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th></th></tr></thead><tbody>'+S._tmpC.map(function(c){return '<tr><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:12px">'+c.num+'</td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td><button class="act red" onclick="delTmpCaution('+c._tid+')">X</button></td></tr>';}).join('')+'</tbody></table>';
 }
 function delTmpCaution(tid){S._tmpC=S._tmpC.filter(function(c){return c._tid!==tid;});refreshTmpCautionList();}
 function delCautionInline(id){
@@ -1119,16 +1119,16 @@ function renderProvisoiresBlock(){
   var rows=list.map(function(p){
     var a=p.ao,cp=p.cp;
     var etatDate=cp.statut==='mainlevee_demandee'?cp.date_demande_mainlevee:(cp.statut==='restituee'?cp.date_restitution:(cp.statut==='active'?cp.date_emission:''));
-    var etat=bdg(cp.statut,SMC)+(etatDate?'<div style="font-size:10px;color:#7A7369">'+fdat(etatDate)+'</div>':'');
+    var etat=bdg(cp.statut,SMC)+(etatDate?'<div style="font-size:12px;color:#7A7369">'+fdat(etatDate)+'</div>':'');
     var dateConst=cp.date_emission?fdat(cp.date_emission):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
     var banque=cp.banque?esc(cp.banque):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
     var act='';
     if(cp.statut==='active')act='<button class="act" title="Marquer la mainlevee comme demandee" onclick="provMainlevee(\''+esc(a.id)+'\')">M</button>';
     else if(cp.statut==='mainlevee_demandee')act='<button class="act" style="color:#065f46;font-weight:bold" title="Confirmer la restitution (argent revenu de la banque)" onclick="provRestituer(\''+esc(a.id)+'\')">Restituee</button>';
     var trStyle=p.dormante?' style="background:#fff7ed"':'';
-    return '<tr'+trStyle+'><td style="font-size:12px"><div style="font-weight:600">'+esc(a.ref||'')+'</div><div style="font-size:10px;margin-top:2px">'+bdg(a.statut,SMAO)+'</div></td><td style="font-family:monospace;font-size:12px">'+fmad(cp.montant)+'</td><td style="font-size:12px">'+dateConst+'</td><td style="font-size:12px">'+banque+'</td><td>'+etat+'</td><td>'+act+'</td></tr>';
+    return '<tr'+trStyle+'><td style="font-size:12px"><div style="font-weight:600">'+esc(a.ref||'')+'</div><div style="font-size:12px;margin-top:2px">'+bdg(a.statut,SMAO)+'</div></td><td style="font-family:monospace;font-size:12px">'+fmad(cp.montant)+'</td><td style="font-size:12px">'+dateConst+'</td><td style="font-size:12px">'+banque+'</td><td>'+etat+'</td><td>'+act+'</td></tr>';
   }).join('');
-  return '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 6px;border-bottom:1px solid #DDD5C4"><div style="font-size:14px;font-weight:600">Cautions provisoires (portees par les AO)</div><div style="font-size:11px;color:#7A7369;margin-top:2px">Constituees au depot de l\'offre, a restituer apres la decision. Les dormantes (AO decide, non restituee) sont en tete.</div></div><div style="padding:10px 18px 0">'+banner+'</div><div class="tw"><table><thead><tr><th>AO</th><th>Montant</th><th>Constitution</th><th>Banque</th><th>Etat</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+  return '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 6px;border-bottom:1px solid #DDD5C4"><div style="font-size:14px;font-weight:600">Cautions provisoires (portees par les AO)</div><div style="font-size:12px;color:#7A7369;margin-top:2px">Constituees au depot de l\'offre, a restituer apres la decision. Les dormantes (AO decide, non restituee) sont en tete.</div></div><div style="padding:10px 18px 0">'+banner+'</div><div class="tw"><table><thead><tr><th>AO</th><th>Montant</th><th>Constitution</th><th>Banque</th><th>Etat</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
 }
 function provMainlevee(aoId){
   var a=S.aos.find(function(x){return String(x.id)===String(aoId);});if(!a||!a.caution_prov)return;
@@ -1235,7 +1235,7 @@ function pgCautions(){
 
 function cautionFormHTML(c){
   return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar">'+S.marches.map(function(m){return '<option value="'+m.id+'"'+(c&&c.marche_id===m.id?' selected':'')+'>'+m.ref+' - '+m.titre.substring(0,40)+'</option>';}).join('')+'</select></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
-  '<div class="sec" style="margin-top:8px;padding:10px;background:#F6F2EA;border-radius:4px"><div class="sec-t" style="font-size:12px;margin-bottom:6px">Suivi mainlevee (optionnel)</div><div class="fr2"><div class="fg"><label style="font-size:11px">Date demande mainlevee</label><input class="fc" id="cdemmain" type="date" value="'+(c&&c.date_demande_mainlevee?c.date_demande_mainlevee:'')+'" title="Date ou vous avez demande au MO de liberer la caution"></div><div class="fg"><label style="font-size:11px">Date liberation effective</label><input class="fc" id="cliber" type="date" value="'+(c&&c.date_liberation_effective?c.date_liberation_effective:'')+'" title="Date ou la banque a confirme le deblocage de l\'argent"></div></div><div class="fg"><label style="font-size:11px">Notes (relances, contacts MO)</label><input class="fc" id="cnotesmain" value="'+esc(c&&c.notes_mainlevee?c.notes_mainlevee:'')+'" placeholder="Ex: Relance envoyee le 15/04, interlocuteur M. Bennani"></div></div>'+
+  '<div class="sec" style="margin-top:8px;padding:10px;background:#F6F2EA;border-radius:4px"><div class="sec-t" style="font-size:12px;margin-bottom:6px">Suivi mainlevee (optionnel)</div><div class="fr2"><div class="fg"><label style="font-size:12px">Date demande mainlevee</label><input class="fc" id="cdemmain" type="date" value="'+(c&&c.date_demande_mainlevee?c.date_demande_mainlevee:'')+'" title="Date ou vous avez demande au MO de liberer la caution"></div><div class="fg"><label style="font-size:12px">Date liberation effective</label><input class="fc" id="cliber" type="date" value="'+(c&&c.date_liberation_effective?c.date_liberation_effective:'')+'" title="Date ou la banque a confirme le deblocage de l\'argent"></div></div><div class="fg"><label style="font-size:12px">Notes (relances, contacts MO)</label><input class="fc" id="cnotesmain" value="'+esc(c&&c.notes_mainlevee?c.notes_mainlevee:'')+'" placeholder="Ex: Relance envoyee le 15/04, interlocuteur M. Bennani"></div></div>'+
   banquesDatalistHTML();
 }
 function newCaution(){
@@ -1309,8 +1309,8 @@ function pgPaiements(){
     var crg=p.caution_rg_id?gc(p.caution_rg_id):null;
     var modeLabel={deduction:'Deduction',caution:'Caution bancaire',aucune:'Aucune'}[p.mode_retenue]||p.mode_retenue;
     var modeColor={deduction:'bw',caution:'bp',aucune:'bn'}[p.mode_retenue]||'bn';
-    var retCell=p.mode_retenue==='caution'?('<span class="badge bp" style="font-size:10px">'+(crg?crg.num:'Caution RG')+'</span>'):p.mode_retenue==='deduction'?('<span style="color:#ef4444;font-family:monospace;font-size:12px">-'+fmad(p.retenue)+'</span>'):'-';
-    return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+p.numero+'</td><td style="font-size:12px;font-weight:500">'+gm(p.marche_id).ref+'</td><td><span class="badge '+(p.type==='definitif'?'bi':'bn')+'" style="font-size:11px">'+(p.type==='definitif'?'Definitif':'Provisoire')+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(p.montant_brut)+'</td><td><span class="badge '+modeColor+'" style="font-size:10px">'+modeLabel+'</span></td><td>'+retCell+'</td><td style="font-family:monospace;font-size:12px;font-weight:600">'+fmad(p.net)+'</td><td style="font-size:12px">'+fdat(p.date_depot)+'</td><td style="font-size:12px">'+fdat(p.date_paiement)+'</td><td>'+bdg(p.statut,SMP)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editPaiement(\''+p.id+'\')">&#9998;</button><button class="act red" onclick="delPaiement(\''+p.id+'\')">&#128465;</button></div></td></tr>';
+    var retCell=p.mode_retenue==='caution'?('<span class="badge bp" style="font-size:12px">'+(crg?crg.num:'Caution RG')+'</span>'):p.mode_retenue==='deduction'?('<span style="color:#ef4444;font-family:monospace;font-size:12px">-'+fmad(p.retenue)+'</span>'):'-';
+    return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+p.numero+'</td><td style="font-size:12px;font-weight:500">'+gm(p.marche_id).ref+'</td><td><span class="badge '+(p.type==='definitif'?'bi':'bn')+'" style="font-size:12px">'+(p.type==='definitif'?'Definitif':'Provisoire')+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(p.montant_brut)+'</td><td><span class="badge '+modeColor+'" style="font-size:12px">'+modeLabel+'</span></td><td>'+retCell+'</td><td style="font-family:monospace;font-size:12px;font-weight:600">'+fmad(p.net)+'</td><td style="font-size:12px">'+fdat(p.date_depot)+'</td><td style="font-size:12px">'+fdat(p.date_paiement)+'</td><td>'+bdg(p.statut,SMP)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editPaiement(\''+p.id+'\')">&#9998;</button><button class="act red" onclick="delPaiement(\''+p.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="11"><div class="empty">Aucun decompte</div></td></tr>';
   return '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(totPaye)+'</div><div class="kf">'+S.paiements.filter(function(p){return p.statut==='paye';}).length+' decomptes</div></div><div class="kpi k1"><div class="kl">En attente</div><div class="kv sm">'+fmad(totAtt)+'</div></div><div class="kpi k3"><div class="kl">RG par caution</div><div class="kv">'+S.paiements.filter(function(p){return p.mode_retenue==='caution';}).length+'</div></div><div class="kpi k4"><div class="kl">Rejetes</div><div class="kv">'+S.paiements.filter(function(p){return p.statut==='rejete';}).length+'</div></div></div><div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMP).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+ps.length+' decompte(s)</span><button class="btn btn-sm" onclick="printEtat(\'paiements\')">Imprimer</button></div></div><div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N Decompte</th><th>Marche</th><th>Type</th><th>Montant brut</th><th>Mode retenue</th><th>Retenue/Caution RG</th><th>Net</th><th>Depot</th><th>Paiement</th><th>Statut</th><th>Actions</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="3">TOTAL</td><td style="font-family:monospace">'+fmad(ps.reduce(function(a,p){return a+p.montant_brut;},0))+'</td><td colspan="2"></td><td style="font-family:monospace">'+fmad(ps.reduce(function(a,p){return a+p.net;},0))+'</td><td colspan="4"></td></tr></tfoot></table></div></div>';
 }
@@ -1406,14 +1406,14 @@ function printEtat(type){
     titre="Etat des appels d'offres";
     var aos=S.aos;if(S.search)aos=aos.filter(function(a){return [a.ref,a.objet,a.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)aos=aos.filter(function(a){return a.statut===S.sf;});
     body+='<table><thead><tr><th>#</th><th>Reference</th><th>Objet</th><th>Maitre ouvrage</th><th>Type</th><th>Budget estime</th><th>Date lancement</th><th>Date limite</th><th>Caution prov.</th><th>Marche</th><th>Statut</th></tr></thead><tbody>';
-    aos.forEach(function(a,i){var m=a.marche_id?gm(a.marche_id):null;var st=(SMAO[a.statut]||{l:a.statut,c:'bn'});var cp=a.caution_prov;body+='<tr><td>'+( i+1)+'</td><td class="mono"><b>'+a.ref+'</b></td><td>'+a.objet+'</td><td>'+a.maitre_ouvrage+'</td><td>'+a.type+'</td><td class="mono" style="text-align:right">'+fmad(a.budget_estime)+'</td><td>'+fdat(a.date_lancement)+'</td><td>'+fdat(a.date_limite)+'</td><td style="font-size:9.5px">'+(cp?cp.num+' / '+cp.banque+' / '+fmad(cp.montant)+' ['+(SMC[cp.statut]||{l:cp.statut}).l+']':'-')+'</td><td>'+(m?m.ref:'-')+'</td><td><span class="badge '+st.c+'">'+st.l+'</span></td></tr>';});
+    aos.forEach(function(a,i){var m=a.marche_id?gm(a.marche_id):null;var st=(SMAO[a.statut]||{l:a.statut,c:'bn'});var cp=a.caution_prov;body+='<tr><td>'+( i+1)+'</td><td class="mono"><b>'+a.ref+'</b></td><td>'+a.objet+'</td><td>'+a.maitre_ouvrage+'</td><td>'+a.type+'</td><td class="mono" style="text-align:right">'+fmad(a.budget_estime)+'</td><td>'+fdat(a.date_lancement)+'</td><td>'+fdat(a.date_limite)+'</td><td style="font-size:12px">'+(cp?cp.num+' / '+cp.banque+' / '+fmad(cp.montant)+' ['+(SMC[cp.statut]||{l:cp.statut}).l+']':'-')+'</td><td>'+(m?m.ref:'-')+'</td><td><span class="badge '+st.c+'">'+st.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL ('+aos.length+' AO)</td><td class="mono" style="text-align:right">'+fmad(aos.reduce(function(a,o){return a+(o.budget_estime||0);},0))+'</td><td colspan="5"></td></tr></tfoot></table>';
   }else if(type==='marches'){
     titre='Etat des marches publics';
     var ms=S.marches;if(S.search)ms=ms.filter(function(m){return [m.ref,m.titre,m.maitre_ouvrage].some(function(x){return (x||'').toLowerCase().indexOf(S.search)>=0;});});if(S.sf)ms=ms.filter(function(m){return m.statut===S.sf;});if(S.tf)ms=ms.filter(function(m){return m.type===S.tf;});
     var totM=ms.reduce(function(a,m){return a+m.montant;},0);
     body+='<table><thead><tr><th>#</th><th>Reference</th><th>Intitule</th><th>Maitre ouvrage</th><th>Type</th><th>Montant</th><th>Avanc.</th><th>Commencement</th><th>Delai</th><th>Date fin calc.</th><th>Recept. prov.</th><th>Rec. def.</th><th>OS</th><th>Cautions</th><th>Statut</th></tr></thead><tbody>';
-    ms.forEach(function(m,i){var mc=S.cautions.filter(function(c){return c.marche_id===m.id;});var stS=(SMM[m.statut]||{l:m.statut,c:'bn'});var osTxt=(m.ordres_service||[]).map(function(o){return (o.type==='arret'?'Arret':'Reprise')+' '+fdat(o.date);}).join(' / ')||'-';var cauTxt=mc.map(function(c){return (TC[c.type]||c.type)+': '+fmad(c.montant)+' ['+(SMC[c.statut]||{l:c.statut}).l+']';}).join(' | ')||'-';body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+m.ref+'</b></td><td>'+m.titre+'</td><td>'+m.maitre_ouvrage+'</td><td>'+m.type+'</td><td class="mono" style="text-align:right">'+fmad(m.montant)+'</td><td style="text-align:center">'+m.avancement+'%</td><td>'+fdat(m.date_commencement)+'</td><td style="text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td>'+(m.date_fin_calculee?fdat(m.date_fin_calculee):'-')+'</td><td>'+fdat(m.date_reception_provisoire)+'</td><td>'+fdat(m.date_reception_definitive)+'</td><td style="font-size:9.5px">'+osTxt+'</td><td style="font-size:9.5px">'+cauTxt+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
+    ms.forEach(function(m,i){var mc=S.cautions.filter(function(c){return c.marche_id===m.id;});var stS=(SMM[m.statut]||{l:m.statut,c:'bn'});var osTxt=(m.ordres_service||[]).map(function(o){return (o.type==='arret'?'Arret':'Reprise')+' '+fdat(o.date);}).join(' / ')||'-';var cauTxt=mc.map(function(c){return (TC[c.type]||c.type)+': '+fmad(c.montant)+' ['+(SMC[c.statut]||{l:c.statut}).l+']';}).join(' | ')||'-';body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+m.ref+'</b></td><td>'+m.titre+'</td><td>'+m.maitre_ouvrage+'</td><td>'+m.type+'</td><td class="mono" style="text-align:right">'+fmad(m.montant)+'</td><td style="text-align:center">'+m.avancement+'%</td><td>'+fdat(m.date_commencement)+'</td><td style="text-align:center">'+(m.delai_execution?m.delai_execution+'j':'-')+'</td><td>'+(m.date_fin_calculee?fdat(m.date_fin_calculee):'-')+'</td><td>'+fdat(m.date_reception_provisoire)+'</td><td>'+fdat(m.date_reception_definitive)+'</td><td style="font-size:12px">'+osTxt+'</td><td style="font-size:12px">'+cauTxt+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="5">TOTAL</td><td class="mono" style="text-align:right">'+fmad(totM)+'</td><td colspan="8"></td></tr></tfoot></table>';
   }else if(type==='cautions'){
     titre='Etat des cautions bancaires';
@@ -1432,7 +1432,7 @@ function printEtat(type){
     ps.forEach(function(p,i){var stS=(SMP[p.statut]||{l:p.statut,c:'bn'});var crg=p.caution_rg_id?gc(p.caution_rg_id):null;body+='<tr><td>'+(i+1)+'</td><td class="mono"><b>'+p.numero+'</b></td><td>'+gm(p.marche_id).ref+'</td><td>'+(p.type==='definitif'?'Definitif':'Provisoire')+'</td><td class="mono" style="text-align:right">'+fmad(p.montant_brut)+'</td><td>'+(p.mode_retenue||'-')+'</td><td class="mono" style="text-align:right">'+(p.mode_retenue==='caution'?'Caution: '+(crg?crg.num:'RG'):p.retenue?fmad(p.retenue):'-')+'</td><td class="mono" style="text-align:right;font-weight:bold">'+fmad(p.net)+'</td><td>'+fdat(p.date_depot)+'</td><td>'+fdat(p.date_paiement)+'</td><td><span class="badge '+stS.c+'">'+stS.l+'</span></td></tr>';});
     body+='</tbody><tfoot><tr class="tfoot"><td colspan="4">TOTAL</td><td class="mono" style="text-align:right">'+fmad(ps.reduce(function(a,p){return a+p.montant_brut;},0))+'</td><td colspan="2"></td><td class="mono" style="text-align:right">'+fmad(ps.reduce(function(a,p){return a+p.net;},0))+'</td><td colspan="3"></td></tr></tfoot></table>';
   }
-  var html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>'+titre+'</title><style>'+CSS+'</style></head><body><div class="entete"><div><div class="soc">MP Manager</div><div style="font-size:11px;color:#7A7369;margin-top:2px">Gestion des Marches Publics</div></div><div><div class="eta-t">'+titre+'</div><div class="eta-s">Edite le '+dateStr+' a '+timeStr+'</div></div></div>'+body+'<div class="pied"><span>MP Manager - '+dateStr+' a '+timeStr+'</span></div><script>window.onload=function(){window.print();}<\/script></body></html>';
+  var html='<!DOCTYPE html><html lang="fr"><head><meta charset="UTF-8"><title>'+titre+'</title><style>'+CSS+'</style></head><body><div class="entete"><div><div class="soc">MP Manager</div><div style="font-size:12px;color:#7A7369;margin-top:2px">Gestion des Marches Publics</div></div><div><div class="eta-t">'+titre+'</div><div class="eta-s">Edite le '+dateStr+' a '+timeStr+'</div></div></div>'+body+'<div class="pied"><span>MP Manager - '+dateStr+' a '+timeStr+'</span></div><script>window.onload=function(){window.print();}<\/script></body></html>';
   var w=window.open('','_blank','width=1000,height=700');
   if(w){w.document.write(html);w.document.close();}else alert('Autorisez les popups pour imprimer.');
 }
@@ -1512,7 +1512,7 @@ function pgIndices(){
   h+='<input type="file" id="xlsx_import_input" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleIndicesImport(this)">';
   h+='<a href="#" onclick="downloadIndicesTemplate();return false" style="font-size:12px;color:#1E40AF;text-decoration:underline">Telecharger le template</a>';
   h+='<span style="font-size:12px;color:#7A7369">Indices suivis : '+INDICES_TYPES.map(function(i){return '<strong>'+i.code+'</strong>';}).join(', ')+'</span>';
-  h+='<span style="font-size:11px;color:#7A7369;margin-left:auto">Source : HCP.ma</span>';
+  h+='<span style="font-size:12px;color:#7A7369;margin-left:auto">Source : HCP.ma</span>';
   h+='</div>';
 
   // Resume statistique
@@ -1535,7 +1535,7 @@ function pgIndices(){
       var display=val!=null?fmtIdx(val):'<span style="color:#c2410c">-</span>';
       h+='<td style="text-align:right;font-family:monospace">'+display+'</td>';
     });
-    h+='<td style="font-size:11px">'+(row&&row.date_publication?fdat(row.date_publication):'-')+'</td>';
+    h+='<td style="font-size:12px">'+(row&&row.date_publication?fdat(row.date_publication):'-')+'</td>';
     h+='<td>'+(row?(row.definitif?'<span class="badge bi">Definitif</span>':'<span class="badge bw">Provisoire</span>'):'<span class="badge" style="background:#FEE2E2;color:#991B1B">Manquant</span>')+'</td>';
     h+='<td>';
     if(row){
@@ -2060,7 +2060,7 @@ function bordereauTabHTML(m, b){
     return '<tr><td style="font-family:monospace;font-size:12px">'+esc(p.num||'')+'</td><td style="font-size:12px">'+esc(p.designation||'')+'</td><td style="font-size:12px">'+esc(p.unite||'')+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.quantite||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px">'+(p.pu_initial||0)+'</td><td style="text-align:right;font-family:monospace;font-size:12px;font-weight:600">'+fmad((p.quantite||0)*(p.pu_initial||0))+'</td><td><button type="button" class="act red" onclick="delPoste('+i+')">X</button></td></tr>';
   }).join('');
   var totalMontant=S._tmpPostes.reduce(function(a,p){return a+(p.quantite||0)*(p.pu_initial||0);},0);
-  return '<div id="bor-config"><div class="sec"><div class="sec-t">Configuration de la revision des prix</div>'+bat0Info+'<div class="fr2"><div class="fg"><label>Type d\'indice *</label><select class="fc" id="bor_type"><option value="BAT3"'+(typeIndice==='BAT3'?' selected':'')+'>BAT3 - Electricite</option><option value="BAT6"'+(typeIndice==='BAT6'?' selected':'')+'>BAT6 - Batiment tous corps d\'etat</option></select></div><div class="fg"><label>BAT0 (manuel si absent des indices)</label><input class="fc" id="bor_bat0_manuel" type="number" step="0.01" value="'+bat0Manuel+'" placeholder="Laisser vide si lu auto"></div></div><div class="fr2"><div class="fg"><label>Coefficient a (partie fixe)</label><input class="fc" id="bor_coef_a" type="number" step="0.01" value="'+coefA+'"></div><div class="fg"><label>Coefficient b (partie revisable)</label><input class="fc" id="bor_coef_b" type="number" step="0.01" value="'+coefB+'"></div></div><div class="info-box info-blue" style="margin-top:4px;font-size:11px">Formule : <b>P revise = P0 &times; (a + b &times; BAT/BAT0)</b> avec a+b=1 (par defaut 0.15 + 0.85)</div></div><div class="sec"><div class="sec-t">Postes du bordereau</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" onclick="downloadBordereauTemplate()">Telecharger template Excel</button><label class="btn btn-sm" style="background:#EDE8DE;cursor:pointer"><input type="file" id="bor_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importBordereauExcel(event)">Importer Excel/CSV</label><button type="button" class="btn btn-sm" onclick="clearPostes()" style="border-color:#8B2A1C;color:#8B2A1C">Vider</button></div><div id="postes-list">'+(S._tmpPostes.length?'<table class="mini-table"><thead><tr><th>N Poste</th><th>Designation</th><th>Unite</th><th style="text-align:right">Quantite</th><th style="text-align:right">PU</th><th style="text-align:right">Montant</th><th></th></tr></thead><tbody>'+postesRows+'</tbody><tfoot><tr style="background:#EDE8DE;font-weight:600"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right;font-family:monospace">'+fmad(totalMontant)+'</td><td></td></tr></tfoot></table>':'<div style="font-size:12px;color:#7A7369;padding:10px 0">Aucun poste. Importer un fichier Excel ou utiliser le template.</div>')+'</div></div></div>';
+  return '<div id="bor-config"><div class="sec"><div class="sec-t">Configuration de la revision des prix</div>'+bat0Info+'<div class="fr2"><div class="fg"><label>Type d\'indice *</label><select class="fc" id="bor_type"><option value="BAT3"'+(typeIndice==='BAT3'?' selected':'')+'>BAT3 - Electricite</option><option value="BAT6"'+(typeIndice==='BAT6'?' selected':'')+'>BAT6 - Batiment tous corps d\'etat</option></select></div><div class="fg"><label>BAT0 (manuel si absent des indices)</label><input class="fc" id="bor_bat0_manuel" type="number" step="0.01" value="'+bat0Manuel+'" placeholder="Laisser vide si lu auto"></div></div><div class="fr2"><div class="fg"><label>Coefficient a (partie fixe)</label><input class="fc" id="bor_coef_a" type="number" step="0.01" value="'+coefA+'"></div><div class="fg"><label>Coefficient b (partie revisable)</label><input class="fc" id="bor_coef_b" type="number" step="0.01" value="'+coefB+'"></div></div><div class="info-box info-blue" style="margin-top:4px;font-size:12px">Formule : <b>P revise = P0 &times; (a + b &times; BAT/BAT0)</b> avec a+b=1 (par defaut 0.15 + 0.85)</div></div><div class="sec"><div class="sec-t">Postes du bordereau</div><div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap"><button type="button" class="btn btn-sm" onclick="downloadBordereauTemplate()">Telecharger template Excel</button><label class="btn btn-sm" style="background:#EDE8DE;cursor:pointer"><input type="file" id="bor_file" accept=".xlsx,.xls,.csv" style="display:none" onchange="importBordereauExcel(event)">Importer Excel/CSV</label><button type="button" class="btn btn-sm" onclick="clearPostes()" style="border-color:#8B2A1C;color:#8B2A1C">Vider</button></div><div id="postes-list">'+(S._tmpPostes.length?'<table class="mini-table"><thead><tr><th>N Poste</th><th>Designation</th><th>Unite</th><th style="text-align:right">Quantite</th><th style="text-align:right">PU</th><th style="text-align:right">Montant</th><th></th></tr></thead><tbody>'+postesRows+'</tbody><tfoot><tr style="background:#EDE8DE;font-weight:600"><td colspan="5" style="text-align:right">TOTAL</td><td style="text-align:right;font-family:monospace">'+fmad(totalMontant)+'</td><td></td></tr></tfoot></table>':'<div style="font-size:12px;color:#7A7369;padding:10px 0">Aucun poste. Importer un fichier Excel ou utiliser le template.</div>')+'</div></div></div>';
 }
 
 function collectBordereauData(m){
@@ -2404,11 +2404,11 @@ function updateRevisionSection(){
     '<div class="sec" style="padding:12px;background:#E6EEE9;border:1px solid #B8CFC0;border-radius:4px">'+
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">'+
         '<div style="font-size:13px;font-weight:600;color:#1F3A2E">Revision de prix</div>'+
-        '<label style="font-size:11px;color:#4A453F;display:flex;align-items:center;gap:6px;cursor:pointer">'+
+        '<label style="font-size:12px;color:#4A453F;display:flex;align-items:center;gap:6px;cursor:pointer">'+
           '<input type="checkbox" id="p-rev-activate" '+activateChecked+' onchange="toggleRevisionInputs()"> Appliquer la revision de prix'+
         '</label>'+
       '</div>'+
-      '<div style="font-size:11px;color:#7A7369;margin-bottom:8px">'+
+      '<div style="font-size:12px;color:#7A7369;margin-bottom:8px">'+
         'Formule : P = P<sub>0</sub> &times; (a + b &times; BAT/BAT<sub>0</sub>) | '+
         'Indice : <b>'+bord.type_indice+'</b> | '+
         'BAT<sub>0</sub> = <b>'+bat0+'</b> ('+(bord.date_reference_BAT0||'reference du marche')+') | '+
@@ -2416,8 +2416,8 @@ function updateRevisionSection(){
       '</div>'+
       '<div id="p-rev-inputs">'+
         '<div class="fr2">'+
-          '<div class="fg"><label style="font-size:11px">Periode de realisation *</label><input class="fc" id="p-rev-periode" type="month" value="'+(periodeSaved||'')+'" oninput="recomputeK()"></div>'+
-          '<div class="fg"><label style="font-size:11px">Montant initial P<sub>0</sub> (MAD) *</label><input class="fc" id="p-rev-mnt-initial" type="number" value="'+(mntInitialSaved||'')+'" placeholder="Saisir le montant avant revision" oninput="recomputeK()"></div>'+
+          '<div class="fg"><label style="font-size:12px">Periode de realisation *</label><input class="fc" id="p-rev-periode" type="month" value="'+(periodeSaved||'')+'" oninput="recomputeK()"></div>'+
+          '<div class="fg"><label style="font-size:12px">Montant initial P<sub>0</sub> (MAD) *</label><input class="fc" id="p-rev-mnt-initial" type="number" value="'+(mntInitialSaved||'')+'" placeholder="Saisir le montant avant revision" oninput="recomputeK()"></div>'+
         '</div>'+
         '<div id="p-rev-result" style="margin-top:6px;font-size:12px;color:#4A453F"></div>'+
       '</div>'+
@@ -2501,11 +2501,11 @@ function recomputeK(){
     resultEl.innerHTML =
       '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">'+
         '<div>'+
-          '<div style="font-size:11px;color:#7A7369">BAT periode ('+periode+')</div>'+
+          '<div style="font-size:12px;color:#7A7369">BAT periode ('+periode+')</div>'+
           '<div style="font-family:var(--FM);font-size:14px;font-weight:600">'+BAT+'</div>'+
         '</div>'+
         '<div>'+
-          '<div style="font-size:11px;color:#7A7369">Coefficient K</div>'+
+          '<div style="font-size:12px;color:#7A7369">Coefficient K</div>'+
           '<div style="font-family:var(--FM);font-size:14px;font-weight:600;color:'+variationColor+'">'+K.toFixed(4)+' ('+variationSign+variation+'%)</div>'+
         '</div>'+
       '</div>'+
@@ -2636,8 +2636,8 @@ function mainleveeAlertsHTML(){
         '<span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span>'+
       '</div>'+
       '<div style="display:flex;align-items:center;gap:8px">'+
-        '<span style="font-size:11px;color:'+col.color+';font-weight:600">'+col.emoji+' '+jours+'j ('+col.label+')</span>'+
-        '<button class="btn btn-sm" onclick="libereCaution(\''+c.id+'\')" style="padding:4px 10px;font-size:11px">Confirmer liberation</button>'+
+        '<span style="font-size:12px;color:'+col.color+';font-weight:600">'+col.emoji+' '+jours+'j ('+col.label+')</span>'+
+        '<button class="btn btn-sm" onclick="libereCaution(\''+c.id+'\')" style="padding:4px 10px;font-size:12px">Confirmer liberation</button>'+
       '</div>'+
     '</div>';
   }).join('');
@@ -2941,21 +2941,21 @@ function renderImportPreview(){
     else if(p._status === 'warning'){ statusBadge = 'A verifier'; statusColor = 'bw'; }
     else { statusBadge = 'OK'; statusColor = 'bs'; }
 
-    var existingMark = existingRefs[p.ref] ? '<span class="badge bd" style="font-size:10px" title="Un marche avec cette reference existe deja">Doublon</span>' : '';
+    var existingMark = existingRefs[p.ref] ? '<span class="badge bd" style="font-size:12px" title="Un marche avec cette reference existe deja">Doublon</span>' : '';
 
     var warnings = p._warnings && p._warnings.length ? ' - '+p._warnings.join(', ') : (p._error || '');
 
     return '<tr'+(p._status==='error'?' style="background:#F5E6E3"':(p._status==='warning'?' style="background:#FEF3C7"':''))+'>'+
       '<td><input type="checkbox" '+checked+' onchange="importHistToggle('+idx+')"'+(p._status==='error'?' disabled':'')+'></td>'+
-      '<td style="font-size:11px">L'+p._row+'</td>'+
-      '<td style="font-family:monospace;font-size:11px;font-weight:600">'+esc(p.ref)+' '+existingMark+'</td>'+
+      '<td style="font-size:12px">L'+p._row+'</td>'+
+      '<td style="font-family:monospace;font-size:12px;font-weight:600">'+esc(p.ref)+' '+existingMark+'</td>'+
       '<td style="font-size:12px">'+esc((p.titre||'').substring(0,50))+(p.titre&&p.titre.length>50?'...':'')+'</td>'+
-      '<td style="font-size:11px">'+esc((p.maitre_ouvrage||'').substring(0,30))+'</td>'+
-      '<td style="font-family:monospace;font-size:11px;text-align:right">'+(p.montant?fmad(p.montant):'-')+'</td>'+
-      '<td><span class="badge bn" style="font-size:10px">'+p.type+'</span></td>'+
-      '<td><span class="badge '+(p.statut==='termine'?'bs':'bi')+'" style="font-size:10px">'+(p.statut==='termine'?'Termine':'En cours')+'</span></td>'+
-      '<td style="font-size:11px">'+(p.date_commencement?fdat(p.date_commencement):'-')+'</td>'+
-      '<td><span class="badge '+statusColor+'" style="font-size:10px">'+statusBadge+'</span><div style="font-size:10px;color:#7A7369;margin-top:2px">'+esc(warnings)+'</div></td>'+
+      '<td style="font-size:12px">'+esc((p.maitre_ouvrage||'').substring(0,30))+'</td>'+
+      '<td style="font-family:monospace;font-size:12px;text-align:right">'+(p.montant?fmad(p.montant):'-')+'</td>'+
+      '<td><span class="badge bn" style="font-size:12px">'+p.type+'</span></td>'+
+      '<td><span class="badge '+(p.statut==='termine'?'bs':'bi')+'" style="font-size:12px">'+(p.statut==='termine'?'Termine':'En cours')+'</span></td>'+
+      '<td style="font-size:12px">'+(p.date_commencement?fdat(p.date_commencement):'-')+'</td>'+
+      '<td><span class="badge '+statusColor+'" style="font-size:12px">'+statusBadge+'</span><div style="font-size:12px;color:#7A7369;margin-top:2px">'+esc(warnings)+'</div></td>'+
     '</tr>';
   }).join('');
 
@@ -2963,7 +2963,7 @@ function renderImportPreview(){
     '<div><span class="badge bs">OK</span> tout est valide</div>'+
     '<div><span class="badge bw">A verifier</span> warnings, importable</div>'+
     '<div><span class="badge bd">Erreur</span> non importable</div>'+
-    '<div><span class="badge bd" style="font-size:10px">Doublon</span> existe deja en base</div>'+
+    '<div><span class="badge bd" style="font-size:12px">Doublon</span> existe deja en base</div>'+
   '</div>';
 
   var actions = '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px">'+
@@ -3208,7 +3208,7 @@ function veilleKeywordsCard(){
         '<button class="btn" onclick="veilleKwAdd()">+ Ajouter</button>'+
         '<button id="vkw-save" class="btn btn-prim" onclick="veilleKwSave()">Enregistrer</button>'+
       '</div>'+
-      '<div style="font-size:11px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (7h / 15h).</div>'+
+      '<div style="font-size:12px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (7h / 15h).</div>'+
     '</div>'+
   '</details>';
 }
@@ -3280,7 +3280,7 @@ function veilleDceEmailCard(){
         '<button class="btn" onclick="veilleDceEmailAdd(\'cc\')">+ Ajouter</button>'+
       '</div>'+
       '<button id="vdce-save" class="btn btn-prim" onclick="veilleDceEmailSave()">Enregistrer</button>'+
-      '<div style="font-size:11px;color:#7A7369;margin-top:8px">Email envoye a la secretaire quand un DCE est pret. Si aucun destinataire (To), fallback sur imane@neurones.ma.</div>'+
+      '<div style="font-size:12px;color:#7A7369;margin-top:8px">Email envoye a la secretaire quand un DCE est pret. Si aucun destinataire (To), fallback sur imane@neurones.ma.</div>'+
     '</div>'+
   '</details>';
 }
@@ -3421,23 +3421,23 @@ function pgVeille(){
       var L=r.date_limite?MPEch.libelleEcheance(r.date_limite,r.heure_limite||null):null;
       var dlCell;
       if(!L){
-        dlCell='<span style="color:#7A7369;font-size:11px">-</span>';
+        dlCell='<span style="color:#7A7369;font-size:12px">-</span>';
       } else {
         var vcol=L.passe?'#7A7369':aoDlColor(L.urgence);
         var deco=L.passe?'text-decoration:line-through;':'';
         var vfw=(L.passe||L.urgence==='aujourdhui'||L.urgence==='imminent')?'600':'400';
-        var vwarn=L.transitionWarn?'<div style="font-size:9px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
+        var vwarn=L.transitionWarn?'<div style="font-size:12px;color:#b45309">&#9888; changement d\'heure legale - verifier le portail</div>':'';
         dlCell='<div style="font-size:12px;color:'+vcol+';'+deco+'font-weight:'+vfw+'">'+esc(L.dateFR)+'</div>'+
-               '<div style="font-size:10px;color:'+vcol+'">'+esc(L.text)+'</div>'+vwarn;
+               '<div style="font-size:12px;color:'+vcol+'">'+esc(L.text)+'</div>'+vwarn;
       }
-      var heure=r.heure_limite?'<div style="font-size:10px;color:#7A7369">'+esc(r.heure_limite)+'</div>':'';
+      var heure=r.heure_limite?'<div style="font-size:12px;color:#7A7369">'+esc(r.heure_limite)+'</div>':'';
 
       var st=SMVA[r.statut||'a_etudier']||SMVA.a_etudier;
       var statutCell='<span class="badge '+st.c+'">'+st.l+'</span>';
 
-      var marcheLink=r.marche_id_lie?'<div style="font-size:10px;margin-top:2px"><a href="#" onclick="event.preventDefault();veilleGotoMarche(\''+esc(r.marche_id_lie)+'\')" style="color:#1F4E78;text-decoration:underline">Voir marche</a></div>':'';
+      var marcheLink=r.marche_id_lie?'<div style="font-size:12px;margin-top:2px"><a href="#" onclick="event.preventDefault();veilleGotoMarche(\''+esc(r.marche_id_lie)+'\')" style="color:#1F4E78;text-decoration:underline">Voir marche</a></div>':'';
 
-      var notes=r.notes?'<div style="font-size:10px;color:#7A7369;margin-top:2px;font-style:italic">'+esc(r.notes.substring(0,60))+(r.notes.length>60?'...':'')+'</div>':'';
+      var notes=r.notes?'<div style="font-size:12px;color:#7A7369;margin-top:2px;font-style:italic">'+esc(r.notes.substring(0,60))+(r.notes.length>60?'...':'')+'</div>':'';
 
       /* Actions */
       var fiche=r.lien_fiche?'<a href="'+esc(r.lien_fiche)+'" target="_blank" rel="noopener" class="act" title="Ouvrir fiche portail">&#128279;</a>':'';
@@ -3461,10 +3461,10 @@ function pgVeille(){
         '<td style="background:'+col.bg+';color:'+col.fg+';font-weight:bold;text-align:center;font-size:18px;padding:6px">'+
           (r.score||0)+
         '</td>'+
-        '<td><div style="font-family:monospace;font-size:11px;font-weight:600">'+esc(r.reference_ao||'-')+'</div><div style="font-size:10px;color:#7A7369">'+esc(r.categorie||'')+'</div></td>'+
+        '<td><div style="font-family:monospace;font-size:12px;font-weight:600">'+esc(r.reference_ao||'-')+'</div><div style="font-size:12px;color:#7A7369">'+esc(r.categorie||'')+'</div></td>'+
         '<td style="max-width:380px"><div style="font-size:12px;line-height:1.3">'+esc((r.objet||'').substring(0,250))+((r.objet||'').length>250?'...':'')+'</div>'+notes+marcheLink+'</td>'+
-        '<td style="font-size:11px;color:#5a5650">'+esc((r.acheteur||'').substring(0,100))+'</td>'+
-        '<td style="font-size:11px;text-align:center">'+esc((r.lieu_execution||'').substring(0,40))+'</td>'+
+        '<td style="font-size:12px;color:#5a5650">'+esc((r.acheteur||'').substring(0,100))+'</td>'+
+        '<td style="font-size:12px;text-align:center">'+esc((r.lieu_execution||'').substring(0,40))+'</td>'+
         '<td>'+dlCell+heure+'</td>'+
         '<td>'+statutCell+'</td>'+
         '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+actStatut+actNotes+actLink+actTransfer+'</div></td>'+
@@ -3828,7 +3828,7 @@ function addVeilleNavLink(){
   var newLink=document.createElement('div');
   newLink.className='ni';
   newLink.setAttribute('data-page','veille');
-  newLink.innerHTML='<span class="ni-ic">&#128269;</span>Veille AO <span id="veille-counter" style="display:none;background:#107C41;color:#fff;border-radius:8px;padding:1px 6px;font-size:10px;margin-left:4px"></span>';
+  newLink.innerHTML='<span class="ni-ic">&#128269;</span>Veille AO <span id="veille-counter" style="display:none;background:#107C41;color:#fff;border-radius:8px;padding:1px 6px;font-size:12px;margin-left:4px"></span>';
   aoLink.parentNode.insertBefore(newLink, aoLink.nextSibling);
   newLink.addEventListener('click', function(){nav('veille');});
 }
