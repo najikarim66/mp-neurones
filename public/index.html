@@ -294,7 +294,7 @@ input,select,textarea{font-family:inherit}
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
 var SMM={en_cours:{l:'En cours',c:'bi'},termine:{l:'Termine',c:'bs'},suspendu:{l:'Suspendu',c:'bw'},resilie:{l:'Resilie',c:'bd'}};
-var SMC={active:{l:'Active',c:'bs'},mainlevee_demandee:{l:'Mainlevee demandee',c:'bp'},expiree:{l:'Expiree',c:'bd'},liberee:{l:'Liberee',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
+var SMC={active:{l:'Active',c:'bs'},mainlevee_demandee:{l:'Mainlevee demandee',c:'bp'},expiree:{l:'Expiree',c:'bd'},liberee:{l:'Liberee',c:'bn'},restituee:{l:'Restituee',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
 var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Rejete',c:'bd'},en_cours:{l:'En cours',c:'bi'}};
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
@@ -1093,6 +1093,56 @@ function delCautionInline(id){
   deleteItem('cautions',id,cdel.marche_id).then(function(){if(_editingMarcheId)refreshCautionListInModal(_editingMarcheId);toast('Caution supprimee');}).catch(function(e){toast('Erreur: '+e.message);});
 }
 
+// ─── Cautions provisoires (embarquees sur les AO : a.caution_prov) ───
+// Cycle propre : constituee (active) -> mainlevee demandee -> restituee.
+// "Dormante" = AO deja decide (attribue/infructueux/annule ou marche cree) et provisoire non restituee.
+function _aoDecidee(a){return a.statut==='attribue'||a.statut==='infructueux'||a.statut==='annule'||!!a.marche_id;}
+function _provTerminee(cp){return !!cp&&(cp.statut==='restituee'||cp.statut==='liberee');}
+function collectProvisoires(){
+  return S.aos.filter(function(a){return a.caution_prov;}).map(function(a){
+    return {ao:a,cp:a.caution_prov,dormante:_aoDecidee(a)&&!_provTerminee(a.caution_prov)};
+  });
+}
+function renderProvisoiresBlock(){
+  var list=collectProvisoires();
+  if(!list.length)return '';
+  // Dormantes d'abord, puis montant decroissant
+  list.sort(function(x,y){if(x.dormante!==y.dormante)return x.dormante?-1:1;return (+y.cp.montant||0)-(+x.cp.montant||0);});
+  var dormantes=list.filter(function(p){return p.dormante;});
+  var totDorm=dormantes.reduce(function(s,p){return s+(+p.cp.montant||0);},0);
+  var sansDate=list.filter(function(p){return !p.cp.date_emission;}).length;
+  var banner='<div style="padding:8px 12px;border-radius:4px;font-size:12px;margin-bottom:10px;'+(totDorm>0?'background:#fef2f2;border:1px solid #fecaca;color:#991b1b':'background:#f0fdf4;border:1px solid #bbf7d0;color:#065f46')+'">'+
+    '<strong>'+(totDorm>0?'&#9888; ':'')+dormantes.length+' provisoire(s) dormante(s)</strong> sur AO deja decides &middot; <strong>'+fmad(totDorm)+'</strong> immobilises a la banque'+
+    (sansDate?' <span style="color:#92400e">&middot; date de constitution non renseignee : '+sansDate+'/'+list.length+'</span>':'')+'</div>';
+  var rows=list.map(function(p){
+    var a=p.ao,cp=p.cp;
+    var etatDate=cp.statut==='mainlevee_demandee'?cp.date_demande_mainlevee:(cp.statut==='restituee'?cp.date_restitution:(cp.statut==='active'?cp.date_emission:''));
+    var etat=bdg(cp.statut,SMC)+(etatDate?'<div style="font-size:10px;color:#7A7369">'+fdat(etatDate)+'</div>':'');
+    var dateConst=cp.date_emission?fdat(cp.date_emission):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
+    var banque=cp.banque?esc(cp.banque):'<span style="color:#b45309;font-style:italic">non renseignee</span>';
+    var act='';
+    if(cp.statut==='active')act='<button class="act" title="Marquer la mainlevee comme demandee" onclick="provMainlevee(\''+esc(a.id)+'\')">M</button>';
+    else if(cp.statut==='mainlevee_demandee')act='<button class="act" style="color:#065f46;font-weight:bold" title="Confirmer la restitution (argent revenu de la banque)" onclick="provRestituer(\''+esc(a.id)+'\')">Restituee</button>';
+    var trStyle=p.dormante?' style="background:#fff7ed"':'';
+    return '<tr'+trStyle+'><td style="font-size:12px"><div style="font-weight:600">'+esc(a.ref||'')+'</div><div style="font-size:10px;margin-top:2px">'+bdg(a.statut,SMAO)+'</div></td><td style="font-family:monospace;font-size:12px">'+fmad(cp.montant)+'</td><td style="font-size:12px">'+dateConst+'</td><td style="font-size:12px">'+banque+'</td><td>'+etat+'</td><td>'+act+'</td></tr>';
+  }).join('');
+  return '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 6px;border-bottom:1px solid #DDD5C4"><div style="font-size:14px;font-weight:600">Cautions provisoires (portees par les AO)</div><div style="font-size:11px;color:#7A7369;margin-top:2px">Constituees au depot de l\'offre, a restituer apres la decision. Les dormantes (AO decide, non restituee) sont en tete.</div></div><div style="padding:10px 18px 0">'+banner+'</div><div class="tw"><table><thead><tr><th>AO</th><th>Montant</th><th>Constitution</th><th>Banque</th><th>Etat</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody></table></div></div>';
+}
+function provMainlevee(aoId){
+  var a=S.aos.find(function(x){return String(x.id)===String(aoId);});if(!a||!a.caution_prov)return;
+  if(!confirm('Marquer la mainlevee comme demandee pour la provisoire de '+(a.ref||'')+' ?'))return;
+  a.caution_prov.statut='mainlevee_demandee';
+  a.caution_prov.date_demande_mainlevee=new Date().toISOString().slice(0,10);
+  saveItem('aos',a).then(function(){sbStats();render();toast('Mainlevee demandee le '+fdat(a.caution_prov.date_demande_mainlevee));});
+}
+function provRestituer(aoId){
+  var a=S.aos.find(function(x){return String(x.id)===String(aoId);});if(!a||!a.caution_prov)return;
+  if(!confirm('Confirmer la RESTITUTION de la provisoire de '+(a.ref||'')+' ?\n\n(La banque a debloque l\'argent - c\'est l\'acte final du cycle)'))return;
+  a.caution_prov.statut='restituee';
+  a.caution_prov.date_restitution=new Date().toISOString().slice(0,10);
+  saveItem('aos',a).then(function(){sbStats();render();toast('Provisoire restituee le '+fdat(a.caution_prov.date_restitution));});
+}
+
 // PAGE CAUTIONS
 function pgCautions(){
   var cs=S.cautions;
@@ -1104,21 +1154,27 @@ function pgCautions(){
 
   // Situation par banque
   var TORD=['bonne_execution','retenue_garantie','soumission','avance_demarrage'];
-  var banques=uniqueArr(S.cautions.map(function(c){return c.banque;})).sort();
+  // Provisoires portees par les AO, encore bloquees a la banque (active | mainlevee_demandee)
+  var provBloq=S.aos.filter(function(a){return a.caution_prov&&(a.caution_prov.statut==='active'||a.caution_prov.statut==='mainlevee_demandee')&&a.caution_prov.banque;}).map(function(a){return a.caution_prov;});
+  var provByBank={};provBloq.forEach(function(cp){provByBank[cp.banque]=(provByBank[cp.banque]||0)+(+cp.montant||0);});
+  var hasProvCol=provBloq.length>0;
+  var banques=uniqueArr(S.cautions.map(function(c){return c.banque;}).concat(Object.keys(provByBank))).sort();
   var typesActifs=TORD.filter(function(t){return S.cautions.some(function(c){return c.type===t;});});
-  var mat={};var tActifT={};var tActifB={};var gTotActif=0;
+  var mat={};var tActifT={};var tActifB={};var gTotActif=0;var tProv=0;
   banques.forEach(function(b){mat[b]={};tActifB[b]=0;TORD.forEach(function(t){mat[b][t]={nb:0,mnt_actif:0};});});
   typesActifs.forEach(function(t){tActifT[t]=0;});
   S.cautions.forEach(function(c){
     if(!mat[c.banque]||!mat[c.banque][c.type])return;
     if(c.statut==='active'){mat[c.banque][c.type].nb++;mat[c.banque][c.type].mnt_actif+=c.montant;tActifB[c.banque]+=c.montant;tActifT[c.type]+=c.montant;gTotActif+=c.montant;}
   });
-  var sitHead='<th>Banque</th>'+typesActifs.map(function(t){return '<th style="text-align:center">'+(TC[t]||t)+'</th>';}).join('')+'<th style="text-align:right">TOTAL</th>';
+  // Ajout des provisoires bloquees aux totaux par banque + grand total
+  banques.forEach(function(b){if(provByBank[b]){tActifB[b]+=provByBank[b];gTotActif+=provByBank[b];tProv+=provByBank[b];}});
+  var sitHead='<th>Banque</th>'+typesActifs.map(function(t){return '<th style="text-align:center">'+(TC[t]||t)+'</th>';}).join('')+(hasProvCol?'<th style="text-align:center">Provisoire</th>':'')+'<th style="text-align:right">TOTAL</th>';
   var sitRows=banques.map(function(b){
-    var hasAny=TORD.some(function(t){return mat[b][t].nb>0;});if(!hasAny)return'';
-    return '<tr><td style="font-weight:600">'+b+'</td>'+typesActifs.map(function(t){var cell=mat[b][t];return '<td style="text-align:right;font-family:monospace;font-size:12px">'+(cell.mnt_actif?fmad(cell.mnt_actif)+'<div style="font-size:10px;color:#7A7369">'+cell.nb+' caution(s)</div>':'-')+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(tActifB[b])+'</td></tr>';
+    var hasAny=TORD.some(function(t){return mat[b][t].nb>0;})||provByBank[b];if(!hasAny)return'';
+    return '<tr><td style="font-weight:600">'+b+'</td>'+typesActifs.map(function(t){var cell=mat[b][t];return '<td style="text-align:right;font-family:monospace;font-size:12px">'+(cell.mnt_actif?fmad(cell.mnt_actif)+'<div style="font-size:10px;color:#7A7369">'+cell.nb+' caution(s)</div>':'-')+'</td>';}).join('')+(hasProvCol?'<td style="text-align:right;font-family:monospace;font-size:12px">'+(provByBank[b]?fmad(provByBank[b]):'-')+'</td>':'')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(tActifB[b])+'</td></tr>';
   }).join('');
-  var sitFoot='<tr style="background:#f0fdf4;border-top:2px solid #1A5C3A"><td style="font-weight:700">TOTAL</td>'+typesActifs.map(function(t){return '<td style="text-align:right;font-family:monospace;font-weight:700">'+fmad(tActifT[t])+'</td>';}).join('')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(gTotActif)+'</td></tr>';
+  var sitFoot='<tr style="background:#f0fdf4;border-top:2px solid #1A5C3A"><td style="font-weight:700">TOTAL</td>'+typesActifs.map(function(t){return '<td style="text-align:right;font-family:monospace;font-weight:700">'+fmad(tActifT[t])+'</td>';}).join('')+(hasProvCol?'<td style="text-align:right;font-family:monospace;font-weight:700">'+fmad(tProv)+'</td>':'')+'<td style="text-align:right;font-family:monospace;font-weight:700;color:#065f46">'+fmad(gTotActif)+'</td></tr>';
   var alerts='';
   var rows=cs.length?cs.map(function(c){
     var payUse=c.type==='retenue_garantie'?S.paiements.filter(function(p){return p.caution_rg_id===c.id;}):[];
@@ -1132,6 +1188,7 @@ function pgCautions(){
     return '<tr><td style="font-family:monospace;font-size:12px;font-weight:600">'+c.num+'</td><td style="font-size:12px"><div style="font-weight:500">'+gm(c.marche_id).ref+'</div><div style="color:#7A7369;font-size:11px">'+gm(c.marche_id).titre.substring(0,28)+'</div></td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:11px">'+(TC[c.type]||c.type)+'</span></td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td style="font-size:12px">'+fdat(c.date_emission)+'</td><td style="font-size:11px">'+(payUse.length?payUse.map(function(p){return '<span class="badge bn">'+p.numero+'</span>';}).join(' '):'-')+'</td><td>'+bdg(c.statut,SMC)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editCaution(\''+c.id+'\')">&#9998;</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="10"><div class="empty">Aucune caution</div></td></tr>';
   return (alerts?'<div style="margin-bottom:12px">'+alerts+'</div>':'')+
+  renderProvisoiresBlock()+
   '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+fmad(gTotActif)+'</div></div><div class="kpi k1"><div class="kl">Mainlevee demandee</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='mainlevee_demandee';}).length+'</div></div><div class="kpi k4"><div class="kl">Expirees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='expiree';}).length+'</div></div><div class="kpi k3"><div class="kl">Liberees</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='liberee';}).length+'</div></div></div>'+
   '<div class="card" style="padding:0;margin-bottom:16px"><div style="padding:14px 18px 10px;border-bottom:1px solid #DDD5C4;font-size:14px;font-weight:600">Situation par banque et par type (cautions actives)</div><div class="tw"><table><thead><tr>'+sitHead+'</tr></thead><tbody>'+sitRows+'</tbody><tfoot>'+sitFoot+'</tfoot></table></div></div>'+
   '<div class="tb"><div class="tb-l"><input class="si" placeholder="Rechercher..." value="'+S.search+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+uniqueArr(S.cautions.map(function(c){return c.banque;})).sort().map(function(b){return '<option'+(S.bf===b?' selected':'')+'>'+b+'</option>';}).join('')+'</select></div><div style="display:flex;align-items:center;gap:10px"><span style="font-size:12px;color:#7A7369">'+cs.length+' caution(s)</span><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div></div>'+
