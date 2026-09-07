@@ -1,0 +1,28 @@
+name: Gate integrite donnees
+
+# Garde-fou : aucun champ de DONNÉE ne doit être stocké tronqué (substring/slice à
+# l'écriture d'un objet persisté). Défaut payé par l'import historique (titre coupé
+# à 80 -> 25/33 marchés amputés). Cette gate empêche qu'un futur chemin d'écriture
+# (nouvel import, formulaire) le réintroduise. Formatage de date exclu. Node pur.
+
+on:
+  push:
+    paths:
+      - 'public/index.html'
+      - 'test/no-truncated-write.js'
+      - '.github/workflows/data-integrity-gate.yml'
+  pull_request:
+    paths:
+      - 'public/index.html'
+      - 'test/no-truncated-write.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate integrite donnees (node, sans dependances)
+        run: node test/no-truncated-write.js
