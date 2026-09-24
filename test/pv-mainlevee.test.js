@@ -106,6 +106,21 @@ check('depot accuse banque -> liberee + date + piece', cLib.statut === 'liberee'
 check('appliquerPiece sur statut invalide -> null (pas de saut d\'etat)', MPM.appliquerPiece(cDem, 'accuse_banque', ref2, '2026-09-25') === null, '');
 check('type hors def/RG -> non recevable', MPM.pieceRecevable({ type: 'soumission', statut: 'mainlevee_demandee' }, 'mainlevee_client') === false, '');
 
+console.log('\n=== 7. Lecture des pieces : resolution depuis le doc, jamais un chemin fourni ===');
+check('non authentifie (pas de principal) -> refuse', MPM.principalAutorise(null) === false && MPM.principalAutorise({}) === false, '');
+check('authentifie (userDetails) -> autorise', MPM.principalAutorise({ userDetails: 'a@neurones.ma' }) === true, '');
+var mPv = { id: 'm1', pv_reception_definitive: { blob: 'm1/pv-reception-definitive.pdf', nom_original: 'PV scan.pdf' }, date_reception_definitive_reelle: '2026-09-24' };
+var cMl = { id: 'c1', marche_id: 'm1', mainlevee_client: { blob: 'm1/caution-c1/mainlevee_client.pdf' }, date_mainlevee_recue: '2026-09-25', accuse_banque: { blob: 'm1/caution-c1/accuse_banque.pdf' }, date_liberation: '2026-09-30' };
+check('resout le blob du PV depuis le marche', MPM.resoudreBlobPiece('pv', mPv, null) === 'm1/pv-reception-definitive.pdf', '');
+check('resout le blob de la mainlevee client depuis la caution', MPM.resoudreBlobPiece('mainlevee_client', null, cMl) === 'm1/caution-c1/mainlevee_client.pdf', '');
+check('resout le blob de l\'accuse banque depuis la caution', MPM.resoudreBlobPiece('accuse_banque', null, cMl) === 'm1/caution-c1/accuse_banque.pdf', '');
+check('type inconnu -> null (aucun service)', MPM.resoudreBlobPiece('n_importe_quoi', mPv, cMl) === null, '');
+check('un chemin blob DEVINE passe comme type -> null (pas de passthrough)', MPM.resoudreBlobPiece('m1/pv-reception-definitive.pdf', mPv, cMl) === null, '');
+check('piece absente du doc -> null (rien a servir)', MPM.resoudreBlobPiece('pv', { id: 'm2' }, null) === null, '');
+check('libelle humain du PV, sans nom de fichier interne', (function () { var l = MPM.libellePiece('pv'); return l.indexOf('.pdf') < 0 && l.indexOf('/') < 0 && l.length > 0; })(), MPM.libellePiece('pv'));
+check('libelles distincts pour les 3 types', MPM.libellePiece('pv') !== MPM.libellePiece('mainlevee_client') && MPM.libellePiece('mainlevee_client') !== MPM.libellePiece('accuse_banque'), '');
+check('conteneur PV vs pieces caution correctement route', MPM.conteneurPiece('pv') === 'mp-pv-reception' && MPM.conteneurPiece('mainlevee_client') === 'mp-preuves' && MPM.conteneurPiece('accuse_banque') === 'mp-preuves', '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

@@ -481,6 +481,64 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route piece : GET /api/piece?type=&marcheId=&cautionId=
+  // Proxy AUTHENTIFIE (Entra) qui sert une piece (PV, mainlevee client, accuse
+  // banque) par son marche/caution et son TYPE. Le nom du blob est resolu
+  // UNIQUEMENT depuis le document stocke (MPMainlevee.resoudreBlobPiece) : aucun
+  // chemin fourni par l'appelant n'est jamais servi. Jamais d'URL Blob exposee.
+  if (fn === "pieceGet") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) {
+        context.res = { status: 401, body: { error: "Authentification requise" } };
+        return;
+      }
+      const type = String((req.query && req.query.type) || "").trim();
+      const marcheId = String((req.query && req.query.marcheId) || "").trim();
+      const cautionId = String((req.query && req.query.cautionId) || "").trim();
+      const src = MPMainlevee.PIECE_LECTURE[type];
+      if (!src) { context.res = { status: 400, body: { error: "type de piece inconnu" } }; return; }
+      if (!marcheId) { context.res = { status: 400, body: { error: "marcheId requis" } }; return; }
+
+      let marche = null, caution = null;
+      if (src.sur === "marche") {
+        try { marche = (await getDb().container("mp_marches").item(marcheId, marcheId).read()).resource || null; } catch (e) { marche = null; }
+      } else {
+        if (!cautionId) { context.res = { status: 400, body: { error: "cautionId requis" } }; return; }
+        try { caution = (await getDb().container("mp_cautions").item(cautionId, marcheId).read()).resource || null; } catch (e) { caution = null; }
+      }
+
+      const blobName = MPMainlevee.resoudreBlobPiece(type, marche, caution);
+      if (!blobName) { context.res = { status: 404, body: { error: "Piece introuvable" } }; return; }
+
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+      const ref = ((src.sur === "marche" ? marche : caution) || {})[src.champ] || {};
+      const svc = BlobServiceClient.fromConnectionString(conn);
+      const bc = svc.getContainerClient(MPMainlevee.conteneurPiece(type)).getBlockBlobClient(blobName);
+      let buf;
+      try { buf = await bc.downloadToBuffer(); } catch (e) { context.res = { status: 404, body: { error: "Fichier absent du stockage" } }; return; }
+
+      const ct = ref.content_type || "application/octet-stream";
+      const nom = String(ref.nom_original || (type + ".bin")).replace(/[\r\n"\\]/g, "_");
+      context.res = {
+        status: 200,
+        isRaw: true,
+        headers: {
+          "Content-Type": ct,
+          "Content-Disposition": 'inline; filename="' + nom + '"',
+          "Cache-Control": "private, no-store"
+        },
+        body: buf
+      };
+      return;
+    } catch (e) {
+      context.log.error("pieceGet error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

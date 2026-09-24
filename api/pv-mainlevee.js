@@ -112,9 +112,44 @@
     return out;
   }
 
+  /* Lecture des pieces : ou vit chaque piece (marche ou caution), son conteneur
+   * Blob, son libelle humain et le champ date associe. La resolution du blob se
+   * fait UNIQUEMENT depuis le document stocke : aucun chemin fourni par l'appelant
+   * n'est jamais servi (defense contre un chemin blob devine). */
+  var PIECE_LECTURE = {
+    pv:               { sur: 'marche',  champ: 'pv_reception_definitive', dateChamp: 'date_reception_definitive_reelle', conteneur: 'mp-pv-reception', label: 'PV de reception definitive' },
+    mainlevee_client: { sur: 'caution', champ: 'mainlevee_client',        dateChamp: 'date_mainlevee_recue',            conteneur: 'mp-preuves',      label: 'Mainlevee recue' },
+    accuse_banque:    { sur: 'caution', champ: 'accuse_banque',           dateChamp: 'date_liberation',                 conteneur: 'mp-preuves',      label: 'Accuse bancaire' }
+  };
+
+  /* Vrai seulement si un principal Entra est present (userDetails). */
+  function principalAutorise(p) { return !!(p && p.userDetails); }
+
+  function _sourcePiece(type) { return PIECE_LECTURE[type] || null; }
+
+  /* Nom du blob a servir, LU depuis le doc (marche ou caution). null si type
+   * inconnu ou piece absente. Ne prend jamais un chemin de l'appelant. */
+  function resoudreBlobPiece(type, marche, caution) {
+    var s = _sourcePiece(type);
+    if (!s) return null;
+    var doc = s.sur === 'marche' ? marche : caution;
+    if (!doc || !doc[s.champ] || !doc[s.champ].blob) return null;
+    return doc[s.champ].blob;
+  }
+
+  /* Conteneur Blob d'un type de piece (null si type inconnu). */
+  function conteneurPiece(type) { var s = _sourcePiece(type); return s ? s.conteneur : null; }
+
+  /* Libelle humain (jamais le nom de fichier interne). L'appelant y ajoute la date formatee. */
+  function libellePiece(type) { var s = _sourcePiece(type); return s ? s.label : ''; }
+
+  /* Champ date associe a une piece (pour composer "<label> du <date>" cote UI). */
+  function dateChampPiece(type) { var s = _sourcePiece(type); return s ? s.dateChamp : null; }
+
   return {
     TYPES_MAINLEVEE: TYPES_MAINLEVEE,
     PIECE_TRANSITIONS: PIECE_TRANSITIONS,
+    PIECE_LECTURE: PIECE_LECTURE,
     cMarcheId: cMarcheId,
     estRecevable: estRecevable,
     cautionsABasculer: cautionsABasculer,
@@ -124,6 +159,11 @@
     joursDepuisDemande: joursDepuisDemande,
     transitionPiece: transitionPiece,
     pieceRecevable: pieceRecevable,
-    appliquerPiece: appliquerPiece
+    appliquerPiece: appliquerPiece,
+    principalAutorise: principalAutorise,
+    resoudreBlobPiece: resoudreBlobPiece,
+    conteneurPiece: conteneurPiece,
+    libellePiece: libellePiece,
+    dateChampPiece: dateChampPiece
   };
 });
