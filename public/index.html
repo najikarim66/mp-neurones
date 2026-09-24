@@ -779,7 +779,7 @@ function marcheFormHTML(m){
   });
   var cautionRows=mc.map(function(c){return '<tr id="cr-'+c.id+'"><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+(TC[c.type]||c.type)+'</span></td><td style="font-family:monospace;font-size:12px">'+c.num+'</td><td style="font-size:12px">'+c.banque+'</td><td style="font-family:monospace;font-size:12px">'+fmad(c.montant)+'</td><td>'+bdg(c.statut,SMC)+'</td><td><button class="act red" onclick="delCautionInline(\''+c.id+'\')">X</button></td></tr>';}).join('');
   var dfin=m?m.date_fin_calculee||'':'';
-  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'" oninput="updateDRD()"></div></div><div class="fr2"><div class="fg"><label>Delai de garantie (mois)</label><input class="fc" id="mdgar_mois" type="number" min="0" max="60" value="'+(m&&m.delai_garantie_mois!=null?m.delai_garantie_mois:12)+'" placeholder="12" oninput="updateDRD()" title="Standard CCAG-T: 12 mois"></div><div class="fg"><label>Reception definitive (calculee)</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'" readonly style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: reception provisoire + delai de garantie"></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-totals">'+renderCautionTotals(m,mc)+'</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('nc', '')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+renderAvenantsSection(m)+banquesDatalistHTML();
+  return '<div class="fr2"><div class="fg"><label>Reference *</label><input class="fc" id="mref" value="'+esc(m?m.ref:'MRC-'+yr+'-XXX')+'"></div><div class="fg"><label>Type *</label><select class="fc" id="mtype">'+['travaux','fournitures','services'].map(function(t){return '<option value="'+t+'"'+(m&&m.type===t?' selected':'')+'>'+t+'</option>';}).join('')+'</select></div></div><div class="fg"><label>Intitule *</label><input class="fc" id="mtitre" value="'+esc(m?m.titre:'')+'"></div><div class="fg"><label>Maitre d\'ouvrage *</label><input class="fc" id="mmo" value="'+esc(m?m.maitre_ouvrage:'')+'"></div><div class="fg"><label>Objet</label><input class="fc" id="mobjet" value="'+esc(m&&m.objet?m.objet:'')+'"></div><div class="fr2"><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="mmnt" type="number" value="'+(m?m.montant:'')+'" oninput="updateCautionSuggestions()"></div><div class="fg"><label>Avancement (%)</label><input class="fc" id="mav" type="number" value="'+(m?m.avancement:0)+'" min="0" max="100"></div></div><div class="fr2"><div class="fg"><label>Retenue garantie (%)</label><input class="fc" id="mgar" type="number" value="'+(m?m.garantie||5:5)+'" min="0" max="10"></div><div class="fg"><label>Statut</label><select class="fc" id="mstat">'+objEnts(SMM).map(function(e){return '<option value="'+e[0]+'"'+(m&&m.statut===e[0]?' selected':!m&&e[0]==='en_cours'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div></div><div class="fr2"><div class="fg"><label>Date soumission (mois)</label><input class="fc" id="mdsoum" type="month" value="'+(m&&m.date_soumission?m.date_soumission:'')+'" title="Mois/annee de soumission - utilise pour lire BAT0 automatiquement"></div><div class="fg"><label>Date attribution</label><input class="fc" id="mdatt" type="date" value="'+(m&&m.date_attribution?m.date_attribution:'')+'"></div></div><div class="fr2"><div class="fg"><label>Date commencement</label><input class="fc" id="mdcom" type="date" value="'+(m&&m.date_commencement?m.date_commencement:'')+'" oninput="updateDFC()"></div><div class="fg"><label>Delai execution (jours) *</label><input class="fc" id="mdelai" type="number" value="'+(m&&m.delai_execution?m.delai_execution:'')+'" placeholder="ex: 365" oninput="updateDFC()"></div></div><div class="fr2"><div class="fg"><label>Date fin calculee</label><input class="fc" id="mdfin_calc" readonly value="'+(dfin?fdat(dfin):'')+'" style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: commencement + delai + OS arrets"></div><div class="fg"><label>Reception provisoire</label><input class="fc" id="mdrp" type="date" value="'+(m&&m.date_reception_provisoire?m.date_reception_provisoire:'')+'" oninput="updateDRD()"></div></div><div class="fr2"><div class="fg"><label>Delai de garantie (mois)</label><input class="fc" id="mdgar_mois" type="number" min="0" max="60" value="'+(m&&m.delai_garantie_mois!=null?m.delai_garantie_mois:12)+'" placeholder="12" oninput="updateDRD()" title="Standard CCAG-T: 12 mois"></div><div class="fg"><label>Reception definitive (calculee)</label><input class="fc" id="mdrd" type="date" value="'+(m&&m.date_reception_definitive?m.date_reception_definitive:'')+'" readonly style="background:#f0fdf4;color:#065f46;font-weight:600" title="Calculee: reception provisoire + delai de garantie"></div></div><div class="sec"><div class="sec-t">Ordres de service - Arrets et Reprises</div><div class="info-box info-blue">Les jours d\'arret sont automatiquement ajoutes au delai de fin.</div><div id="os-list">'+(S._osTemp.length?osHtml:'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Aucun OS.</div>')+'</div><div id="os-info" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;margin-top:6px"><button class="btn btn-sm" style="border-color:#f97316;color:#c2410c;background:#fff7ed" onclick="addOS(\'arret\')">+ OS Arret</button><button class="btn btn-sm" style="border-color:#1A5C3A;color:#065f46;background:#f0fdf4" onclick="addOS(\'reprise\')">+ OS Reprise</button></div></div><div class="sec"><div class="sec-t">Cautions bancaires du marche</div><div id="caution-totals">'+renderCautionTotals(m,mc)+'</div><div id="caution-list">'+(mc.length?'<table class="mini-table" style="margin-bottom:10px"><thead><tr><th>Type</th><th>N Caution</th><th>Banque</th><th>Montant</th><th>Statut</th><th></th></tr></thead><tbody>'+cautionRows+'</tbody></table>':'<div style="font-size:12px;color:#7A7369;margin-bottom:10px">Aucune caution.</div>')+'</div><div id="add-caution-panel" style="display:none;background:#EDE8DE;border-radius:4px;padding:12px;margin-bottom:10px;border:1px solid #DDD5C4"><div style="font-size:12px;font-weight:600;margin-bottom:10px" id="add-caution-title">Nouvelle caution</div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="nc_type" onchange="prefillCautionAmount()">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'">'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('nc', '')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="nc_num" placeholder="ATW-2024-XXXX"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="nc_montant" type="number"></div></div><div class="fg"><label>Emission</label><input class="fc" id="nc_emission" type="date"></div><div id="nc_suggestion" class="info-box info-amber" style="display:none"></div><div style="display:flex;gap:8px;justify-content:flex-end;margin-top:4px"><button class="btn btn-sm" onclick="hideAddCaution()">Annuler</button><button class="btn btn-sm btn-prim" onclick="confirmAddCaution()">Ajouter</button></div></div><div style="display:flex;gap:8px"><button class="btn btn-sm" style="border-color:#1F3A2E;color:#1e40af;background:#eff6ff" onclick="showAddCaution(\'bonne_execution\')">+ Caution definitive</button><button class="btn btn-sm" style="border-color:#7c3aed;color:#5b21b6;background:#ede9fe" onclick="showAddCaution(\'retenue_garantie\')">+ Caution RG</button></div></div>'+pvReceptionSectionHTML(m)+renderAvenantsSection(m)+banquesDatalistHTML();
 }
 
 var _editingMarcheId=null;
@@ -1040,6 +1040,82 @@ function delMarche(id){
   var delC=cautionsToDelete.map(function(c){return deleteItem('cautions',c.id,c.marche_id);});
   var delP=paiementsToDelete.map(function(p){return deleteItem('paiements',p.id,p.marche_id);});
   Promise.all(delC.concat(delP)).then(function(){return deleteItem('marches',id);}).then(function(){sbStats();render();toast('Marche supprime');}).catch(function(e){toast('Erreur suppression: '+e.message);});
+}
+
+// PV DE RECEPTION DEFINITIVE (etape 2 du lot mainlevee)
+/* Section du form marche : depot du PV. Seulement en EDITION (il faut un marche
+   existant cote base). Le depot passe par POST /api/pv-reception : une seule
+   decision serveur (Blob -> marche -> cautions), voir public/pv-mainlevee.js. */
+function pvReceptionSectionHTML(m){
+  if(!m||!m.id)return '';
+  var prononce=m.reception_definitive_prononcee===true;
+  var pv=m.pv_reception_definitive||null;
+  var banner='';
+  if(prononce){
+    var quand=m.date_reception_definitive_reelle?fdat(m.date_reception_definitive_reelle):'-';
+    var pvNom=pv&&pv.nom_original?pv.nom_original:'PV depose';
+    var par=pv&&pv.depose_par?(' par '+esc(pv.depose_par)):'';
+    banner='<div class="info-box" style="background:#f0fdf4;border:1px solid #1A5C3A;color:#065f46">&#10003; Reception definitive prononcee le '+quand+' &middot; piece : '+esc(pvNom)+par+'</div>';
+  }
+  var today=new Date().toISOString().slice(0,10);
+  var dateDef=m.date_reception_definitive_reelle||today;
+  var btnLabel=prononce?'Remplacer le PV':'Deposer le PV';
+  return '<div class="sec"><div class="sec-t">PV de reception definitive</div>'+banner+
+    '<div class="info-box info-amber">Le depot du PV fait passer les cautions definitive et RG de ce marche en « mainlevee demandee » (une seule action). La date calculee ne declenche rien : seul le PV depose fait foi.</div>'+
+    '<div class="fr2"><div class="fg"><label>Date de reception definitive (reelle) *</label><input class="fc" id="pv_date" type="date" value="'+esc(dateDef)+'"></div><div class="fg"><label>Fichier PV (PDF, JPG ou PNG) *</label><input class="fc" id="pv_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
+    '<div id="pv_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
+    '<button class="btn btn-sm btn-prim" id="pv_btn" onclick="deposerPV(\''+esc(m.id)+'\')">'+btnLabel+'</button></div>';
+}
+function deposerPV(marcheId){
+  var m=S.marches.find(function(x){return x.id===marcheId;});if(!m)return;
+  var fileEl=document.getElementById('pv_file');
+  var dateEl=document.getElementById('pv_date');
+  var statusEl=document.getElementById('pv_status');
+  var btn=document.getElementById('pv_btn');
+  var dateReelle=dateEl?dateEl.value:'';
+  if(!dateReelle){toast('Date de reception definitive requise',false);return;}
+  if(!fileEl||!fileEl.files||!fileEl.files.length){toast('Selectionne le fichier PV',false);return;}
+  var file=fileEl.files[0];
+  var okTypes={'application/pdf':1,'image/jpeg':1,'image/png':1};
+  if(!okTypes[file.type]){toast('Type non autorise (PDF, JPG ou PNG)',false);return;}
+  if(file.size>20*1024*1024){toast('Fichier trop volumineux (max 20 Mo)',false);return;}
+  if(!confirm('Deposer le PV et passer les cautions definitive/RG de '+(m.ref||'')+' en mainlevee demandee ?'))return;
+  if(btn)btn.disabled=true;
+  if(statusEl)statusEl.textContent='Depot en cours...';
+  var reader=new FileReader();
+  reader.onload=function(){
+    var res=String(reader.result||'');
+    var b64=res.indexOf(',')>=0?res.split(',')[1]:res;
+    apiFetch('/api/pv-reception',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      marcheId:String(marcheId),
+      date_reception_definitive_reelle:dateReelle,
+      nom_original:file.name,
+      content_type:file.type,
+      data_base64:b64
+    })}).then(function(r){
+      r=r||{};
+      /* Les cautions ont change cote serveur : on recharge la source de verite. */
+      return apiList('cautions').then(function(cs){
+        S.cautions=cs;
+        var mm=S.marches.find(function(x){return x.id===marcheId;});
+        if(mm){
+          mm.reception_definitive_prononcee=true;
+          mm.date_reception_definitive_reelle=dateReelle;
+          mm.pv_reception_definitive={nom_original:file.name,content_type:file.type,depose_le:new Date().toISOString()};
+        }
+        sbStats();render();closeMod();
+        var n=(r.cautions_basculees!=null)?r.cautions_basculees:0;
+        var mnt=r.montant_bascule?(' ('+fmad(r.montant_bascule)+')'):'';
+        toast('PV depose — '+n+' caution(s) en mainlevee demandee'+mnt);
+      });
+    }).catch(function(e){
+      if(btn)btn.disabled=false;
+      if(statusEl)statusEl.textContent='';
+      toast('Echec depot PV : '+e.message,false);
+    });
+  };
+  reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
+  reader.readAsDataURL(file);
 }
 
 // CAUTIONS INLINE dans marche
