@@ -125,6 +125,15 @@
   /* Vrai seulement si un principal Entra est present (userDetails). */
   function principalAutorise(p) { return !!(p && p.userDetails); }
 
+  /* Garde de l'endpoint machine /api/relance-hebdo (voie A, secret partage).
+   * PAS de fail-open (lecon de X-MP-Autolink-Secret cote ERP) : si le secret
+   * ATTENDU est vide/absent, on REFUSE tout — jamais l'inverse. Il faut que le
+   * secret attendu soit non vide ET que l'en-tete fourni corresponde exactement. */
+  function enteteRelanceValide(fourni, attendu) {
+    if (!attendu) return false;
+    return fourni === attendu;
+  }
+
   function _sourcePiece(type) { return PIECE_LECTURE[type] || null; }
 
   /* Nom du blob a servir, LU depuis le doc (marche ou caution). null si type
@@ -146,6 +155,34 @@
   /* Champ date associe a une piece (pour composer "<label> du <date>" cote UI). */
   function dateChampPiece(type) { var s = _sourcePiece(type); return s ? s.dateChamp : null; }
 
+  /* Mail du lundi : file de relance = cautions def/RG en mainlevee_demandee (la
+   * relance s'arrete a l'etat b : une caution mainlevee_recue n'y est plus).
+   * lignesRelance renvoie des LIBELLES HUMAINS uniquement (ref marche, client,
+   * type, N°, montant, anciennete en jours) — jamais d'id. gm(marcheId)->{ref,
+   * maitre_ouvrage}. nowMs injecte (deterministe). */
+  function lignesRelance(cautions, gm, nowMs) {
+    gm = gm || function () { return {}; };
+    return mainleveesEnAttente(cautions).map(function (c) {
+      var m = gm(cMarcheId(c)) || {};
+      return {
+        ref: m.ref || '', client: m.maitre_ouvrage || '', type: c.type,
+        num: c.num || '', montant: +c.montant || 0, jours: joursDepuisDemande(c, nowMs)
+      };
+    }).sort(function (a, b) { return b.jours - a.jours; });
+  }
+
+  /* Decide s'il faut envoyer, et le contenu. File VIDE -> envoyer:false (pas de
+   * mail : un rappel hebdo vide finit ignore). Pas d'id dans le sujet. */
+  function mailHebdo(lignes) {
+    if (!lignes || !lignes.length) return { envoyer: false, nb: 0, total: 0 };
+    var total = lignes.reduce(function (s, l) { return s + (+l.montant || 0); }, 0);
+    return {
+      envoyer: true, nb: lignes.length, total: total,
+      sujet: 'Mainlevees en attente du client — ' + lignes.length + ' caution(s), ' + total + ' MAD',
+      lignes: lignes
+    };
+  }
+
   return {
     TYPES_MAINLEVEE: TYPES_MAINLEVEE,
     PIECE_TRANSITIONS: PIECE_TRANSITIONS,
@@ -164,6 +201,9 @@
     resoudreBlobPiece: resoudreBlobPiece,
     conteneurPiece: conteneurPiece,
     libellePiece: libellePiece,
-    dateChampPiece: dateChampPiece
+    dateChampPiece: dateChampPiece,
+    lignesRelance: lignesRelance,
+    mailHebdo: mailHebdo,
+    enteteRelanceValide: enteteRelanceValide
   };
 });

@@ -539,6 +539,55 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route relance-hebdo : GET /api/relance-hebdo
+  // Voie A du mail du lundi : la DECISION vit ici (logique unique, gatee), le job
+  // timer (dans rh-neurones-api-fc, depot btp-pointage) ne fait qu'appeler puis
+  // envoyer. Garde par en-tete a secret partage MP_RELANCE_HEBDO_SECRET, SANS
+  // fail-open (enteteRelanceValide refuse si le secret attendu est vide). Route
+  // anonyme au niveau SWA (voir staticwebapp.config) : l'en-tete EST la garde.
+  if (fn === "relanceHebdo") {
+    try {
+      var provided = (req.headers && (req.headers["x-mp-relance-secret"] || req.headers["X-MP-Relance-Secret"])) || "";
+      if (!MPMainlevee.enteteRelanceValide(provided, process.env.MP_RELANCE_HEBDO_SECRET)) {
+        context.res = { status: 401, body: { error: "En-tete de relance invalide" } };
+        return;
+      }
+      const [cautions, marches] = await Promise.all([
+        getDb().container("mp_cautions").items.readAll().fetchAll().then(function (r) { return r.resources; }),
+        getDb().container("mp_marches").items.readAll().fetchAll().then(function (r) { return r.resources; })
+      ]);
+      const M = {}; marches.forEach(function (m) { M[String(m.id)] = m; });
+      const gm = function (id) { return M[String(id)] || {}; };
+      const lignes = MPMainlevee.lignesRelance(cautions, gm, Date.now());
+      const mail = MPMainlevee.mailHebdo(lignes);
+
+      // Destinataires : doc de config Cosmos mp_config/mp_mail_to (editable sans
+      // redeploiement) ; fallback en dur si le doc/container n'existe pas encore.
+      var destinataires = ["naji@neurones.ma", "imane@neurones.ma", "drissia@neurones.ma"];
+      try {
+        const cfg = (await getDb().container("mp_config").item("mp_mail_to", "mp_mail_to").read()).resource;
+        if (cfg && Array.isArray(cfg.destinataires) && cfg.destinataires.length) destinataires = cfg.destinataires;
+      } catch (e) { /* doc/container absent -> fallback */ }
+
+      context.res = {
+        status: 200,
+        body: {
+          envoyer: mail.envoyer,
+          nb: mail.nb || 0,
+          total: mail.total || 0,
+          sujet: mail.sujet || null,
+          lignes: mail.lignes || [],
+          destinataires: destinataires
+        }
+      };
+      return;
+    } catch (e) {
+      context.log.error("relanceHebdo error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

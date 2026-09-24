@@ -121,6 +121,32 @@ check('libelle humain du PV, sans nom de fichier interne', (function () { var l 
 check('libelles distincts pour les 3 types', MPM.libellePiece('pv') !== MPM.libellePiece('mainlevee_client') && MPM.libellePiece('mainlevee_client') !== MPM.libellePiece('accuse_banque'), '');
 check('conteneur PV vs pieces caution correctement route', MPM.conteneurPiece('pv') === 'mp-pv-reception' && MPM.conteneurPiece('mainlevee_client') === 'mp-preuves' && MPM.conteneurPiece('accuse_banque') === 'mp-preuves', '');
 
+console.log('\n=== 8. Mail du lundi : file de relance + PAS de mail si vide ===');
+var gmStub = function (id) { return id === 'm1' ? { ref: 'MRC-1', titre: 'T1', maitre_ouvrage: 'Client A' } : { ref: 'MRC-2', titre: 'T2', maitre_ouvrage: 'Client B' }; };
+var cautMail = [
+  { id: 'a', num: 'D1', type: 'bonne_execution', montant: 100000, statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-01', marche_id: 'm1' },
+  { id: 'b', num: 'R1', type: 'retenue_garantie', montant: 50000, statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-20', marche_id: 'm2' },
+  { id: 'c', num: 'X', type: 'bonne_execution', montant: 9, statut: 'mainlevee_recue', date_mainlevee_recue: '2026-09-10', marche_id: 'm1' },
+  { id: 'd', num: 'Y', type: 'bonne_execution', montant: 9, statut: 'active', marche_id: 'm1' }
+];
+var lignes = MPM.lignesRelance(cautMail, gmStub, NOW);
+check('relance = seulement mainlevee_demandee (2 lignes ; ni recue ni active)', lignes.length === 2, 'n=' + lignes.length);
+check('triees par anciennete decroissante (la plus vieille en tete)', lignes[0].num === 'D1', JSON.stringify(lignes.map(function (l) { return l.num; })));
+check('ligne = libelles humains (ref + client), AUCUN id', lignes[0].ref === 'MRC-1' && lignes[0].client === 'Client A' && lignes[0].id === undefined && lignes[0].marche_id === undefined, JSON.stringify(lignes[0]));
+check('la ligne porte l\'anciennete en jours', lignes[0].jours === MPM.joursDepuisDemande(cautMail[0], NOW), 'j=' + lignes[0].jours);
+var mailVide = MPM.mailHebdo([]);
+check('file VIDE -> PAS de mail (envoyer=false)', mailVide.envoyer === false, JSON.stringify(mailVide));
+var mailPlein = MPM.mailHebdo(lignes);
+check('file non vide -> mail (envoyer=true) + nb + total', mailPlein.envoyer === true && mailPlein.nb === 2 && mailPlein.total === 150000, JSON.stringify({ e: mailPlein.envoyer, nb: mailPlein.nb, t: mailPlein.total }));
+check('sujet mentionne le nombre et n\'expose aucun id', mailPlein.sujet.indexOf('2') >= 0 && mailPlein.sujet.indexOf('m1') < 0, mailPlein.sujet);
+
+console.log('\n=== 9. Endpoint relance-hebdo : REFUS d\'abord (pas de fail-open, lecon ERP) ===');
+check('secret attendu VIDE -> refuse meme si fourni vide (PAS de fail-open)', MPM.enteteRelanceValide('', '') === false && MPM.enteteRelanceValide(undefined, undefined) === false, '');
+check('secret attendu defini, en-tete ABSENT -> refuse', MPM.enteteRelanceValide(undefined, 'S3cret-attendu') === false, '');
+check('secret attendu defini, en-tete FAUX -> refuse', MPM.enteteRelanceValide('mauvais', 'S3cret-attendu') === false, '');
+check('secret attendu defini, en-tete VIDE -> refuse', MPM.enteteRelanceValide('', 'S3cret-attendu') === false, '');
+check('en-tete CORRECT -> accepte', MPM.enteteRelanceValide('S3cret-attendu', 'S3cret-attendu') === true, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
