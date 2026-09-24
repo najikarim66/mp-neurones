@@ -131,6 +131,22 @@
     return out;
   }
 
+  /* Liberation DIRECTE (active -> liberee sans passer par l'accuse bancaire) : chemin
+   * OUVERT pour les cas legitimes anciens (accuse papier, caution soldee hors systeme)
+   * mais TRACE — motif libre obligatoire + utilisateur. Sinon une caution sort des
+   * montants immobilises sans preuve ni auteur (mesure : 3 cautions, 135 161 MAD). */
+  function appliquerLiberationDirecte(caution, motif, user, dateISO) {
+    if (!caution || caution.statut !== 'active') return null;
+    if (!motifMainleveeValide(motif)) return null;
+    var out = {};
+    Object.keys(caution).forEach(function (k) { out[k] = caution[k]; });
+    out.statut = 'liberee';
+    out.date_liberation = dateISO;
+    out.liberation_par = user || null;
+    out.liberation_motif = motif.trim();
+    return out;
+  }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -254,6 +270,7 @@
     dateReceptionValide: dateReceptionValide,
     motifMainleveeValide: motifMainleveeValide,
     appliquerMainleveeManuelle: appliquerMainleveeManuelle,
+    appliquerLiberationDirecte: appliquerLiberationDirecte,
     resoudreBlobPiece: resoudreBlobPiece,
     conteneurPiece: conteneurPiece,
     libellePiece: libellePiece,

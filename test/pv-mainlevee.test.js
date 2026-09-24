@@ -202,6 +202,14 @@ var r1 = lj.filter(function (x) { return x.num === 'R1'; })[0];
 check('caution sur marche avec PV -> justif=PV', d1.justif === 'PV', JSON.stringify(d1));
 check('caution manuelle (marche sans PV) -> justif=manuel + motif transmis', r1.justif === 'manuel' && r1.motif === 'reception prononcee avant le systeme', JSON.stringify(r1));
 
+console.log('\n=== 15. Liberation DIRECTE (active -> liberee sans accuse) : motif OBLIGATOIRE + utilisateur ===');
+var cLib = { id: 'l1', num: 'L', type: 'bonne_execution', montant: 5, statut: 'active' };
+var majL = MPM.appliquerLiberationDirecte(cLib, 'accuse papier, marche ancien', 'naji@neurones.ma', '2026-09-24');
+check('active + motif -> liberee, liberation_par + liberation_motif + date_liberation', majL.statut === 'liberee' && majL.liberation_motif === 'accuse papier, marche ancien' && majL.liberation_par === 'naji@neurones.ma' && majL.date_liberation === '2026-09-24', JSON.stringify(majL));
+check('ne mute pas l\'entree', cLib.statut === 'active', cLib.statut);
+check('sans motif -> refuse (null), aucune liberation', MPM.appliquerLiberationDirecte(cLib, '  ', 'x', '2026-09-24') === null, '');
+check('caution non active -> refuse (null)', MPM.appliquerLiberationDirecte({ statut: 'liberee' }, 'motif', 'x', '2026-09-24') === null, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
