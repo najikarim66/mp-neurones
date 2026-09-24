@@ -215,7 +215,11 @@
       var m = gm(cMarcheId(c)) || {};
       return {
         ref: m.ref || '', client: m.maitre_ouvrage || '', type: c.type,
-        num: c.num || '', montant: +c.montant || 0, jours: joursDepuisDemande(c, nowMs)
+        num: c.num || '', montant: +c.montant || 0, jours: joursDepuisDemande(c, nowMs),
+        // Adossee a un PV (reception prononcee dans le systeme) ou mainlevee manuelle
+        // (sans PV numerique) : le mail doit distinguer laquelle est justifiee par une piece.
+        justif: (m.reception_definitive_prononcee === true) ? 'PV' : 'manuel',
+        motif: c.mainlevee_motif || null
       };
     }).sort(function (a, b) { return b.jours - a.jours; });
   }

@@ -190,6 +190,18 @@ check('ne mute pas l\'entree', cAct.statut === 'active', cAct.statut);
 check('sans motif -> refuse (null), aucune bascule', MPM.appliquerMainleveeManuelle(cAct, '   ', 'x', '2026-09-24') === null, '');
 check('caution non active -> refuse (null, pas de saut d\'etat)', MPM.appliquerMainleveeManuelle({ statut: 'mainlevee_demandee' }, 'motif', 'x', '2026-09-24') === null, '');
 
+console.log('\n=== 14. Mail : chaque ligne dit si la mainlevee est adossee a un PV ou manuelle ===');
+var gmJ = function (id) { return id === 'm1' ? { ref: 'MRC-1', maitre_ouvrage: 'A', reception_definitive_prononcee: true } : { ref: 'MRC-2', maitre_ouvrage: 'B' }; };
+var cautJ = [
+  { id: 'a', num: 'D1', type: 'bonne_execution', montant: 100000, statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-01', marche_id: 'm1' },
+  { id: 'b', num: 'R1', type: 'retenue_garantie', montant: 50000, statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-20', marche_id: 'm2', mainlevee_motif: 'reception prononcee avant le systeme' }
+];
+var lj = MPM.lignesRelance(cautJ, gmJ, NOW);
+var d1 = lj.filter(function (x) { return x.num === 'D1'; })[0];
+var r1 = lj.filter(function (x) { return x.num === 'R1'; })[0];
+check('caution sur marche avec PV -> justif=PV', d1.justif === 'PV', JSON.stringify(d1));
+check('caution manuelle (marche sans PV) -> justif=manuel + motif transmis', r1.justif === 'manuel' && r1.motif === 'reception prononcee avant le systeme', JSON.stringify(r1));
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
