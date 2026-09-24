@@ -95,6 +95,9 @@
   // possede (champ cdemmain), le preserver ecraserait une edition legitime. On ne
   // preserve que les champs de piece que le formulaire ne connait pas.
   var CHAMPS_PIECES_CAUTION = ['mainlevee_client', 'accuse_banque', 'date_mainlevee_recue', 'date_liberation'];
+  // Dates de transition de la provisoire (posées par provMainlevee/provRestituer/
+  // attribuerAO), que la reconstruction de caution_prov dans editAO efface sinon.
+  var CHAMPS_PROV_TRANSITION = ['date_demande_mainlevee', 'date_restitution'];
 
   /* Recopie sur `cible` (objet du formulaire) les `champs` présents sur `source`
    * (doc serveur ré-lu juste avant l'upsert). N'invente jamais un champ absent du
@@ -227,6 +230,7 @@
     enteteRelanceValide: enteteRelanceValide,
     CHAMPS_PV_MARCHE: CHAMPS_PV_MARCHE,
     CHAMPS_PIECES_CAUTION: CHAMPS_PIECES_CAUTION,
+    CHAMPS_PROV_TRANSITION: CHAMPS_PROV_TRANSITION,
     preserverChampsServeur: preserverChampsServeur
   };
 });

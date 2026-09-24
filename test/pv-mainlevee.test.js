@@ -159,6 +159,22 @@ var fusion2 = MPM.preserverChampsServeur({ id: 'm2', titre: 't' }, { id: 'm2' },
 check('serveur sans champ PV -> rien invente (pas de cle fantome)', fusion2.reception_definitive_prononcee === undefined && !('pv_reception_definitive' in fusion2), JSON.stringify(fusion2));
 check('champs pieces caution exportes (mainlevee_client, accuse_banque)', MPM.CHAMPS_PIECES_CAUTION.indexOf('mainlevee_client') >= 0 && MPM.CHAMPS_PIECES_CAUTION.indexOf('accuse_banque') >= 0, JSON.stringify(MPM.CHAMPS_PIECES_CAUTION));
 
+console.log('\n=== 11. AO/provisoire : une BASCULE SUIVIE d\'un save de formulaire ne perd pas la date ===');
+var CT = MPM.CHAMPS_PROV_TRANSITION;
+check('liste des champs de transition provisoire exportee', Array.isArray(CT) && CT.indexOf('date_demande_mainlevee') >= 0 && CT.indexOf('date_restitution') >= 0, JSON.stringify(CT));
+// (b) BASCULE : provMainlevee a posé date_demande_mainlevee sur la provisoire
+var provApresBascule = { banque: 'FINEA', num: 'P1', montant: 9, date_emission: '2020-01-01', statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-20' };
+// (save) le formulaire editAO reconstruit cpNew SANS la date (5 champs) -> l'ancien bug
+var cpFormulaire = { banque: 'FINEA', num: 'P1', montant: 9, date_emission: '2020-01-01', statut: 'mainlevee_demandee' };
+MPM.preserverChampsServeur(cpFormulaire, provApresBascule, CT);
+check('mainlevee_demandee : date_demande_mainlevee SURVIT au save de formulaire', cpFormulaire.date_demande_mainlevee === '2026-09-20', JSON.stringify(cpFormulaire));
+var restForm = { statut: 'restituee' };
+MPM.preserverChampsServeur(restForm, { statut: 'restituee', date_restitution: '2026-09-25' }, CT);
+check('restituee : date_restitution SURVIT au save de formulaire', restForm.date_restitution === '2026-09-25', JSON.stringify(restForm));
+var actForm = { statut: 'active' };
+MPM.preserverChampsServeur(actForm, { statut: 'active' }, CT);
+check('active (pas de bascule) : aucune date inventee', actForm.date_demande_mainlevee === undefined && actForm.date_restitution === undefined, JSON.stringify(actForm));
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

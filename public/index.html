@@ -692,6 +692,10 @@ function editAO(id){
   openMod('Modifier AO - '+a.ref,aoFormHTML(a),function(){
     var cpNum=v('cp_num');
     var cpNew=cpNum?{banque:getBanqueValue('cp'),num:cpNum,montant:vn('cp_montant'),date_emission:v('cp_emission')||null,statut:v('cp_statut')||'active'}:a.caution_prov;
+    /* La reconstruction de cpNew perd les dates de transition (date_demande_mainlevee/
+       date_restitution posées par provMainlevee/provRestituer) : on les reporte depuis
+       la provisoire existante, sinon un save de formulaire efface une bascule (leçon PV). */
+    if(cpNum && a.caution_prov) MPMainlevee.preserverChampsServeur(cpNew, a.caution_prov, MPMainlevee.CHAMPS_PROV_TRANSITION);
     if(cpNew && cpNew.banque) ensureBanqueExists(cpNew.banque);
     var heureLimE=v('adlimh')||null;
     a.ref=v('aref');a.objet=v('aobjet');a.maitre_ouvrage=v('amo');a.type=v('atype');a.budget_estime=vn('abud');a.date_lancement=v('adl')||null;a.date_limite=v('adlim')||null;a.heure_limite=heureLimE;a.heure_estimee=!heureLimE;a.statut=v('astat');a.caution_prov=cpNew;a.notes=v('anotes');
