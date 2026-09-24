@@ -1071,12 +1071,11 @@ function pvReceptionSectionHTML(m){
     var par=pv&&pv.depose_par?(' par '+esc(pv.depose_par)):'';
     banner='<div class="info-box" style="background:#f0fdf4;border:1px solid #1A5C3A;color:#065f46">&#10003; Reception definitive prononcee le '+quand+' &middot; '+lienPiece('pv',m.id,null,m.date_reception_definitive_reelle)+par+'</div>';
   }
-  var today=new Date().toISOString().slice(0,10);
-  var dateDef=m.date_reception_definitive_reelle||today;
+  var dateDef=m.date_reception_definitive_reelle||''; /* JAMAIS aujourd'hui par defaut : la date du PV est saisie, pas devinee */
   var btnLabel=prononce?'Remplacer le PV':'Deposer le PV';
   return '<div class="sec"><div class="sec-t">PV de reception definitive</div>'+banner+
     '<div class="info-box info-amber">Le depot du PV fait passer les cautions definitive et RG de ce marche en « mainlevee demandee » (une seule action). La date calculee ne declenche rien : seul le PV depose fait foi.</div>'+
-    '<div class="fr2"><div class="fg"><label>Date de reception definitive (reelle) *</label><input class="fc" id="pv_date" type="date" value="'+esc(dateDef)+'"></div><div class="fg"><label>Fichier PV (PDF, JPG ou PNG) *</label><input class="fc" id="pv_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
+    '<div class="fr2"><div class="fg"><label>Date du PV (telle qu\'elle figure sur le document) *</label><input class="fc" id="pv_date" type="date" value="'+esc(dateDef)+'" required></div><div class="fg"><label>Fichier PV (PDF, JPG ou PNG) *</label><input class="fc" id="pv_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
     '<div id="pv_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
     '<button class="btn btn-sm btn-prim" id="pv_btn" onclick="deposerPV(\''+esc(m.id)+'\')">'+btnLabel+'</button></div>';
 }
@@ -1135,15 +1134,14 @@ function deposerPV(marcheId){
 function openPieceDepot(cautionId, marcheId, pieceType){
   var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
   var lbls={
-    mainlevee_client:{titre:'Depot mainlevee du maitre d\'ouvrage',dateLbl:'Date de reception de la mainlevee',info:'La caution passe en « mainlevee recue » (remise a la banque, en attente de l\'accuse). La relance du lundi s\'arrete.'},
-    accuse_banque:{titre:'Depot accuse de la banque',dateLbl:'Date de l\'accuse bancaire',info:'La caution passe en « liberee » (argent revenu de la banque).'}
+    mainlevee_client:{titre:'Depot mainlevee du maitre d\'ouvrage',dateLbl:'Date de la mainlevee (telle qu\'elle figure sur le document)',info:'La caution passe en « mainlevee recue » (remise a la banque, en attente de l\'accuse). La relance du lundi s\'arrete.'},
+    accuse_banque:{titre:'Depot accuse de la banque',dateLbl:'Date de l\'accuse bancaire (telle qu\'elle figure sur le document)',info:'La caution passe en « liberee » (argent revenu de la banque).'}
   };
-  var L=lbls[pieceType]||{titre:'Depot piece',dateLbl:'Date',info:''};
-  var today=new Date().toISOString().slice(0,10);
+  var L=lbls[pieceType]||{titre:'Depot piece',dateLbl:'Date (telle qu\'elle figure sur le document)',info:''};
   var refTxt=c?((c.num||'—')+' — '+(TC[c.type]||c.type)+' — '+fmad(c.montant)):'';
   var html='<div class="info-box info-amber">'+L.info+'</div>'+
     (refTxt?'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Caution : '+esc(refTxt)+'</div>':'')+
-    '<div class="fr2"><div class="fg"><label>'+L.dateLbl+' *</label><input class="fc" id="pc_date" type="date" value="'+today+'"></div><div class="fg"><label>Fichier (PDF, JPG ou PNG) *</label><input class="fc" id="pc_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
+    '<div class="fr2"><div class="fg"><label>'+L.dateLbl+' *</label><input class="fc" id="pc_date" type="date" value="" required></div><div class="fg"><label>Fichier (PDF, JPG ou PNG) *</label><input class="fc" id="pc_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
     '<div id="pc_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
     '<button class="btn btn-sm btn-prim" id="pc_btn" onclick="deposerPiece(\''+esc(cautionId)+'\',\''+esc(marcheId)+'\',\''+pieceType+'\')">Deposer</button>';
   openMod(L.titre,html,null);

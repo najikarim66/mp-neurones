@@ -175,6 +175,11 @@ var actForm = { statut: 'active' };
 MPM.preserverChampsServeur(actForm, { statut: 'active' }, CT);
 check('active (pas de bascule) : aucune date inventee', actForm.date_demande_mainlevee === undefined && actForm.date_restitution === undefined, JSON.stringify(actForm));
 
+console.log('\n=== 12. Date de reception : refusee si absente, JAMAIS completee par aujourd\'hui ===');
+check('date vide/absente -> INVALIDE (depot refuse, aucun defaut)', MPM.dateReceptionValide('') === false && MPM.dateReceptionValide(null) === false && MPM.dateReceptionValide(undefined) === false, '');
+check('date mal formee -> INVALIDE', MPM.dateReceptionValide('24/09/2026') === false && MPM.dateReceptionValide('2026-9-1') === false, '');
+check('date AAAA-MM-JJ -> valide', MPM.dateReceptionValide('2026-09-08') === true, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

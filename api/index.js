@@ -303,8 +303,8 @@ module.exports = async function (context, req) {
         context.res = { status: 400, body: { error: "Manquant : marcheId, date_reception_definitive_reelle, data_base64" } };
         return;
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReelle)) {
-        context.res = { status: 400, body: { error: "date_reception_definitive_reelle invalide (attendu AAAA-MM-JJ)" } };
+      if (!MPMainlevee.dateReceptionValide(dateReelle)) {
+        context.res = { status: 400, body: { error: "Date du PV requise (AAAA-MM-JJ) — jamais completee par defaut" } };
         return;
       }
       const ext = PV_TYPES[contentType];
@@ -427,8 +427,8 @@ module.exports = async function (context, req) {
         context.res = { status: 400, body: { error: "piece_type inconnu (mainlevee_client ou accuse_banque)" } };
         return;
       }
-      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReelle)) {
-        context.res = { status: 400, body: { error: "date invalide (attendu AAAA-MM-JJ)" } };
+      if (!MPMainlevee.dateReceptionValide(dateReelle)) {
+        context.res = { status: 400, body: { error: "Date de la piece requise (AAAA-MM-JJ) — jamais completee par defaut" } };
         return;
       }
       const ext = PV_TYPES[contentType];

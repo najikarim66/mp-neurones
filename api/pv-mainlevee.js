@@ -148,6 +148,11 @@
   /* Vrai seulement si un principal Entra est present (userDetails). */
   function principalAutorise(p) { return !!(p && p.userDetails); }
 
+  /* Date de piece (PV, mainlevee, accuse) : AAAA-MM-JJ obligatoire. Refuse le vide
+   * -> un depot sans date saisie est rejete, JAMAIS complete par la date du jour
+   * (doctrine : quand le systeme ne sait pas, il ne propose pas une valeur plausible). */
+  function dateReceptionValide(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v == null ? '' : v)); }
+
   /* Garde de l'endpoint machine /api/relance-hebdo (voie A, secret partage).
    * PAS de fail-open (lecon de X-MP-Autolink-Secret cote ERP) : si le secret
    * ATTENDU est vide/absent, on REFUSE tout — jamais l'inverse. Il faut que le
@@ -221,6 +226,7 @@
     pieceRecevable: pieceRecevable,
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
+    dateReceptionValide: dateReceptionValide,
     resoudreBlobPiece: resoudreBlobPiece,
     conteneurPiece: conteneurPiece,
     libellePiece: libellePiece,
