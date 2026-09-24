@@ -351,6 +351,10 @@ function apiList(ckey){
     return items.map(function(it){return fromCosmos(ckey, it);});
   });
 }
+function apiGetOne(ckey, id, pkValue){
+  var pk=pkValue!=null?String(pkValue):String(id);
+  return apiFetch(API_BASE+'/'+CONTAINERS[ckey]+'/'+encodeURIComponent(id)+'?pk='+encodeURIComponent(pk)).then(function(it){return it?fromCosmos(ckey,it):null;});
+}
 function apiUpsert(ckey, item){
   var cosmos=toCosmos(ckey, item);
   return apiFetch(API_BASE+'/'+CONTAINERS[ckey], {
@@ -1030,7 +1034,12 @@ function editMarche(id){
     var osData=collectOS();
     var dfin=calcDateFin(v('mdcom'),parseInt(v('mdelai')),osData,getAvenantsDelaiSup(id));
     m.ref=v('mref');m.titre=v('mtitre');m.maitre_ouvrage=v('mmo');m.objet=v('mobjet');m.montant=vn('mmnt')||m.montant;m.type=v('mtype');m.statut=v('mstat');m.date_soumission=v('mdsoum')||null;m.date_attribution=v('mdatt')||null;m.date_commencement=v('mdcom')||null;m.delai_execution=parseInt(v('mdelai'))||null;m.date_fin_calculee=dfin;m.date_reception_provisoire=v('mdrp')||null;m.date_reception_definitive=v('mdrd')||null;m.delai_garantie_mois=v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null;m.avancement=Math.min(100,Math.max(0,parseInt(v('mav'))||0));m.garantie=vn('mgar')||5;m.ordres_service=osData;
-    saveItem('marches',m).then(function(){sbStats();render();toast('Marche mis a jour');});
+    /* Re-lecture serveur + preservation des champs PV (posés par /api/pv-reception) :
+       un save de formulaire ne doit JAMAIS effacer un PV déposé (incident 24/09). */
+    apiGetOne('marches', m.id, m.id).then(function(srv){
+      if(srv) MPMainlevee.preserverChampsServeur(m, srv, MPMainlevee.CHAMPS_PV_MARCHE);
+      return saveItem('marches',m);
+    }).then(function(){sbStats();render();toast('Marche mis a jour');}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
   });
 }
 function delMarche(id){
@@ -1095,15 +1104,12 @@ function deposerPV(marcheId){
       data_base64:b64
     })}).then(function(r){
       r=r||{};
-      /* Les cautions ont change cote serveur : on recharge la source de verite. */
-      return apiList('cautions').then(function(cs){
-        S.cautions=cs;
-        var mm=S.marches.find(function(x){return x.id===marcheId;});
-        if(mm){
-          mm.reception_definitive_prononcee=true;
-          mm.date_reception_definitive_reelle=dateReelle;
-          mm.pv_reception_definitive={nom_original:file.name,content_type:file.type,depose_le:new Date().toISOString()};
-        }
+      /* On recharge la source de verite serveur : cautions ET le marche (drapeau +
+         pv_reception_definitive complet avec le blob) — pas de patch local partiel. */
+      return Promise.all([apiList('cautions'), apiGetOne('marches', marcheId, marcheId)]).then(function(res){
+        S.cautions=res[0];
+        var srv=res[1];
+        if(srv){ var mm=S.marches.find(function(x){return x.id===marcheId;}); if(mm){ Object.keys(srv).forEach(function(k){mm[k]=srv[k];}); } }
         sbStats();render();closeMod();
         var n=(r.cautions_basculees!=null)?r.cautions_basculees:0;
         var mnt=r.montant_bascule?(' ('+fmad(r.montant_bascule)+')'):'';
@@ -1418,7 +1424,12 @@ function editCaution(id){
     c.date_demande_mainlevee=v('cdemmain')||null;
     c.date_liberation_effective=v('cliber')||null;
     c.notes_mainlevee=v('cnotesmain')||'';
-    saveItem('cautions',c).then(function(){sbStats();render();toast('Caution mise a jour');});
+    /* Re-lecture + preservation des pieces de mainlevee (mainlevee_client / accuse_banque)
+       posées par /api/caution-piece : un save de formulaire caution ne les efface pas. */
+    apiGetOne('cautions', c.id, c.marche_id).then(function(srv){
+      if(srv) MPMainlevee.preserverChampsServeur(c, srv, MPMainlevee.CHAMPS_PIECES_CAUTION);
+      return saveItem('cautions',c);
+    }).then(function(){sbStats();render();toast('Caution mise a jour');}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
     if(c.statut==='liberee'&&oldStatut!=='liberee')checkAutoTermine(c.marche_id);
   });
 }

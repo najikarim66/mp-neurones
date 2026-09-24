@@ -147,6 +147,18 @@ check('secret attendu defini, en-tete FAUX -> refuse', MPM.enteteRelanceValide('
 check('secret attendu defini, en-tete VIDE -> refuse', MPM.enteteRelanceValide('', 'S3cret-attendu') === false, '');
 check('en-tete CORRECT -> accepte', MPM.enteteRelanceValide('S3cret-attendu', 'S3cret-attendu') === true, '');
 
+console.log('\n=== 10. Un enregistrement de formulaire ne doit PAS effacer les champs serveur ===');
+var CH = MPM.CHAMPS_PV_MARCHE;
+check('liste des champs PV marche exportee', Array.isArray(CH) && CH.indexOf('reception_definitive_prononcee') >= 0 && CH.indexOf('pv_reception_definitive') >= 0, JSON.stringify(CH));
+var formulaire = { id: 'm1', ref: 'MRC-1', titre: 'edite', montant: 999 }; // objet du formulaire : ne connait PAS les champs PV
+var serveur = { id: 'm1', reception_definitive_prononcee: true, date_reception_definitive_reelle: '2026-09-24', pv_reception_definitive: { blob: 'm1/pv-reception-definitive.pdf' } };
+var fusion = MPM.preserverChampsServeur(formulaire, serveur, CH);
+check('les champs PV du serveur sont PRESERVES sur l\'objet a enregistrer', fusion.reception_definitive_prononcee === true && fusion.date_reception_definitive_reelle === '2026-09-24' && fusion.pv_reception_definitive.blob === 'm1/pv-reception-definitive.pdf', JSON.stringify(fusion));
+check('les champs du formulaire restent intacts', fusion.titre === 'edite' && fusion.montant === 999, JSON.stringify(fusion));
+var fusion2 = MPM.preserverChampsServeur({ id: 'm2', titre: 't' }, { id: 'm2' }, CH);
+check('serveur sans champ PV -> rien invente (pas de cle fantome)', fusion2.reception_definitive_prononcee === undefined && !('pv_reception_definitive' in fusion2), JSON.stringify(fusion2));
+check('champs pieces caution exportes (mainlevee_client, accuse_banque)', MPM.CHAMPS_PIECES_CAUTION.indexOf('mainlevee_client') >= 0 && MPM.CHAMPS_PIECES_CAUTION.indexOf('accuse_banque') >= 0, JSON.stringify(MPM.CHAMPS_PIECES_CAUTION));
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

@@ -87,6 +87,26 @@
     return Math.floor((nowMs - t) / DAY);
   }
 
+  /* Champs POSSEDES PAR LE SERVEUR (posés par les endpoints de dépôt), que les
+   * formulaires ne connaissent pas et ne doivent JAMAIS effacer en s'enregistrant.
+   * Incident réel : un save de formulaire marché a écrasé le PV déposé 1 s avant. */
+  var CHAMPS_PV_MARCHE = ['reception_definitive_prononcee', 'date_reception_definitive_reelle', 'pv_reception_definitive'];
+  // NB : date_demande_mainlevee EXCLU volontairement — le formulaire caution le
+  // possede (champ cdemmain), le preserver ecraserait une edition legitime. On ne
+  // preserve que les champs de piece que le formulaire ne connait pas.
+  var CHAMPS_PIECES_CAUTION = ['mainlevee_client', 'accuse_banque', 'date_mainlevee_recue', 'date_liberation'];
+
+  /* Recopie sur `cible` (objet du formulaire) les `champs` présents sur `source`
+   * (doc serveur ré-lu juste avant l'upsert). N'invente jamais un champ absent du
+   * serveur, ne touche pas les autres champs du formulaire. Mute et renvoie cible. */
+  function preserverChampsServeur(cible, source, champs) {
+    if (!cible || !source) return cible;
+    (champs || []).forEach(function (k) {
+      if (source[k] !== undefined) cible[k] = source[k];
+    });
+    return cible;
+  }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -204,6 +224,9 @@
     dateChampPiece: dateChampPiece,
     lignesRelance: lignesRelance,
     mailHebdo: mailHebdo,
-    enteteRelanceValide: enteteRelanceValide
+    enteteRelanceValide: enteteRelanceValide,
+    CHAMPS_PV_MARCHE: CHAMPS_PV_MARCHE,
+    CHAMPS_PIECES_CAUTION: CHAMPS_PIECES_CAUTION,
+    preserverChampsServeur: preserverChampsServeur
   };
 });
