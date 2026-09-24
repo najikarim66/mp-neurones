@@ -90,6 +90,22 @@ var c9 = { statut: 'mainlevee_demandee', date_demande_mainlevee: '2026-09-14' };
 check('joursDepuisDemande = 9 (now injecte)', MPM.joursDepuisDemande(c9, NOW) === 9, 'j=' + MPM.joursDepuisDemande(c9, NOW));
 check('joursDepuisDemande = 0 si pas de date', MPM.joursDepuisDemande({ statut: 'mainlevee_demandee' }, NOW) === 0, '');
 
+console.log('\n=== 6. Cycle 3 etats : depot des pieces (mainlevee client -> accuse banque) ===');
+var cDem = { id: 'p1', num: 'P', type: 'bonne_execution', montant: 100000, statut: 'mainlevee_demandee', marche_id: 'm1' };
+check('mainlevee_client recevable sur une caution mainlevee_demandee', MPM.pieceRecevable(cDem, 'mainlevee_client') === true, '');
+check('accuse_banque NON recevable tant que pas mainlevee_recue (ordre impose)', MPM.pieceRecevable(cDem, 'accuse_banque') === false, '');
+var ref1 = { blob: 'b1', nom_original: 'ml.pdf' };
+var cRecu = MPM.appliquerPiece(cDem, 'mainlevee_client', ref1, '2026-09-24');
+check('depot mainlevee client -> mainlevee_recue + date + piece', cRecu.statut === 'mainlevee_recue' && cRecu.date_mainlevee_recue === '2026-09-24' && cRecu.mainlevee_client === ref1, JSON.stringify(cRecu));
+check('appliquerPiece NE MUTE PAS l\'entree', cDem.statut === 'mainlevee_demandee', cDem.statut);
+check('mainlevee_client NON recevable une 2e fois (deja recue)', MPM.pieceRecevable(cRecu, 'mainlevee_client') === false, '');
+check('accuse_banque recevable sur mainlevee_recue', MPM.pieceRecevable(cRecu, 'accuse_banque') === true, '');
+var ref2 = { blob: 'b2', nom_original: 'ac.pdf' };
+var cLib = MPM.appliquerPiece(cRecu, 'accuse_banque', ref2, '2026-09-25');
+check('depot accuse banque -> liberee + date + piece', cLib.statut === 'liberee' && cLib.date_liberation === '2026-09-25' && cLib.accuse_banque === ref2, JSON.stringify(cLib));
+check('appliquerPiece sur statut invalide -> null (pas de saut d\'etat)', MPM.appliquerPiece(cDem, 'accuse_banque', ref2, '2026-09-25') === null, '');
+check('type hors def/RG -> non recevable', MPM.pieceRecevable({ type: 'soumission', statut: 'mainlevee_demandee' }, 'mainlevee_client') === false, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

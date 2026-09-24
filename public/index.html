@@ -295,7 +295,7 @@ input,select,textarea{font-family:inherit}
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
 var SMM={en_cours:{l:'En cours',c:'bi'},termine:{l:'Termine',c:'bs'},suspendu:{l:'Suspendu',c:'bw'},resilie:{l:'Resilie',c:'bd'}};
-var SMC={active:{l:'Active',c:'bs'},mainlevee_demandee:{l:'Mainlevee demandee',c:'bp'},expiree:{l:'Expiree',c:'bd'},liberee:{l:'Liberee',c:'bn'},restituee:{l:'Restituee',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
+var SMC={active:{l:'Active',c:'bs'},mainlevee_demandee:{l:'Mainlevee demandee',c:'bp'},mainlevee_recue:{l:'Mainlevee recue',c:'bi'},expiree:{l:'Expiree',c:'bd'},liberee:{l:'Liberee',c:'bn'},restituee:{l:'Restituee',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
 var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Rejete',c:'bd'},en_cours:{l:'En cours',c:'bi'}};
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
@@ -1118,6 +1118,67 @@ function deposerPV(marcheId){
   reader.readAsDataURL(file);
 }
 
+// DEPOT DES PIECES DE MAINLEVEE (cycle 3 etats : mainlevee client, accuse banque)
+/* Ouvre une petite modale de depot pour UNE caution. pieceType :
+   'mainlevee_client' (demandee -> recue) ou 'accuse_banque' (recue -> liberee). */
+function openPieceDepot(cautionId, marcheId, pieceType){
+  var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
+  var lbls={
+    mainlevee_client:{titre:'Depot mainlevee du maitre d\'ouvrage',dateLbl:'Date de reception de la mainlevee',info:'La caution passe en « mainlevee recue » (remise a la banque, en attente de l\'accuse). La relance du lundi s\'arrete.'},
+    accuse_banque:{titre:'Depot accuse de la banque',dateLbl:'Date de l\'accuse bancaire',info:'La caution passe en « liberee » (argent revenu de la banque).'}
+  };
+  var L=lbls[pieceType]||{titre:'Depot piece',dateLbl:'Date',info:''};
+  var today=new Date().toISOString().slice(0,10);
+  var refTxt=c?((c.num||'—')+' — '+(TC[c.type]||c.type)+' — '+fmad(c.montant)):'';
+  var html='<div class="info-box info-amber">'+L.info+'</div>'+
+    (refTxt?'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Caution : '+esc(refTxt)+'</div>':'')+
+    '<div class="fr2"><div class="fg"><label>'+L.dateLbl+' *</label><input class="fc" id="pc_date" type="date" value="'+today+'"></div><div class="fg"><label>Fichier (PDF, JPG ou PNG) *</label><input class="fc" id="pc_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
+    '<div id="pc_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
+    '<button class="btn btn-sm btn-prim" id="pc_btn" onclick="deposerPiece(\''+esc(cautionId)+'\',\''+esc(marcheId)+'\',\''+pieceType+'\')">Deposer</button>';
+  openMod(L.titre,html,null);
+}
+function deposerPiece(cautionId, marcheId, pieceType){
+  var fileEl=document.getElementById('pc_file');
+  var dateEl=document.getElementById('pc_date');
+  var statusEl=document.getElementById('pc_status');
+  var btn=document.getElementById('pc_btn');
+  var dateReelle=dateEl?dateEl.value:'';
+  if(!dateReelle){toast('Date requise',false);return;}
+  if(!fileEl||!fileEl.files||!fileEl.files.length){toast('Selectionne le fichier',false);return;}
+  var file=fileEl.files[0];
+  var okTypes={'application/pdf':1,'image/jpeg':1,'image/png':1};
+  if(!okTypes[file.type]){toast('Type non autorise (PDF, JPG ou PNG)',false);return;}
+  if(file.size>20*1024*1024){toast('Fichier trop volumineux (max 20 Mo)',false);return;}
+  if(btn)btn.disabled=true;
+  if(statusEl)statusEl.textContent='Depot en cours...';
+  var reader=new FileReader();
+  reader.onload=function(){
+    var res=String(reader.result||'');
+    var b64=res.indexOf(',')>=0?res.split(',')[1]:res;
+    apiFetch('/api/caution-piece',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+      cautionId:String(cautionId),
+      marcheId:String(marcheId),
+      piece_type:pieceType,
+      date:dateReelle,
+      nom_original:file.name,
+      content_type:file.type,
+      data_base64:b64
+    })}).then(function(r){
+      r=r||{};
+      return apiList('cautions').then(function(cs){
+        S.cautions=cs;sbStats();render();closeMod();
+        var st=(SMC[r.nouveau_statut]||{l:r.nouveau_statut}).l;
+        toast('Piece deposee — caution '+(r.caution||'')+' : '+st);
+      });
+    }).catch(function(e){
+      if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';
+      toast('Echec depot : '+e.message,false);
+    });
+  };
+  reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
+  reader.readAsDataURL(file);
+}
+
 // CAUTIONS INLINE dans marche
 function showAddCaution(type){
   document.getElementById('add-caution-panel').style.display='block';
@@ -1283,7 +1344,7 @@ function pgCautions(){
     }).join('')+'</div>';
 
   // KPI (suivent le filtre).
-  var kpis='<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+agg.kpi.active+'</div></div><div class="kpi k1"><div class="kl">Mainlevée demandée</div><div class="kv">'+agg.kpi.mainlevee+'</div></div><div class="kpi k4"><div class="kl">Expirées</div><div class="kv">'+agg.kpi.expiree+'</div></div><div class="kpi k3"><div class="kl">Libérées / restituées</div><div class="kv">'+agg.kpi.liberee+'</div></div></div>';
+  var kpis='<div class="krow" style="grid-template-columns:repeat(5,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+agg.kpi.active+'</div></div><div class="kpi k1"><div class="kl">Mainlevée demandée</div><div class="kv">'+agg.kpi.mainlevee+'</div></div><div class="kpi k1"><div class="kl">Mainlevée reçue</div><div class="kv">'+agg.kpi.recue+'</div></div><div class="kpi k4"><div class="kl">Expirées</div><div class="kv">'+agg.kpi.expiree+'</div></div><div class="kpi k3"><div class="kl">Libérées / restituées</div><div class="kv">'+agg.kpi.liberee+'</div></div></div>';
 
   var toolbar='<div class="tb" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px"><input class="si" placeholder="Rechercher (n°, banque, réf)…" value="'+esc(S.search)+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'<option value="provisoire"'+(S.tf==='provisoire'?' selected':'')+'>Caution provisoire</option></select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+aggAll.banksSorted.map(function(e){return '<option value="'+esc(e[0])+'"'+(S.bf===e[0]?' selected':'')+'>'+esc(e[0])+'</option>';}).join('')+'</select><span style="margin-left:auto;font-size:12px;color:var(--ink-muted)">'+cs.length+' / '+allC.length+' cautions</span><button class="btn btn-sm" onclick="exportCSV(\'cautions\')">Export CSV</button><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div>';
 
@@ -1299,7 +1360,8 @@ function pgCautions(){
     var usedNote=payUse.length?'<div style="font-size:12px;color:var(--ink-muted)">Utilisée : '+payUse.map(function(p){return esc(p.numero);}).join(', ')+'</div>':'';
     var libBtn='';
     if(c.statut==='active'){libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Demander la mainlevée au maître d\'ouvrage">Mainlevée</button><button class="act" onclick="libereCautionDirect(\''+c.id+'\')" title="Libérer directement (mainlevée reçue immédiatement)" style="color:var(--green-soft)">Libérer</button>';}
-    else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Confirmer la libération effective (banque a débloqué)" style="color:var(--green-soft);font-weight:600">Confirmer</button>';}
+    else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'mainlevee_client\')" title="Déposer la mainlevée reçue du maître d\'ouvrage" style="color:var(--green-soft);font-weight:600">Mainlevée reçue</button>';}
+    else if(c.statut==='mainlevee_recue'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'accuse_banque\')" title="Déposer l\'accusé de la banque (libère la caution)" style="color:var(--green-soft);font-weight:600">Accusé banque</button>';}
     return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span></td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">Modifier</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">Supprimer</button></div></td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty">Aucune caution avec ce filtre</div></td></tr>';
   var table='<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N°</th><th>Marché / AO</th><th>Type</th><th>Banque</th><th>Montant</th><th>Émission</th><th>État</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">Engagé ('+fctx+')</td><td style="font-family:var(--FM);font-weight:600">'+fmad(agg.engage)+'</td><td colspan="3"></td></tr></tfoot></table></div></div>';
@@ -2680,9 +2742,10 @@ editPaiement = function(id){
    SUIVI DES MAINLEVEES DE CAUTIONS (Niveau 2)
    ======================================================================== */
 
-/* Retourne toutes les cautions en statut mainlevee_demandee */
+/* Argent encore immobilisé dans le cycle de mainlevée (déf/RG) : demandée au client
+   OU reçue et déposée en banque (accusé pas encore là). Sert au compteur « à récupérer ». */
 function getCautionsEnAttenteMainlevee(){
-  return (S.cautions||[]).filter(function(c){return c.statut==='mainlevee_demandee';});
+  return (S.cautions||[]).filter(function(c){return c.statut==='mainlevee_demandee'||c.statut==='mainlevee_recue';});
 }
 
 /* Jours ecoules depuis la demande de mainlevee */
@@ -2699,30 +2762,37 @@ function colorMainlevee(jours){
   return {color:'#8B2A1C', bg:'#F5E6E3', emoji:'🔴', label:'Urgent'};
 }
 
-/* Widget dashboard : alerte cautions en attente de mainlevee */
-function mainleveeAlertsHTML(){
-  var list = getCautionsEnAttenteMainlevee();
+/* Age en jours depuis un champ date (0 si absent). */
+function _mlJours(c,champ){ if(!c||!c[champ]) return 0; return Math.floor((Date.now()-new Date(c[champ]).getTime())/86400000); }
+/* Bloc dashboard generique : titre + count + montant total, une ligne par caution
+   avec anciennete (champ date) + montant, et un bouton d'action optionnel. */
+function _mlBlock(titre, sous, list, champDate, actLabel, actPieceType){
   if(!list.length) return '';
-  list.sort(function(a,b){return joursMainlevee(b) - joursMainlevee(a);});
-  var rows = list.map(function(c){
-    var jours = joursMainlevee(c);
-    var col = colorMainlevee(jours);
-    var m = gm(c.marche_id);
-    return '<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 10px;background:'+col.bg+';border-radius:3px;margin-bottom:4px">'+
-      '<div style="font-size:12px">'+
-        '<span style="font-weight:600">'+(m.ref||'?')+'</span> &middot; '+
-        '<span>'+(TC[c.type]||c.type)+'</span> &middot; '+
-        '<span style="font-family:var(--FM)">'+c.num+'</span> &middot; '+
-        '<span>'+c.banque+'</span> &middot; '+
-        '<span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span>'+
-      '</div>'+
-      '<div style="display:flex;align-items:center;gap:8px">'+
-        '<span style="font-size:12px;color:'+col.color+';font-weight:600">'+col.emoji+' '+jours+'j ('+col.label+')</span>'+
-        '<button class="btn btn-sm" onclick="libereCaution(\''+c.id+'\')" style="padding:4px 10px;font-size:12px">Confirmer liberation</button>'+
-      '</div>'+
-    '</div>';
+  var total=list.reduce(function(s,c){return s+(+c.montant||0);},0);
+  list=list.slice().sort(function(a,b){return _mlJours(b,champDate)-_mlJours(a,champDate);});
+  var rows=list.map(function(c){
+    var j=_mlJours(c,champDate);var col=colorMainlevee(j);
+    var m=c.marche_id?gm(c.marche_id):{ref:c.ref};
+    var act=actLabel?('<button class="btn btn-sm" onclick="'+
+      (actPieceType?('openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id||'')+'\',\''+actPieceType+'\')'):('provRestituer(\''+esc(c._aoId)+'\')'))+
+      '" style="padding:4px 10px;font-size:12px">'+actLabel+'</button>'):'';
+    return '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;padding:8px 10px;background:'+col.bg+';border-radius:3px;margin-bottom:4px">'+
+      '<div style="font-size:12px"><span style="font-weight:600">'+esc(m.ref||c.ref||'?')+'</span> &middot; <span>'+(TC[c.type]||(c.type==='provisoire'?'Provisoire':c.type))+'</span> &middot; <span style="font-family:var(--FM)">'+esc(c.num||'—')+'</span> &middot; <span>'+esc(c.banque||'—')+'</span> &middot; <span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span></div>'+
+      '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:12px;color:'+col.color+';font-weight:600">'+col.emoji+' '+j+'j ('+col.label+')</span>'+act+'</div></div>';
   }).join('');
-  return '<div class="card"><div class="sh"><div class="st">Cautions en attente de mainlevee ('+list.length+')</div></div>'+rows+'</div>';
+  return '<div class="card"><div class="sh"><div class="st">'+titre+' ('+list.length+' &middot; '+fmad(total)+')</div></div><div style="font-size:12px;color:#7A7369;margin-bottom:6px">'+sous+'</div>'+rows+'</div>';
+}
+/* Widget dashboard : les trois moments du cycle (immobilisé = relance), provisoires à part. */
+function mainleveeAlertsHTML(){
+  var cauts=S.cautions||[];
+  var demandee=cauts.filter(function(c){return c.statut==='mainlevee_demandee';});
+  var recue=cauts.filter(function(c){return c.statut==='mainlevee_recue';});
+  var provs=(S.aos||[]).filter(function(a){return a.caution_prov&&a.caution_prov.statut==='mainlevee_demandee';}).map(function(a){
+    var p=a.caution_prov;return {id:'prov_'+a.id,_aoId:a.id,num:p.num,type:'provisoire',banque:p.banque,montant:p.montant,marche_id:null,ref:a.ref,date_demande_mainlevee:p.date_demande_mainlevee};
+  });
+  return _mlBlock('Mainlevées demandées au maître d\'ouvrage','En attente du client — file de relance du lundi.',demandee,'date_demande_mainlevee','Mainlevée reçue','mainlevee_client')+
+    _mlBlock('Mainlevées reçues, déposées en banque','En attente de l\'accusé bancaire — plus de relance client.',recue,'date_mainlevee_recue','Accusé banque','accuse_banque')+
+    _mlBlock('Provisoires à restituer (cycle distinct)','Caution de soumission portée par l\'AO.',provs,'date_demande_mainlevee','Restituée',null);
 }
 
 /* Hook sur le dashboard pour injecter le widget mainlevee */

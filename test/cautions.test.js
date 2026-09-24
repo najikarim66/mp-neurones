@@ -63,6 +63,15 @@ var refs = r.items.map(function (x) { return x.num; }).sort().join(',');
 check('reunit P1 (prov, AO infructueux) ET B (def mainlevee) ; pas P2 (AO en cours)', refs === 'B,P1', 'items=' + refs);
 check('total a restituer = 270 000 (220k + 50k)', r.total === 270000, 'total=' + r.total);
 
+console.log('\n=== 5. Cycle 3 etats : mainlevee_recue (entre demandee et liberee) ===');
+var recu = { id: 'x1', num: 'X', type: 'retenue_garantie', banque: 'FINEA', montant: 70000, statut: 'mainlevee_recue', marche_id: 'm9' };
+check('mainlevee_recue -> encore bloquee (argent pas revenu de la banque)', MPC.isBlocked(recu) === true, '');
+var aggR = MPC.aggregate([recu]);
+check('kpi.recue = 1', aggR.kpi.recue === 1, JSON.stringify(aggR.kpi));
+check('engage inclut la mainlevee_recue', aggR.engage === 70000, 'engage=' + aggR.engage);
+var restR = MPC.aRestituer([recu]);
+check('aRestituer inclut mainlevee_recue', restR.items.length === 1 && restR.total === 70000, JSON.stringify(restR));
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

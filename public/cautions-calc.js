@@ -36,8 +36,10 @@
     return col.concat(prov);
   }
 
-  /* Encore bloquée à la banque = argent pas encore revenu. */
-  function isBlocked(c) { return c.statut === 'active' || c.statut === 'mainlevee_demandee'; }
+  /* Encore bloquée à la banque = argent pas encore revenu. mainlevee_recue = la
+   * mainlevée est revenue du client et remise à la banque, mais l'accusé bancaire
+   * n'est pas là : l'argent est toujours bloqué (voir cycle à 3 états). */
+  function isBlocked(c) { return c.statut === 'active' || c.statut === 'mainlevee_demandee' || c.statut === 'mainlevee_recue'; }
 
   function applyFilters(rows, f) {
     f = f || {};
@@ -56,10 +58,11 @@
 
   /* Agrégats de l'ensemble reçu (déjà filtré par l'appelant). */
   function aggregate(rows) {
-    var engage = 0, byBank = {}, kpi = { active: 0, mainlevee: 0, expiree: 0, liberee: 0 };
+    var engage = 0, byBank = {}, kpi = { active: 0, mainlevee: 0, recue: 0, expiree: 0, liberee: 0 };
     rows.forEach(function (c) {
       if (c.statut === 'active') kpi.active++;
       else if (c.statut === 'mainlevee_demandee') kpi.mainlevee++;
+      else if (c.statut === 'mainlevee_recue') kpi.recue++;
       else if (c.statut === 'expiree') kpi.expiree++;
       else if (c.statut === 'liberee' || c.statut === 'restituee') kpi.liberee++;
       if (isBlocked(c)) {
@@ -80,11 +83,12 @@
   }
 
   /* "À restituer" = argent immobilisé à récupérer : toute caution en mainlevee_demandee
-   * (définitive OU provisoire) + toute provisoire encore active sur un AO déjà décidé
-   * (dormante pas encore demandée). Reçoit la liste unifiée. */
+   * OU mainlevee_recue (définitive/RG en cours de cycle, argent pas encore libéré)
+   * + toute provisoire encore active sur un AO déjà décidé (dormante pas encore
+   * demandée). Reçoit la liste unifiée. */
   function aRestituer(rows) {
     var items = rows.filter(function (c) {
-      if (c.statut === 'mainlevee_demandee') return true;
+      if (c.statut === 'mainlevee_demandee' || c.statut === 'mainlevee_recue') return true;
       if (c.src === 'ao' && _decidee(c.aoStatut) && c.statut === 'active') return true;
       return false;
     });

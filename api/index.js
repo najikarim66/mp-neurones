@@ -7,6 +7,8 @@ const MPMainlevee = require("./pv-mainlevee.js");
 
 // Blob des PV de reception definitive (compte partage erpneuronesstorage du tenant).
 const PV_CONTAINER = "mp-pv-reception";
+// Blob des pieces de mainlevee (mainlevee du client, accuse de la banque).
+const PIECE_CONTAINER = "mp-preuves";
 // Types de PV acceptes -> extension du blob (nom deterministe : un PV par marche).
 const PV_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
 const PV_MAX_BYTES = 20 * 1024 * 1024; // 20 Mo
@@ -388,6 +390,92 @@ module.exports = async function (context, req) {
       return;
     } catch (e) {
       context.log.error("pvReception error:", e.message, e.stack);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route caution-piece : POST /api/caution-piece
+  // Cycle a 3 etats (def/RG) : depot d'UNE piece qui fait avancer UNE caution.
+  //   piece_type "mainlevee_client" : mainlevee_demandee -> mainlevee_recue
+  //   piece_type "accuse_banque"    : mainlevee_recue    -> liberee
+  // Body JSON : { cautionId, marcheId (partition), piece_type, date (YYYY-MM-DD),
+  //               nom_original, content_type, data_base64 }
+  // Meme ordre strict que le PV : Blob d'abord, puis la caution (statut + ref piece
+  // + date). La transition est refusee si le statut de depart ne correspond pas
+  // (pas de saut d'etat), via MPMainlevee.pieceRecevable.
+  if (fn === "cautionPiece") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!user) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+
+      const body = req.body || {};
+      const cautionId = String(body.cautionId || "").trim();
+      const marcheId = String(body.marcheId || "").trim();
+      const pieceType = String(body.piece_type || "").trim();
+      const dateReelle = String(body.date || "").trim();
+      const nomOriginal = String(body.nom_original || "").trim();
+      const contentType = String(body.content_type || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+
+      if (!cautionId || !marcheId || !pieceType || !dateReelle || !dataB64) {
+        context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId, piece_type, date, data_base64" } };
+        return;
+      }
+      if (!MPMainlevee.transitionPiece(pieceType)) {
+        context.res = { status: 400, body: { error: "piece_type inconnu (mainlevee_client ou accuse_banque)" } };
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReelle)) {
+        context.res = { status: 400, body: { error: "date invalide (attendu AAAA-MM-JJ)" } };
+        return;
+      }
+      const ext = PV_TYPES[contentType];
+      if (!ext) { context.res = { status: 400, body: { error: "content_type non autorise (pdf, jpeg ou png)" } }; return; }
+      let buf;
+      try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+      if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+
+      // La caution doit exister ET la transition doit etre recevable (pas de saut d'etat).
+      const cautionsC = getDb().container("mp_cautions");
+      let caution = null;
+      try { const r = await cautionsC.item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
+      if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
+      if (!MPMainlevee.pieceRecevable(caution, pieceType)) {
+        context.res = { status: 409, body: { error: "Transition non recevable pour le statut actuel (" + caution.statut + ")" } };
+        return;
+      }
+
+      // (1) BLOB d'abord. Nom deterministe -> un retry reecrase, pas d'orphelin.
+      const blobName = marcheId + "/caution-" + cautionId + "/" + pieceType + "." + ext;
+      const svc = BlobServiceClient.fromConnectionString(conn);
+      const cont = svc.getContainerClient(PIECE_CONTAINER);
+      await cont.createIfNotExists();
+      await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+
+      // (2) CAUTION : transition pure, puis upsert (doc unique, partition marcheId).
+      const pieceRef = {
+        blob: blobName,
+        nom_original: nomOriginal || (pieceType + "." + ext),
+        taille: buf.length,
+        content_type: contentType,
+        depose_le: new Date().toISOString(),
+        depose_par: user.userDetails || null
+      };
+      const maj = MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle);
+      await cautionsC.items.upsert(maj);
+
+      context.res = {
+        status: 200,
+        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle }
+      };
+      return;
+    } catch (e) {
+      context.log.error("cautionPiece error:", e.message);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }

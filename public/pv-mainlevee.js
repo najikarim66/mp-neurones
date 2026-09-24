@@ -29,6 +29,14 @@
   var TYPES_MAINLEVEE = ['bonne_execution', 'retenue_garantie'];
   var DAY = 86400000;
 
+  /* Cycle a 3 etats (def/RG) : mainlevee_demandee --[mainlevee du client]-->
+   * mainlevee_recue --[accuse de la banque]--> liberee. Chaque piece a un statut
+   * de depart impose (pas de saut d'etat) et pose son propre horodatage. */
+  var PIECE_TRANSITIONS = {
+    mainlevee_client: { de: 'mainlevee_demandee', vers: 'mainlevee_recue', champ: 'mainlevee_client', dateChamp: 'date_mainlevee_recue' },
+    accuse_banque:    { de: 'mainlevee_recue',    vers: 'liberee',        champ: 'accuse_banque',   dateChamp: 'date_liberation' }
+  };
+
   /* marcheId (Cosmos brut) OU marche_id (cote app apres fromCosmos) : on tolere les deux. */
   function cMarcheId(c) { return c.marcheId != null ? c.marcheId : c.marche_id; }
 
@@ -79,14 +87,43 @@
     return Math.floor((nowMs - t) / DAY);
   }
 
+  function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
+
+  /* Une piece est recevable si : la transition existe, la caution est def/RG,
+   * et son statut courant est le statut de depart impose par la piece. */
+  function pieceRecevable(caution, pieceType) {
+    var t = transitionPiece(pieceType);
+    if (!t || !caution) return false;
+    if (TYPES_MAINLEVEE.indexOf(caution.type) < 0) return false;
+    return caution.statut === t.de;
+  }
+
+  /* Applique le depot d'une piece : COPIE de la caution avec nouveau statut,
+   * reference de piece et horodatage. null si non recevable (aucun saut d'etat).
+   * pieceRef = { blob, nom_original, taille, content_type, depose_le, depose_par }. */
+  function appliquerPiece(caution, pieceType, pieceRef, dateISO) {
+    if (!pieceRecevable(caution, pieceType)) return null;
+    var t = transitionPiece(pieceType);
+    var out = {};
+    Object.keys(caution).forEach(function (k) { out[k] = caution[k]; });
+    out.statut = t.vers;
+    out[t.champ] = pieceRef;
+    out[t.dateChamp] = dateISO;
+    return out;
+  }
+
   return {
     TYPES_MAINLEVEE: TYPES_MAINLEVEE,
+    PIECE_TRANSITIONS: PIECE_TRANSITIONS,
     cMarcheId: cMarcheId,
     estRecevable: estRecevable,
     cautionsABasculer: cautionsABasculer,
     appliquerBascule: appliquerBascule,
     basculerMarche: basculerMarche,
     mainleveesEnAttente: mainleveesEnAttente,
-    joursDepuisDemande: joursDepuisDemande
+    joursDepuisDemande: joursDepuisDemande,
+    transitionPiece: transitionPiece,
+    pieceRecevable: pieceRecevable,
+    appliquerPiece: appliquerPiece
   };
 });
