@@ -588,6 +588,44 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route caution-mainlevee : POST /api/caution-mainlevee
+  // Mainlevee MANUELLE d'une caution (active -> mainlevee_demandee) SANS PV numerique.
+  // Chemin volontairement OUVERT (cas legitime : reception prononcee avant le systeme,
+  // marche ancien) mais TRACE : motif libre OBLIGATOIRE + utilisateur enregistres.
+  // Body JSON : { cautionId, marcheId (partition), motif }.
+  if (fn === "cautionMainlevee") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+
+      const body = req.body || {};
+      const cautionId = String(body.cautionId || "").trim();
+      const marcheId = String(body.marcheId || "").trim();
+      const motif = typeof body.motif === "string" ? body.motif : "";
+
+      if (!cautionId || !marcheId) { context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId" } }; return; }
+      if (!MPMainlevee.motifMainleveeValide(motif)) { context.res = { status: 400, body: { error: "Motif de mainlevee obligatoire (texte libre)" } }; return; }
+
+      const cautionsC = getDb().container("mp_cautions");
+      let caution = null;
+      try { const r = await cautionsC.item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
+      if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
+
+      const dateISO = new Date().toISOString().slice(0, 10);
+      const maj = MPMainlevee.appliquerMainleveeManuelle(caution, motif, user.userDetails || null, dateISO);
+      if (!maj) { context.res = { status: 409, body: { error: "Mainlevee manuelle impossible : la caution n'est pas active (statut " + caution.statut + ")" } }; return; }
+      await cautionsC.items.upsert(maj);
+
+      context.res = { status: 200, body: { ok: true, caution: maj.num, statut: maj.statut, mainlevee_par: maj.mainlevee_par, motif: maj.mainlevee_motif } };
+      return;
+    } catch (e) {
+      context.log.error("cautionMainlevee error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

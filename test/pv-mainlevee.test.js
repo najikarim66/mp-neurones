@@ -180,6 +180,16 @@ check('date vide/absente -> INVALIDE (depot refuse, aucun defaut)', MPM.dateRece
 check('date mal formee -> INVALIDE', MPM.dateReceptionValide('24/09/2026') === false && MPM.dateReceptionValide('2026-9-1') === false, '');
 check('date AAAA-MM-JJ -> valide', MPM.dateReceptionValide('2026-09-08') === true, '');
 
+console.log('\n=== 13. Mainlevee MANUELLE (sans PV numerique) : motif libre OBLIGATOIRE + utilisateur trace ===');
+check('motif vide/blanc/absent -> invalide (depot refuse)', MPM.motifMainleveeValide('') === false && MPM.motifMainleveeValide('   ') === false && MPM.motifMainleveeValide(null) === false, '');
+check('motif libre renseigne -> valide (ex. reception prononcee avant le systeme)', MPM.motifMainleveeValide('reception prononcee avant le systeme') === true, '');
+var cAct = { id: 'z1', num: 'Z', type: 'bonne_execution', montant: 5, statut: 'active' };
+var majM = MPM.appliquerMainleveeManuelle(cAct, 'reception avant systeme (marche ancien)', 'imane@neurones.ma', '2026-09-24');
+check('active + motif -> mainlevee_demandee, motif + utilisateur traces, datee', majM.statut === 'mainlevee_demandee' && majM.mainlevee_motif === 'reception avant systeme (marche ancien)' && majM.mainlevee_par === 'imane@neurones.ma' && majM.date_demande_mainlevee === '2026-09-24', JSON.stringify(majM));
+check('ne mute pas l\'entree', cAct.statut === 'active', cAct.statut);
+check('sans motif -> refuse (null), aucune bascule', MPM.appliquerMainleveeManuelle(cAct, '   ', 'x', '2026-09-24') === null, '');
+check('caution non active -> refuse (null, pas de saut d\'etat)', MPM.appliquerMainleveeManuelle({ statut: 'mainlevee_demandee' }, 'motif', 'x', '2026-09-24') === null, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

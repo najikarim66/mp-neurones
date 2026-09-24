@@ -1206,6 +1206,17 @@ function piecesLiens(c){
   return out;
 }
 
+// MAINLEVEE MANUELLE tracée (chemin sans PV : reception avant le systeme, resiliation…)
+function demanderMainleveeManuelle(cautionId, marcheId){
+  var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
+  var motif=prompt('Motif de la mainlevee (OBLIGATOIRE, texte libre) — ex. « reception prononcee avant le systeme » (marche ancien), resiliation, expiration, avance recuperee…\n\nCaution '+((c&&c.num)||'')+'. L\'argent reste bloque a la banque jusqu\'au retour de la mainlevee.');
+  if(motif===null)return; /* annule */
+  if(!motif||!motif.trim()){toast('Motif obligatoire',false);return;}
+  apiFetch('/api/caution-mainlevee',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cautionId:String(cautionId),marcheId:String(marcheId),motif:motif})})
+  .then(function(r){r=r||{};return apiList('cautions').then(function(cs){S.cautions=cs;sbStats();render();toast('Mainlevee demandee (manuelle) — caution '+(r.caution||''));});})
+  .catch(function(e){toast('Echec : '+e.message,false);});
+}
+
 // CAUTIONS INLINE dans marche
 function showAddCaution(type){
   document.getElementById('add-caution-panel').style.display='block';
@@ -1386,7 +1397,7 @@ function pgCautions(){
     var payUse=c.type==='retenue_garantie'?S.paiements.filter(function(p){return p.caution_rg_id===c.id;}):[];
     var usedNote=payUse.length?'<div style="font-size:12px;color:var(--ink-muted)">Utilisée : '+payUse.map(function(p){return esc(p.numero);}).join(', ')+'</div>':'';
     var libBtn='';
-    if(c.statut==='active'){libBtn='<button class="act" onclick="libereCaution(\''+c.id+'\')" title="Demander la mainlevée au maître d\'ouvrage">Mainlevée</button><button class="act" onclick="libereCautionDirect(\''+c.id+'\')" title="Libérer directement (mainlevée reçue immédiatement)" style="color:var(--green-soft)">Libérer</button>';}
+    if(c.statut==='active'){libBtn='<button class="act" onclick="demanderMainleveeManuelle(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\')" title="Demander la mainlevée au maître d\'ouvrage (motif obligatoire, tracé)">Mainlevée</button><button class="act" onclick="libereCautionDirect(\''+c.id+'\')" title="Libérer directement (mainlevée reçue immédiatement)" style="color:var(--green-soft)">Libérer</button>';}
     else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'mainlevee_client\')" title="Déposer la mainlevée reçue du maître d\'ouvrage" style="color:var(--green-soft);font-weight:600">Mainlevée reçue</button>';}
     else if(c.statut==='mainlevee_recue'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'accuse_banque\')" title="Déposer l\'accusé de la banque (libère la caution)" style="color:var(--green-soft);font-weight:600">Accusé banque</button>';}
     return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span>'+piecesLiens(c)+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">Modifier</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">Supprimer</button></div></td></tr>';

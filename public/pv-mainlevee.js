@@ -110,6 +110,27 @@
     return cible;
   }
 
+  /* Mainlevee MANUELLE (sans PV numerique) : le chemin reste OUVERT pour le cas
+   * legitime « reception prononcee avant le systeme » (marche ancien), mais TRACE
+   * — motif libre obligatoire + utilisateur — pour ne plus jamais reconstituer qui
+   * a demande quoi par deduction sur des horodatages (incident 24/09). */
+  function motifMainleveeValide(m) { return typeof m === 'string' && m.trim().length > 0; }
+
+  /* active -> mainlevee_demandee, en enregistrant motif + utilisateur + date.
+   * null si la caution n'est pas active (pas de saut d'etat) ou si motif absent.
+   * Copie (ne mute pas l'entree). */
+  function appliquerMainleveeManuelle(caution, motif, user, dateISO) {
+    if (!caution || caution.statut !== 'active') return null;
+    if (!motifMainleveeValide(motif)) return null;
+    var out = {};
+    Object.keys(caution).forEach(function (k) { out[k] = caution[k]; });
+    out.statut = 'mainlevee_demandee';
+    out.date_demande_mainlevee = dateISO;
+    out.mainlevee_par = user || null;
+    out.mainlevee_motif = motif.trim();
+    return out;
+  }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -227,6 +248,8 @@
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
     dateReceptionValide: dateReceptionValide,
+    motifMainleveeValide: motifMainleveeValide,
+    appliquerMainleveeManuelle: appliquerMainleveeManuelle,
     resoudreBlobPiece: resoudreBlobPiece,
     conteneurPiece: conteneurPiece,
     libellePiece: libellePiece,
