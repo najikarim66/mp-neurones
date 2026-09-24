@@ -1,4 +1,15 @@
 const { CosmosClient } = require("@azure/cosmos");
+const { BlobServiceClient } = require("@azure/storage-blob");
+// Regle metier PV -> mainlevee. Copie committee de public/pv-mainlevee.js
+// (SWA deploie /api et /public separement). Identite garantie par
+// test/module-copy.test.js (gate). Une seule regle, testee telle qu'elle sert.
+const MPMainlevee = require("./pv-mainlevee.js");
+
+// Blob des PV de reception definitive (compte partage erpneuronesstorage du tenant).
+const PV_CONTAINER = "mp-pv-reception";
+// Types de PV acceptes -> extension du blob (nom deterministe : un PV par marche).
+const PV_TYPES = { "application/pdf": "pdf", "image/jpeg": "jpg", "image/png": "png" };
+const PV_MAX_BYTES = 20 * 1024 * 1024; // 20 Mo
 
 const ALLOWED = new Set([
   "mp_marches", "mp_aos", "mp_cautions", "mp_paiements",
@@ -249,6 +260,134 @@ module.exports = async function (context, req) {
       return;
     } catch (e) {
       context.log.error("scrapeTrigger error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route pv-reception : POST /api/pv-reception
+  // UNE decision = depot du PV de reception definitive + bascule des cautions.
+  // Body JSON : { marcheId, date_reception_definitive_reelle (YYYY-MM-DD),
+  //               nom_original, content_type, data_base64 }
+  // Ordre STRICT (Cosmos ne transacte pas avec le Blob) :
+  //   (1) Blob d'abord  -> si echec : RIEN en base, marche inchange.
+  //   (2) Marche ensuite (drapeau + date reelle + ref PV) : le drapeau n'est
+  //       jamais ecrit sans pièce, car il suit un upload reussi.
+  //   (3) Cautions enfin, en UN TransactionalBatch (partition marcheId) : def+RG
+  //       actives -> mainlevee_demandee. Derivee et idempotente : un re-POST du
+  //       meme PV repare une bascule partielle (statut != active -> ignore).
+  // Etats interdits impossibles : drapeau-sans-pièce (2 apres 1) et
+  // bascule-sans-drapeau (3 apres 2, et basculerMarche refuse un marche non recevable).
+  if (fn === "pvReception") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!user) {
+        context.res = { status: 401, body: { error: "Authentification requise" } };
+        return;
+      }
+      if ((req.method || "GET").toUpperCase() !== "POST") {
+        context.res = { status: 405, body: { error: "Method not allowed (use POST)" } };
+        return;
+      }
+
+      const body = req.body || {};
+      const marcheId = String(body.marcheId || "").trim();
+      const dateReelle = String(body.date_reception_definitive_reelle || "").trim();
+      const nomOriginal = String(body.nom_original || "").trim();
+      const contentType = String(body.content_type || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+
+      if (!marcheId || !dateReelle || !dataB64) {
+        context.res = { status: 400, body: { error: "Manquant : marcheId, date_reception_definitive_reelle, data_base64" } };
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(dateReelle)) {
+        context.res = { status: 400, body: { error: "date_reception_definitive_reelle invalide (attendu AAAA-MM-JJ)" } };
+        return;
+      }
+      const ext = PV_TYPES[contentType];
+      if (!ext) {
+        context.res = { status: 400, body: { error: "content_type non autorise (pdf, jpeg ou png)" } };
+        return;
+      }
+      let buf;
+      try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) {
+        context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } };
+        return;
+      }
+      if (buf.length > PV_MAX_BYTES) {
+        context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } };
+        return;
+      }
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (!conn) {
+        context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } };
+        return;
+      }
+
+      // Le marche doit exister (garde d'integrite : pas de drapeau sur un fantome).
+      const marchesC = getDb().container("mp_marches");
+      let marche = null;
+      try {
+        const r = await marchesC.item(marcheId, marcheId).read();
+        marche = r.resource || null;
+      } catch (e) { marche = null; }
+      if (!marche) {
+        context.res = { status: 404, body: { error: "Marche introuvable" } };
+        return;
+      }
+
+      // (1) BLOB d'abord. Nom deterministe -> un retry reecrase, pas de doublon orphelin.
+      const blobName = marcheId + "/pv-reception-definitive." + ext;
+      const svc = BlobServiceClient.fromConnectionString(conn);
+      const cont = svc.getContainerClient(PV_CONTAINER);
+      await cont.createIfNotExists();
+      await cont.getBlockBlobClient(blobName).uploadData(buf, {
+        blobHTTPHeaders: { blobContentType: contentType }
+      });
+
+      // (2) MARCHE : le drapeau ne s'ecrit qu'apres un blob reussi.
+      marche.reception_definitive_prononcee = true;
+      marche.date_reception_definitive_reelle = dateReelle;
+      marche.pv_reception_definitive = {
+        blob: blobName,
+        nom_original: nomOriginal || ("pv-reception-definitive." + ext),
+        taille: buf.length,
+        content_type: contentType,
+        depose_le: new Date().toISOString(),
+        depose_par: user.userDetails || null
+      };
+      await marchesC.items.upsert(marche);
+
+      // (3) CAUTIONS : bascule derivee (def + RG actives), UN batch transactionnel.
+      const dateISO = new Date().toISOString().slice(0, 10);
+      const cautionsC = getDb().container("mp_cautions");
+      const q = { query: "SELECT * FROM c WHERE c.marcheId = @m", parameters: [{ name: "@m", value: marcheId }] };
+      const { resources: cautions } = await cautionsC.items.query(q).fetchAll();
+      const batch = MPMainlevee.basculerMarche(marche, cautions, dateISO);
+      if (batch.aMettreAJour.length) {
+        // Meme partition (marcheId) -> tout-ou-rien. Un marche n'atteint jamais 100 cautions.
+        const ops = batch.aMettreAJour.map(function (c) {
+          return { operationType: "Upsert", resourceBody: c };
+        });
+        await cautionsC.items.batch(ops, marcheId);
+      }
+
+      // Reponse : libelles humains uniquement (jamais l'id ni le chemin blob).
+      context.res = {
+        status: 200,
+        body: {
+          ok: true,
+          marche: marche.ref,
+          date_reception_definitive_reelle: dateReelle,
+          cautions_basculees: batch.count,
+          montant_bascule: batch.total
+        }
+      };
+      return;
+    } catch (e) {
+      context.log.error("pvReception error:", e.message, e.stack);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }

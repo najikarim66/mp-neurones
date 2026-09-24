@@ -1,0 +1,40 @@
+name: Gate PV mainlevee
+
+# Garde-fou du lot "PV de reception definitive -> mainlevee". Rejoue la logique
+# pure sur une fixture piegee et echoue si :
+#  - un marche bascule sur sa date_reception_definitive CALCULEE au lieu du PV
+#    reellement depose (reception_definitive_prononcee) -> risque : ~44 cautions
+#    / ~3,1 M MAD basculees d'un coup ;
+#  - une caution hors bonne_execution / retenue_garantie bascule (arbitrage A2) ;
+#  - la bascule mute la caution d'entree ou oublie de dater la demande.
+# Deterministe, sans dependances (node pur).
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/pv-mainlevee.test.js'
+      - 'test/module-copy.test.js'
+      - '.github/workflows/pv-mainlevee-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/pv-mainlevee.test.js'
+      - 'test/module-copy.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate PV mainlevee (node, sans dependances)
+        run: node test/pv-mainlevee.test.js
+      - name: Gate copie unique du module (api == public, octet a octet)
+        run: node test/module-copy.test.js
