@@ -913,7 +913,7 @@ function renderAvenantsSection(m){
 function showAddAvenant(marcheId){
   var avs=(S.avenants||[]).filter(function(a){return a.marche_id===marcheId;});
   var nextNum=avs.length+1;
-  var html='<div class="fr2"><div class="fg"><label>Numero avenant *</label><input class="fc" id="av_numero" type="number" value="'+nextNum+'" min="1"></div><div class="fg"><label>Date de signature *</label><input class="fc" id="av_date" type="date" value="'+(new Date().toISOString().slice(0,10))+'"></div></div>';
+  var html='<div class="fr2"><div class="fg"><label>Numero avenant *</label><input class="fc" id="av_numero" type="number" value="'+nextNum+'" min="1"></div><div class="fg"><label>Date de signature (telle qu\'elle figure sur l\'avenant) *</label><input class="fc" id="av_date" type="date" value="" required></div></div>';
   html+='<div class="fg"><label>Objet de l\'avenant *</label><textarea class="fc" id="av_objet" rows="2" placeholder="Ex: Augmentation de la prestation X"></textarea></div>';
   html+='<div class="fr2"><div class="fg"><label>Montant HT (MAD)</label><input class="fc" id="av_montant" type="number" placeholder="0 (peut etre negatif)"></div><div class="fg"><label>Delai supplementaire (jours)</label><input class="fc" id="av_delai" type="number" min="0" placeholder="0"></div></div>';
   html+='<div class="fg"><label>Delai de garantie modifie (mois) - optionnel</label><input class="fc" id="av_garantie" type="number" min="0" max="60" placeholder="Laisser vide si pas de changement"></div>';

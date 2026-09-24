@@ -363,7 +363,9 @@ module.exports = async function (context, req) {
       await marchesC.items.upsert(marche);
 
       // (3) CAUTIONS : bascule derivee (def + RG actives), UN batch transactionnel.
-      const dateISO = new Date().toISOString().slice(0, 10);
+      // La demande de mainlevee est datee de la RECEPTION (date du PV), pas du jour
+      // du depot : l'anciennete (relance) court depuis que la mainlevee est due.
+      const dateISO = dateReelle;
       const cautionsC = getDb().container("mp_cautions");
       const q = { query: "SELECT * FROM c WHERE c.marcheId = @m", parameters: [{ name: "@m", value: marcheId }] };
       const { resources: cautions } = await cautionsC.items.query(q).fetchAll();
