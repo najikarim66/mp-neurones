@@ -678,7 +678,7 @@ module.exports = async function (context, req) {
 
       const secret = process.env.MP_AUTOLINK_SECRET;
       if (!MPMainlevee.autolinkConfigure(secret)) {
-        context.res = { status: 401, body: { error: "Autolink ERP non configure (MP_AUTOLINK_SECRET absent) — fail-closed, aucun appel ERP" } };
+        context.res = { status: 401, body: { code: "autolink_non_configure", error: "Rattachement ERP non configure (MP_AUTOLINK_SECRET absent) — fail-closed, aucun appel ERP" } };
         return;
       }
 

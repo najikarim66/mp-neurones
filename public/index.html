@@ -1240,7 +1240,15 @@ function autolinkClientERP(marche){
       if(d.action==='created_new'&&d.client){toast('Client ERP cree : '+d.client.raison_sociale+' (ICE a completer)');}
       else if(d.action==='linked_existing'&&d.client){toast('Marche lie au client ERP : '+d.client.raison_sociale);}
     })
-    .catch(function(e){toast('Auto-lien client ERP echoue : '+e.message,false);});
+    .catch(function(e){
+      /* Secret absent (fail-closed) : l'ERP n'a PAS ete appele -> information, pas erreur.
+         Un secret FAUX (l'ERP a refuse) reste, lui, une erreur. */
+      if(String(e.message||'').indexOf('autolink_non_configure')>=0){
+        toast('Rattachement ERP non configure — client a rattacher manuellement dans l\'ERP',true);
+      }else{
+        toast('Auto-lien client ERP echoue : '+e.message,false);
+      }
+    });
 }
 
 // CAUTIONS INLINE dans marche
