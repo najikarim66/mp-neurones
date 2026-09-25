@@ -8,6 +8,7 @@
     "node": ">=18"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.128.0",
     "@azure/cosmos": "^4.1.1",
     "@azure/storage-blob": "^12.24.0"
   }

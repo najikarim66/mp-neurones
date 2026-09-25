@@ -715,6 +715,68 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route caution-acte-ocr : POST /api/caution-acte-ocr
+  // Cas A : depose l'acte + OCR (sonnet, cache hash+modele), renvoie les champs + la
+  // confiance par champ SANS RIEN ECRIRE (validation humaine bloquante cote client, la
+  // caution est creee ensuite avec les champs valides). FAIL-SOFT : sans ANTHROPIC_API_KEY
+  // -> { configure:false } (200), le depot reste possible, l'UI dit "OCR non configure".
+  if (fn === "cautionActeOcr") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+
+      const body = req.body || {};
+      const contentType = String(body.content_type || "").trim();
+      const nomOriginal = String(body.nom_original || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+      const ext = PV_TYPES[contentType];
+      if (!ext) { context.res = { status: 400, body: { error: "content_type non autorise (pdf, jpeg ou png)" } }; return; }
+      let buf; try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+      if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+
+      const ocr = require("./lib/ocr-acte.js");
+
+      // Referentiel banques (best-effort) pour verrouiller la banque lue.
+      let referentiel = [];
+      try {
+        const bs = (await getDb().container("mp_banques").items.readAll().fetchAll()).resources;
+        referentiel = bs.map(function (b) { return b.nom || b.name || b.libelle || ""; }).filter(Boolean);
+      } catch (e) { referentiel = []; }
+
+      // Cache best-effort (container mp_ocr_cache, cree si absent).
+      let cacheC = null;
+      try { const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_cache", partitionKey: { paths: ["/id"] } }); cacheC = cc.container; } catch (e) { cacheC = null; }
+      const cacheGet = cacheC ? function (cle) { return cacheC.item(cle, cle).read().then(function (r) { return r.resource; }).catch(function () { return null; }); } : null;
+      const cacheSet = cacheC ? function (cle, res) { return cacheC.items.upsert({ id: cle, resultat: res, le: new Date().toISOString() }); } : null;
+
+      const res = await ocr.extraireActe(buf, contentType, referentiel, cacheGet, cacheSet);
+      if (!res.configure) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente) — saisir les champs manuellement" } }; return; }
+
+      // Depose l'acte (blob par hash : re-upload du meme acte = ecrase, pas de doublon).
+      var blobName = "actes/" + res.hash + "." + ext;
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      var acte = null;
+      if (conn) {
+        try {
+          const svc = BlobServiceClient.fromConnectionString(conn);
+          const cont = svc.getContainerClient(PIECE_CONTAINER);
+          await cont.createIfNotExists();
+          await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+          acte = { blob: blobName, nom_original: nomOriginal || ("acte." + ext), taille: buf.length, content_type: contentType, depose_le: new Date().toISOString(), depose_par: user.userDetails || null };
+        } catch (e) { acte = null; }
+      }
+
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, champs: res.champs, confiances: res.confiances, acte: acte } };
+      return;
+    } catch (e) {
+      context.log.error("cautionActeOcr error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {
