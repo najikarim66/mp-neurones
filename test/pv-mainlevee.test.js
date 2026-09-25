@@ -228,8 +228,10 @@ check('OCR n\'a rien lu sur un champ -> pas d\'ecart invente', MPM.comparerActe(
 console.log('\n=== 17. OCR incrément A : cache-key (hash+modèle), type/banque verrouillés, parsing montant, confiance ===');
 // (1) cache-key = hash ET modèle
 check('cle cache = modele:hash (change de modele -> cle differente, pas de vieille extraction servie)', MPM.cleCacheOcr('abc123', 'claude-sonnet-5') === 'claude-sonnet-5:abc123' && MPM.cleCacheOcr('abc123', 'claude-sonnet-5') !== MPM.cleCacheOcr('abc123', 'claude-haiku-4-5'), '');
-// (2) type verrouille aux types connus
-check('type OCR -> type connu ou null (la liste verrouille)', MPM.normaliserTypeOcr('Caution definitive') === 'bonne_execution' && MPM.normaliserTypeOcr('RG') === 'retenue_garantie' && MPM.normaliserTypeOcr('retenue de garantie') === 'retenue_garantie' && MPM.normaliserTypeOcr('provisoire') === 'provisoire' && MPM.normaliserTypeOcr('un truc') === null, '');
+// (2) type verrouille aux types connus + PONT provisoire -> soumission (seul nom du modele)
+check('type OCR -> type connu ou null (la liste verrouille)', MPM.normaliserTypeOcr('Caution definitive') === 'bonne_execution' && MPM.normaliserTypeOcr('RG') === 'retenue_garantie' && MPM.normaliserTypeOcr('retenue de garantie') === 'retenue_garantie' && MPM.normaliserTypeOcr('un truc') === null, '');
+check('pont provisoire/CP/caution provisoire/soumission -> soumission', MPM.normaliserTypeOcr('provisoire') === 'soumission' && MPM.normaliserTypeOcr('caution provisoire') === 'soumission' && MPM.normaliserTypeOcr('CP') === 'soumission' && MPM.normaliserTypeOcr('caution de soumission') === 'soumission', JSON.stringify([MPM.normaliserTypeOcr('provisoire'), MPM.normaliserTypeOcr('CP')]));
+check('types connus = soumission, bonne_execution, retenue_garantie (pas de "provisoire")', MPM.TYPES_OCR_CONNUS.indexOf('soumission') >= 0 && MPM.TYPES_OCR_CONNUS.indexOf('provisoire') < 0 && MPM.TYPES_OCR_CONNUS.length === 3, JSON.stringify(MPM.TYPES_OCR_CONNUS));
 // (2) banque depuis le referentiel, jamais un libelle libre
 var refBanques = ['Attijariwafa Bank', 'BMCE Bank', 'FINEA'];
 check('banque OCR -> entree du referentiel ou null (jamais un libelle invente)', MPM.normaliserBanqueOcr('bmce bank', refBanques) === 'BMCE Bank' && MPM.normaliserBanqueOcr('Banque Inconnue SA', refBanques) === null, '');

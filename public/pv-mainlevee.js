@@ -223,12 +223,16 @@
    * extraction n'est PAS servie comme fraiche (variante du defaut « 2 modeles » de l'ERP). */
   function cleCacheOcr(hashHex, modele) { return String(modele || '') + ':' + String(hashHex || ''); }
 
-  var TYPES_OCR_CONNUS = ['provisoire', 'bonne_execution', 'retenue_garantie'];
+  var TYPES_OCR_CONNUS = ['soumission', 'bonne_execution', 'retenue_garantie'];
   /* Le type lu par l'OCR est CONTRAINT aux types connus : l'OCR propose, la liste
-   * verrouille. Renvoie un type connu ou null (l'utilisateur choisit alors). */
+   * verrouille. Renvoie un type connu ou null (l'utilisateur choisit alors).
+   * PONT provisoire -> soumission : « provisoire », « caution provisoire », « CP »
+   * designent le meme instrument que la « caution de soumission », seul nom porte
+   * par le modele. La TRADUCTION ne doit PAS effacer la valeur brute lue : l'appelant
+   * garde le texte d'origine dans la trace (voir ocr-acte.js _normaliser -> lu_brut). */
   function normaliserTypeOcr(propose) {
     var t = _normCmp(propose); if (!t) return null;
-    if (t.indexOf('provisoire') >= 0 || t.indexOf('soumission') >= 0) return 'provisoire';
+    if (t === 'cp' || t.indexOf('provisoire') >= 0 || t.indexOf('soumission') >= 0) return 'soumission';
     if (t.indexOf('retenue') >= 0 || t === 'rg' || t.indexOf('garantie') >= 0) return 'retenue_garantie';
     if (t.indexOf('definitive') >= 0 || t.indexOf('bonne') >= 0 || t.indexOf('execution') >= 0) return 'bonne_execution';
     return null;

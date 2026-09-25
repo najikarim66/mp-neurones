@@ -718,7 +718,7 @@ module.exports = async function (context, req) {
         } catch (e) { acte = null; }
       }
 
-      context.res = { status: 200, body: { configure: true, cache: !!res.cache, champs: res.champs, confiances: res.confiances, acte: acte } };
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut || null, acte: acte } };
       return;
     } catch (e) {
       context.log.error("cautionActeOcr error:", e.message);
