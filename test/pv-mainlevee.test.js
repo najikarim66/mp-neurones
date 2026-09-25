@@ -214,6 +214,21 @@ console.log('\n=== 16. Autolink ERP : FAIL-CLOSED (jamais d\'appel ERP sans secr
 check('secret absent/vide -> non configure (endpoint doit refuser 401, aucun appel ERP)', MPM.autolinkConfigure('') === false && MPM.autolinkConfigure('   ') === false && MPM.autolinkConfigure(null) === false && MPM.autolinkConfigure(undefined) === false, '');
 check('secret present -> configure', MPM.autolinkConfigure('un-secret') === true, '');
 
+console.log('\n=== 17. OCR acte de caution : modele precis + fail-soft + comparaison cas B (sans ecriture) ===');
+check('modele OCR = sonnet, JAMAIS haiku', MPM.MODELE_OCR === 'claude-sonnet-5' && MPM.MODELE_OCR.indexOf('haiku') < 0, MPM.MODELE_OCR);
+check('cle IA absente -> non configure (le depot reste possible, OCR dit non configure)', MPM.ocrConfigure('') === false && MPM.ocrConfigure(null) === false, '');
+check('cle IA presente -> configure', MPM.ocrConfigure('sk-ant-xxx') === true, '');
+// Cas B : comparaison caution stockee vs OCR — écarts, JAMAIS d'écriture
+var stock = { montant: 100000, banque: 'BMCE Bank', num: 'ATW-2024-1', date_emission: '2024-05-01', date_echeance: '2025-05-01' };
+var identique = { montant: 100000, banque: 'bmce bank ', reference: 'ATW-2024-1', date_emission: '2024-05-01', echeance: '2025-05-01' };
+check('OCR identique (normalisé) -> AUCUN ecart', MPM.comparerActe(stock, identique).length === 0, JSON.stringify(MPM.comparerActe(stock, identique)));
+var different = { montant: 95000, banque: 'CIH', reference: 'ATW-2024-1', date_emission: '2024-05-01', echeance: '2025-06-01' };
+var ec = MPM.comparerActe(stock, different);
+var champs = ec.map(function (e) { return e.champ; }).sort().join(',');
+check('OCR different -> ecarts sur montant, banque, date_echeance (pas sur num ni date_emission)', champs === 'banque,date_echeance,montant', JSON.stringify(ec));
+check('un ecart porte stocke + lu (pour affichage, decision humaine)', ec[0].stocke !== undefined && ec[0].lu !== undefined, JSON.stringify(ec[0]));
+check('OCR n\'a rien lu sur un champ -> pas d\'ecart invente', MPM.comparerActe(stock, { montant: 100000 }).length === 0, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

@@ -185,6 +185,40 @@
   /* Vrai seulement si un principal Entra est present (userDetails). */
   function principalAutorise(p) { return !!(p && p.userDetails); }
 
+  /* OCR acte de caution — modele PRECIS impose (jamais le "rapide" haiku qui hallucine,
+   * lecon ERP incident BR2638). Un seul chemin d'extraction, mis en cache par hash cote
+   * serveur. Le nom du modele vit ici (source unique) ; l'appel Anthropic est serveur-only. */
+  var MODELE_OCR = 'claude-sonnet-5';
+
+  /* Cle IA presente ? FAIL-SOFT (≠ autolink) : si absente, le DEPOT reste possible,
+   * l'OCR dit seulement "non configure". Ne lit qu'une presence, jamais la valeur. */
+  function ocrConfigure(cle) { return typeof cle === 'string' && cle.trim().length > 0; }
+
+  function _normCmp(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+  /* CAS B — compare une caution STOCKEE a ce que l'OCR a lu, et renvoie les ECARTS.
+   * N'ECRIT RIEN (la donnee saisie fait foi). Ignore les champs que l'OCR n'a pas lus
+   * (pas de faux ecart par champ manquant). extrait = { montant, banque, reference,
+   * date_emission, echeance } (sortie OCR normalisee). */
+  function comparerActe(stockee, extrait) {
+    stockee = stockee || {}; extrait = extrait || {};
+    var champs = [
+      { cle: 'montant', lu: 'montant', num: true },
+      { cle: 'banque', lu: 'banque' },
+      { cle: 'num', lu: 'reference' },
+      { cle: 'date_emission', lu: 'date_emission' },
+      { cle: 'date_echeance', lu: 'echeance' }
+    ];
+    var ecarts = [];
+    champs.forEach(function (c) {
+      var vl = extrait[c.lu];
+      if (vl === undefined || vl === null || vl === '') return; // OCR n'a rien lu -> pas d'ecart
+      var vs = stockee[c.cle];
+      var diff = c.num ? (Math.round(+vs || 0) !== Math.round(+vl || 0)) : (_normCmp(vs) !== _normCmp(vl));
+      if (diff) ecarts.push({ champ: c.cle, stocke: (vs === undefined ? null : vs), lu: vl });
+    });
+    return ecarts;
+  }
+
   /* Autolink ERP : le secret partagé est-il configuré ? FAIL-CLOSED — si absent/vide,
    * l'endpoint MP refuse (401) et n'appelle JAMAIS l'ERP sans secret. Ne lit qu'une
    * PRÉSENCE, jamais la valeur (les valeurs de secret ne transitent pas par ce module). */
@@ -273,6 +307,9 @@
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
     autolinkConfigure: autolinkConfigure,
+    MODELE_OCR: MODELE_OCR,
+    ocrConfigure: ocrConfigure,
+    comparerActe: comparerActe,
     dateReceptionValide: dateReceptionValide,
     motifMainleveeValide: motifMainleveeValide,
     appliquerMainleveeManuelle: appliquerMainleveeManuelle,
