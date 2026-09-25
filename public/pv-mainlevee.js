@@ -219,6 +219,57 @@
     return ecarts;
   }
 
+  /* Cle de cache OCR = modele ET hash du fichier. Si le modele change, l'ancienne
+   * extraction n'est PAS servie comme fraiche (variante du defaut « 2 modeles » de l'ERP). */
+  function cleCacheOcr(hashHex, modele) { return String(modele || '') + ':' + String(hashHex || ''); }
+
+  var TYPES_OCR_CONNUS = ['provisoire', 'bonne_execution', 'retenue_garantie'];
+  /* Le type lu par l'OCR est CONTRAINT aux types connus : l'OCR propose, la liste
+   * verrouille. Renvoie un type connu ou null (l'utilisateur choisit alors). */
+  function normaliserTypeOcr(propose) {
+    var t = _normCmp(propose); if (!t) return null;
+    if (t.indexOf('provisoire') >= 0 || t.indexOf('soumission') >= 0) return 'provisoire';
+    if (t.indexOf('retenue') >= 0 || t === 'rg' || t.indexOf('garantie') >= 0) return 'retenue_garantie';
+    if (t.indexOf('definitive') >= 0 || t.indexOf('bonne') >= 0 || t.indexOf('execution') >= 0) return 'bonne_execution';
+    return null;
+  }
+
+  /* La banque lue est rattachee au REFERENTIEL existant, jamais un libelle libre
+   * invente par le modele. Renvoie une entree du referentiel ou null. */
+  function normaliserBanqueOcr(propose, referentiel) {
+    var t = _normCmp(propose); if (!t) return null; referentiel = referentiel || [];
+    for (var i = 0; i < referentiel.length; i++) {
+      var r = _normCmp(referentiel[i]);
+      if (r && (r === t || t.indexOf(r) >= 0 || r.indexOf(t) >= 0)) return referentiel[i];
+    }
+    return null;
+  }
+
+  /* Parsing montant DANS le module pur (pas dans l'UI). Gere « 99 072,00 MAD »,
+   * « 99.072 », « 1.234.567,89 ». Renvoie un nombre, ou NULL si illisible — jamais 0
+   * (un montant qui ne parse pas est un champ a confiance zero, pas un zero). */
+  function parserMontant(s) {
+    if (s == null) return null;
+    var t = String(s).replace(/[^\d.,\-]/g, '').trim();
+    if (!t) return null;
+    var dot = t.lastIndexOf('.'), comma = t.lastIndexOf(','), dec = Math.max(dot, comma);
+    var sepDecimal = null;
+    if (dec >= 0) { var apres = t.length - dec - 1; if (apres === 1 || apres === 2) sepDecimal = dec; }
+    var intPart, decPart = '';
+    if (sepDecimal !== null) { intPart = t.slice(0, dec).replace(/[.,\s]/g, ''); decPart = t.slice(dec + 1).replace(/\D/g, ''); }
+    else { intPart = t.replace(/[.,\s]/g, ''); }
+    if (!/^-?\d+$/.test(intPart)) return null;
+    var n = parseFloat(intPart + (decPart ? ('.' + decPart) : ''));
+    return isNaN(n) ? null : n;
+  }
+
+  /* Pastille de confiance : 3 etats (comme l'ERP), pas de pourcentage a l'ecran.
+   * >=80 lu ; <80 douteux (confirmation obligatoire) ; absent/illisible non_lu. */
+  function etatConfiance(score) {
+    if (score == null || isNaN(+score)) return 'non_lu';
+    return (+score >= 80) ? 'lu' : 'douteux';
+  }
+
   /* Autolink ERP : le secret partagé est-il configuré ? FAIL-CLOSED — si absent/vide,
    * l'endpoint MP refuse (401) et n'appelle JAMAIS l'ERP sans secret. Ne lit qu'une
    * PRÉSENCE, jamais la valeur (les valeurs de secret ne transitent pas par ce module). */
@@ -310,6 +361,12 @@
     MODELE_OCR: MODELE_OCR,
     ocrConfigure: ocrConfigure,
     comparerActe: comparerActe,
+    cleCacheOcr: cleCacheOcr,
+    TYPES_OCR_CONNUS: TYPES_OCR_CONNUS,
+    normaliserTypeOcr: normaliserTypeOcr,
+    normaliserBanqueOcr: normaliserBanqueOcr,
+    parserMontant: parserMontant,
+    etatConfiance: etatConfiance,
     dateReceptionValide: dateReceptionValide,
     motifMainleveeValide: motifMainleveeValide,
     appliquerMainleveeManuelle: appliquerMainleveeManuelle,

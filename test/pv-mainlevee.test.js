@@ -229,6 +229,22 @@ check('OCR different -> ecarts sur montant, banque, date_echeance (pas sur num n
 check('un ecart porte stocke + lu (pour affichage, decision humaine)', ec[0].stocke !== undefined && ec[0].lu !== undefined, JSON.stringify(ec[0]));
 check('OCR n\'a rien lu sur un champ -> pas d\'ecart invente', MPM.comparerActe(stock, { montant: 100000 }).length === 0, '');
 
+console.log('\n=== 18. OCR incrément A : cache-key (hash+modèle), type/banque verrouillés, parsing montant, confiance ===');
+// (1) cache-key = hash ET modèle
+check('cle cache = modele:hash (change de modele -> cle differente, pas de vieille extraction servie)', MPM.cleCacheOcr('abc123', 'claude-sonnet-5') === 'claude-sonnet-5:abc123' && MPM.cleCacheOcr('abc123', 'claude-sonnet-5') !== MPM.cleCacheOcr('abc123', 'claude-haiku-4-5'), '');
+// (2) type verrouille aux types connus
+check('type OCR -> type connu ou null (la liste verrouille)', MPM.normaliserTypeOcr('Caution definitive') === 'bonne_execution' && MPM.normaliserTypeOcr('RG') === 'retenue_garantie' && MPM.normaliserTypeOcr('retenue de garantie') === 'retenue_garantie' && MPM.normaliserTypeOcr('provisoire') === 'provisoire' && MPM.normaliserTypeOcr('un truc') === null, '');
+// (2) banque depuis le referentiel, jamais un libelle libre
+var refBanques = ['Attijariwafa Bank', 'BMCE Bank', 'FINEA'];
+check('banque OCR -> entree du referentiel ou null (jamais un libelle invente)', MPM.normaliserBanqueOcr('bmce bank', refBanques) === 'BMCE Bank' && MPM.normaliserBanqueOcr('Banque Inconnue SA', refBanques) === null, '');
+// (3) parsing montant dans le module pur
+check('parse "99 072,00 MAD" -> 99072', MPM.parserMontant('99 072,00 MAD') === 99072, String(MPM.parserMontant('99 072,00 MAD')));
+check('parse "99.072" -> 99072 (point = separateur de milliers)', MPM.parserMontant('99.072') === 99072, String(MPM.parserMontant('99.072')));
+check('parse "1.234.567,89" -> 1234567.89', MPM.parserMontant('1.234.567,89') === 1234567.89, String(MPM.parserMontant('1.234.567,89')));
+check('montant illisible -> null (PAS zero)', MPM.parserMontant('illisible') === null && MPM.parserMontant('') === null, '');
+// (3) montant illisible = confiance zero, pas un zero ; (badge) 3 etats
+check('confiance : >=80 lu, <80 douteux, absent non_lu (pas de %)', MPM.etatConfiance(80) === 'lu' && MPM.etatConfiance(79) === 'douteux' && MPM.etatConfiance(null) === 'non_lu' && MPM.etatConfiance('x') === 'non_lu', '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
