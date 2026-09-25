@@ -1435,26 +1435,135 @@ function pgCautions(){
   return floor12+'<div class="cauv2">'+restBand+hero+tiles+kpis+toolbar+table+details+'</div>';
 }
 
+/* ===== OCR acte de caution (incrément A) — lecture assistée, validation humaine
+   BLOQUANTE. L'OCR pré-remplit ; l'humain valide. Serveur : POST /api/caution-acte-ocr
+   (rien n'est écrit tant que la caution n'est pas enregistrée par ce formulaire). ===== */
+function ocrSectionHTML(){
+  return '<div class="sec" style="margin-bottom:10px;padding:10px;background:#EEF4FF;border:1px solid #C7D8F5;border-radius:5px">'+
+    '<div class="sec-t" style="font-size:12px;margin-bottom:6px">Acte de caution — lecture assistee (OCR)</div>'+
+    '<div class="fr2"><div class="fg"><label style="font-size:12px">Fichier de l\'acte (PDF, JPG ou PNG)</label><input class="fc" id="oc_file" type="file" accept="application/pdf,image/jpeg,image/png"></div>'+
+    '<div class="fg" style="display:flex;align-items:flex-end"><button type="button" class="btn btn-sm btn-prim" id="oc_btn" onclick="ocrActe()">Lire l\'acte</button></div></div>'+
+    '<div id="oc_status" style="font-size:12px;color:#7A7369;margin-top:6px"></div>'+
+    '<div id="oc_result" style="margin-top:8px"></div></div>';
+}
+/* Pastille 3 etats (comme l'ERP) — jamais de pourcentage a l'ecran. */
+function ocrBadge(etat){
+  var m={lu:{l:'lu',bg:'#dcfce7',fg:'#166534'},douteux:{l:'a confirmer',bg:'#fef3c7',fg:'#92400e'},non_lu:{l:'non lu',bg:'#e5e7eb',fg:'#374151'}};
+  var s=m[etat]||m.non_lu;
+  return '<span style="font-size:11px;padding:1px 6px;border-radius:9px;background:'+s.bg+';color:'+s.fg+'">'+s.l+'</span>';
+}
+function optionExiste(sel,val){if(!sel)return false;for(var i=0;i<sel.options.length;i++){if(sel.options[i].value===String(val))return true;}return false;}
+/* Pose une banque dans le select verrouille ; si absente du referentiel -> "Autre". */
+function setBanqueValue(fieldId,nom){
+  var sel=document.getElementById(fieldId+'_banque'),inp=document.getElementById(fieldId+'_banque_autre');
+  if(!sel)return;
+  if(optionExiste(sel,nom)){sel.value=nom;if(inp){inp.style.display='none';inp.value='';}}
+  else{sel.value='__OTHER__';if(inp){inp.style.display='block';inp.value=nom;}}
+}
+/* Applique les champs LUS aux champs du formulaire — seulement si une valeur a ete
+   lue, et pour le type/banque seulement si la valeur existe dans la liste verrouillee
+   (sinon on laisse l'humain choisir : pas de faux pre-remplissage). */
+function appliquerOcrAuFormulaire(o){
+  var ch=(o&&o.champs)||{};
+  if(ch.montant!=null){var m=document.getElementById('cmnt');if(m)m.value=ch.montant;}
+  if(ch.reference){var n=document.getElementById('cnum');if(n)n.value=ch.reference;}
+  if(ch.date_emission){var de=document.getElementById('cdem');if(de)de.value=ch.date_emission;}
+  if(ch.echeance){var ec=document.getElementById('cech');if(ec)ec.value=ch.echeance;}
+  if(ch.type){var ts=document.getElementById('ctype');if(ts&&optionExiste(ts,ch.type))ts.value=ch.type;}
+  if(ch.banque){setBanqueValue('c',ch.banque);}
+}
+/* Panneau de revue : par champ, la pastille + la valeur appliquee + la valeur BRUTE
+   lue quand une traduction a eu lieu (type provisoire->soumission, montant, banque)
+   — la trace de ce qui etait ecrit sur l'acte n'est jamais masquee. Un champ douteux
+   exige une case "je confirme" (validation humaine bloquante). */
+function ocrPanelHTML(o){
+  var ch=o.champs||{},cf=o.confiances||{},lb=o.lu_brut||{};
+  var rows=[
+    ['montant','Montant',ch.montant!=null?fmad(ch.montant):null,lb.montant],
+    ['banque','Banque',ch.banque||null,lb.banque],
+    ['reference','N Caution',ch.reference||null,lb.reference],
+    ['type','Type',ch.type?(TC[ch.type]||ch.type):null,lb.type],
+    ['date_emission','Emission',ch.date_emission?fdat(ch.date_emission):null,lb.date_emission],
+    ['echeance','Echeance',ch.echeance?fdat(ch.echeance):null,lb.echeance]
+  ];
+  var html='<div style="font-size:12px;font-weight:600;margin-bottom:4px">Champs lus (a verifier)</div>';
+  html+=rows.map(function(r){
+    var key=r[0],lbl=r[1],val=r[2],brut=r[3],etat=cf[key]||'non_lu';
+    var trace=(brut!=null&&String(brut)!==String(val==null?'':val))?(' <span style="color:#7A7369">(lu : '+esc(brut)+')</span>'):'';
+    var conf=(etat==='douteux')?(' <label style="font-weight:400;margin-left:4px"><input type="checkbox" id="oc_ok_'+key+'"> je confirme</label>'):'';
+    var valTxt=(val!=null)?esc(String(val)):'<span style="color:#b45309">non lu</span>';
+    return '<div style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:12px;flex-wrap:wrap"><span style="width:78px;color:#7A7369">'+esc(lbl)+'</span>'+ocrBadge(etat)+'<span>'+valTxt+'</span>'+trace+conf+'</div>';
+  }).join('');
+  html+='<div class="info-box info-blue" style="font-size:11px;margin-top:6px">Les champs « a confirmer » exigent la case cochee avant d\'enregistrer. Corrige librement — c\'est toi qui valides.</div>';
+  return html;
+}
+/* Validation humaine BLOQUANTE : tout champ douteux doit avoir sa case cochee. */
+function ocrValidationOK(){
+  if(!S._ocrActe)return true;
+  var cf=S._ocrActe.confiances||{},manquants=[];
+  Object.keys(cf).forEach(function(k){
+    if(cf[k]==='douteux'){var cbx=document.getElementById('oc_ok_'+k);if(!cbx||!cbx.checked)manquants.push(k);}
+  });
+  if(manquants.length){toast('Confirme les champs douteux avant d\'enregistrer : '+manquants.join(', '),false);return false;}
+  return true;
+}
+function ocrActe(){
+  var fileEl=document.getElementById('oc_file'),btn=document.getElementById('oc_btn');
+  var statusEl=document.getElementById('oc_status'),resEl=document.getElementById('oc_result');
+  if(!fileEl||!fileEl.files||!fileEl.files.length){toast('Selectionne le fichier de l\'acte',false);return;}
+  var file=fileEl.files[0],okTypes={'application/pdf':1,'image/jpeg':1,'image/png':1};
+  if(!okTypes[file.type]){toast('Type non autorise (PDF, JPG ou PNG)',false);return;}
+  if(file.size>20*1024*1024){toast('Fichier trop volumineux (max 20 Mo)',false);return;}
+  if(btn)btn.disabled=true;if(statusEl)statusEl.textContent='Lecture de l\'acte en cours...';
+  var reader=new FileReader();
+  reader.onload=function(){
+    var s=String(reader.result||''),b64=s.indexOf(',')>=0?s.split(',')[1]:s;
+    apiFetch('/api/caution-acte-ocr',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({content_type:file.type,nom_original:file.name,data_base64:b64})})
+    .then(function(r){
+      r=r||{};if(btn)btn.disabled=false;
+      if(!r.configure){
+        S._ocrActe=null;if(statusEl)statusEl.textContent='';
+        if(resEl)resEl.innerHTML='<div class="info-box info-amber" style="font-size:12px">OCR non configure — saisis les champs a la main. '+esc(r.message||'')+'</div>';
+        return;
+      }
+      S._ocrActe={acte:r.acte||null,lu_brut:r.lu_brut||null,confiances:r.confiances||{},champs:r.champs||{}};
+      appliquerOcrAuFormulaire(S._ocrActe);
+      if(statusEl)statusEl.textContent=r.cache?'Acte deja lu (cache).':'Acte lu.';
+      if(resEl)resEl.innerHTML=ocrPanelHTML(S._ocrActe);
+    })
+    .catch(function(e){
+      if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';S._ocrActe=null;
+      toast('Lecture OCR echouee : '+e.message,false);
+    });
+  };
+  reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
+  reader.readAsDataURL(file);
+}
 function cautionFormHTML(c){
-  return '<div class="fg"><label>Marche *</label><select class="fc" id="cmar" onchange="mfull(\'cmar\')">'+S.marches.map(function(m){return mopt(m,c&&c.marche_id===m.id);}).join('')+'</select><div id="cmar-full" style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc((gm((c&&c.marche_id)||(S.marches[0]&&S.marches[0].id))||{}).titre||'')+'</div></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
+  return ocrSectionHTML()+'<div class="fg"><label>Marche *</label><select class="fc" id="cmar" onchange="mfull(\'cmar\')">'+S.marches.map(function(m){return mopt(m,c&&c.marche_id===m.id);}).join('')+'</select><div id="cmar-full" style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc((gm((c&&c.marche_id)||(S.marches[0]&&S.marches[0].id))||{}).titre||'')+'</div></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Echeance</label><input class="fc" id="cech" type="date" value="'+(c&&c.date_echeance?c.date_echeance:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
   '<div class="sec" style="margin-top:8px;padding:10px;background:#F6F2EA;border-radius:4px"><div class="sec-t" style="font-size:12px;margin-bottom:6px">Suivi mainlevee (optionnel)</div><div class="fr2"><div class="fg"><label style="font-size:12px">Date demande mainlevee</label><input class="fc" id="cdemmain" type="date" value="'+(c&&c.date_demande_mainlevee?c.date_demande_mainlevee:'')+'" title="Date ou vous avez demande au MO de liberer la caution"></div><div class="fg"><label style="font-size:12px">Date liberation effective</label><input class="fc" id="cliber" type="date" value="'+(c&&c.date_liberation_effective?c.date_liberation_effective:'')+'" title="Date ou la banque a confirme le deblocage de l\'argent"></div></div><div class="fg"><label style="font-size:12px">Notes (relances, contacts MO)</label><input class="fc" id="cnotesmain" value="'+esc(c&&c.notes_mainlevee?c.notes_mainlevee:'')+'" placeholder="Ex: Relance envoyee le 15/04, interlocuteur M. Bennani"></div></div>'+
   banquesDatalistHTML();
 }
 function newCaution(){
+  S._ocrActe=null;
   openMod('Nouvelle caution',cautionFormHTML(null),function(){
+    if(!ocrValidationOK())return;
     var mid=v('cmar'),montant=vn('cmnt'),num=v('cnum');
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
+    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,date_echeance:v('cech')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
+    if(S._ocrActe){ if(S._ocrActe.acte)newC.acte=S._ocrActe.acte; if(S._ocrActe.lu_brut)newC.ocr_lu_brut=S._ocrActe.lu_brut; }
     saveItem('cautions',newC).then(function(){sbStats();render();toast('Caution creee');});
   });
 }
 function editCaution(id){
   var c=S.cautions.find(function(x){return String(x.id)===String(id);});if(!c)return;
   var oldStatut=c.statut;
+  S._ocrActe=null;
   openMod('Modifier caution - '+c.num,cautionFormHTML(c),function(){
+    if(!ocrValidationOK())return;
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.statut=v('cstat');
+    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_echeance=v('cech')||null;c.statut=v('cstat');
     c.date_demande_mainlevee=v('cdemmain')||null;
     c.date_liberation_effective=v('cliber')||null;
     c.notes_mainlevee=v('cnotesmain')||'';
@@ -1462,6 +1571,10 @@ function editCaution(id){
        posées par /api/caution-piece : un save de formulaire caution ne les efface pas. */
     apiGetOne('cautions', c.id, c.marche_id).then(function(srv){
       if(srv) MPMainlevee.preserverChampsServeur(c, srv, MPMainlevee.CHAMPS_PIECES_CAUTION);
+      /* Acte + trace OCR : un nouvel OCR dans ce formulaire remplace ; sinon on garde
+         ce que le serveur porte deja (un simple edit ne doit pas effacer l'acte lu). */
+      if(S._ocrActe){ if(S._ocrActe.acte)c.acte=S._ocrActe.acte; if(S._ocrActe.lu_brut)c.ocr_lu_brut=S._ocrActe.lu_brut; }
+      else if(srv){ if(srv.acte)c.acte=srv.acte; if(srv.ocr_lu_brut)c.ocr_lu_brut=srv.ocr_lu_brut; }
       return saveItem('cautions',c);
     }).then(function(){sbStats();render();toast('Caution mise a jour');}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
     if(c.statut==='liberee'&&oldStatut!=='liberee')checkAutoTermine(c.marche_id);
