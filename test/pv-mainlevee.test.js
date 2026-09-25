@@ -210,11 +210,7 @@ check('ne mute pas l\'entree', cLib.statut === 'active', cLib.statut);
 check('sans motif -> refuse (null), aucune liberation', MPM.appliquerLiberationDirecte(cLib, '  ', 'x', '2026-09-24') === null, '');
 check('caution non active -> refuse (null)', MPM.appliquerLiberationDirecte({ statut: 'liberee' }, 'motif', 'x', '2026-09-24') === null, '');
 
-console.log('\n=== 16. Autolink ERP : FAIL-CLOSED (jamais d\'appel ERP sans secret) ===');
-check('secret absent/vide -> non configure (endpoint doit refuser 401, aucun appel ERP)', MPM.autolinkConfigure('') === false && MPM.autolinkConfigure('   ') === false && MPM.autolinkConfigure(null) === false && MPM.autolinkConfigure(undefined) === false, '');
-check('secret present -> configure', MPM.autolinkConfigure('un-secret') === true, '');
-
-console.log('\n=== 17. OCR acte de caution : modele precis + fail-soft + comparaison cas B (sans ecriture) ===');
+console.log('\n=== 16. OCR acte de caution : modele precis + fail-soft + comparaison cas B (sans ecriture) ===');
 check('modele OCR = sonnet, JAMAIS haiku', MPM.MODELE_OCR === 'claude-sonnet-5' && MPM.MODELE_OCR.indexOf('haiku') < 0, MPM.MODELE_OCR);
 check('cle IA absente -> non configure (le depot reste possible, OCR dit non configure)', MPM.ocrConfigure('') === false && MPM.ocrConfigure(null) === false, '');
 check('cle IA presente -> configure', MPM.ocrConfigure('sk-ant-xxx') === true, '');
@@ -229,7 +225,7 @@ check('OCR different -> ecarts sur montant, banque, date_echeance (pas sur num n
 check('un ecart porte stocke + lu (pour affichage, decision humaine)', ec[0].stocke !== undefined && ec[0].lu !== undefined, JSON.stringify(ec[0]));
 check('OCR n\'a rien lu sur un champ -> pas d\'ecart invente', MPM.comparerActe(stock, { montant: 100000 }).length === 0, '');
 
-console.log('\n=== 18. OCR incrément A : cache-key (hash+modèle), type/banque verrouillés, parsing montant, confiance ===');
+console.log('\n=== 17. OCR incrément A : cache-key (hash+modèle), type/banque verrouillés, parsing montant, confiance ===');
 // (1) cache-key = hash ET modèle
 check('cle cache = modele:hash (change de modele -> cle differente, pas de vieille extraction servie)', MPM.cleCacheOcr('abc123', 'claude-sonnet-5') === 'claude-sonnet-5:abc123' && MPM.cleCacheOcr('abc123', 'claude-sonnet-5') !== MPM.cleCacheOcr('abc123', 'claude-haiku-4-5'), '');
 // (2) type verrouille aux types connus

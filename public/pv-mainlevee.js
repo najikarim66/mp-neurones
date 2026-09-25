@@ -190,8 +190,8 @@
    * serveur. Le nom du modele vit ici (source unique) ; l'appel Anthropic est serveur-only. */
   var MODELE_OCR = 'claude-sonnet-5';
 
-  /* Cle IA presente ? FAIL-SOFT (≠ autolink) : si absente, le DEPOT reste possible,
-   * l'OCR dit seulement "non configure". Ne lit qu'une presence, jamais la valeur. */
+  /* Cle IA presente ? FAIL-SOFT : si absente, le DEPOT reste possible, l'OCR dit
+   * seulement "non configure". Ne lit qu'une presence, jamais la valeur. */
   function ocrConfigure(cle) { return typeof cle === 'string' && cle.trim().length > 0; }
 
   function _normCmp(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
@@ -270,20 +270,15 @@
     return (+score >= 80) ? 'lu' : 'douteux';
   }
 
-  /* Autolink ERP : le secret partagé est-il configuré ? FAIL-CLOSED — si absent/vide,
-   * l'endpoint MP refuse (401) et n'appelle JAMAIS l'ERP sans secret. Ne lit qu'une
-   * PRÉSENCE, jamais la valeur (les valeurs de secret ne transitent pas par ce module). */
-  function autolinkConfigure(secret) { return typeof secret === 'string' && secret.trim().length > 0; }
-
   /* Date de piece (PV, mainlevee, accuse) : AAAA-MM-JJ obligatoire. Refuse le vide
    * -> un depot sans date saisie est rejete, JAMAIS complete par la date du jour
    * (doctrine : quand le systeme ne sait pas, il ne propose pas une valeur plausible). */
   function dateReceptionValide(v) { return /^\d{4}-\d{2}-\d{2}$/.test(String(v == null ? '' : v)); }
 
   /* Garde de l'endpoint machine /api/relance-hebdo (voie A, secret partage).
-   * PAS de fail-open (lecon de X-MP-Autolink-Secret cote ERP) : si le secret
-   * ATTENDU est vide/absent, on REFUSE tout — jamais l'inverse. Il faut que le
-   * secret attendu soit non vide ET que l'en-tete fourni corresponde exactement. */
+   * PAS de fail-open : si le secret ATTENDU est vide/absent, on REFUSE tout —
+   * jamais l'inverse. Il faut que le secret attendu soit non vide ET que
+   * l'en-tete fourni corresponde exactement. */
   function enteteRelanceValide(fourni, attendu) {
     if (!attendu) return false;
     return fourni === attendu;
@@ -357,7 +352,6 @@
     pieceRecevable: pieceRecevable,
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
-    autolinkConfigure: autolinkConfigure,
     MODELE_OCR: MODELE_OCR,
     ocrConfigure: ocrConfigure,
     comparerActe: comparerActe,

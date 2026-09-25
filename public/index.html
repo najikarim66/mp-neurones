@@ -721,7 +721,7 @@ function attribuerAO(id){
     a.caution_prov.statut='mainlevee_demandee';
     a.caution_prov.date_demande_mainlevee=new Date().toISOString().slice(0,10);
   }
-  var newMarche=S.marches[S.marches.length-1];Promise.all([saveItem('marches',newMarche), saveItem('aos',a)]).then(function(){autolinkClientERP(newMarche);return Promise.resolve();}).then(function(){sbStats();render();toast('Marche cree - caution prov. en attente de liberation effective');closeMod();}).catch(function(e){toast('Erreur creation marche');});
+  var newMarche=S.marches[S.marches.length-1];Promise.all([saveItem('marches',newMarche), saveItem('aos',a)]).then(function(){sbStats();render();toast('Marche cree - caution prov. en attente de liberation effective');rappelRattacherERP();closeMod();}).catch(function(e){toast('Erreur creation marche');});
 }
 function delAO(id){
   if(!confirm('Supprimer cet AO?'))return;
@@ -1027,7 +1027,7 @@ function newMarche(){
     S.marches.push({id:newId,ref:ref,titre:titre,maitre_ouvrage:maitre_ouvrage,objet:v('mobjet'),montant:montant,type:v('mtype'),statut:v('mstat'),date_soumission:v('mdsoum')||null,date_attribution:v('mdatt')||null,date_commencement:v('mdcom')||null,delai_execution:parseInt(v('mdelai'))||null,date_fin_calculee:dfin,date_reception_provisoire:v('mdrp')||null,date_reception_definitive:v('mdrd')||null,delai_garantie_mois:v('mdgar_mois')!==''?parseInt(v('mdgar_mois')):null,avancement:0,garantie:vn('mgar')||5,ordres_service:osData});
     var newCautions=S._tmpC.map(function(c){return {id:nidStr('c'),marche_id:newId,type:c.type,montant:c.montant,banque:c.banque,num:c.num,date_emission:c.date_emission,statut:c.statut};});
     var newM2=S.marches[S.marches.length-1];
-    saveItem('marches',newM2).then(function(){autolinkClientERP(newM2);return Promise.resolve();}).then(function(){return saveMany('cautions',newCautions);}).then(function(){S._tmpC=[];sbStats();render();toast('Marche cree');}).catch(function(e){toast('Erreur creation marche');});
+    saveItem('marches',newM2).then(function(){return saveMany('cautions',newCautions);}).then(function(){S._tmpC=[];sbStats();render();toast('Marche cree');rappelRattacherERP();}).catch(function(e){toast('Erreur creation marche');});
   });
 }
 function editMarche(id){
@@ -1229,26 +1229,13 @@ function deposerLiberationDirecte(cautionId, marcheId){
   .catch(function(e){toast('Echec : '+e.message,false);});
 }
 
-// AUTO-LIEN CLIENT ERP — via l'endpoint serveur MP (le secret n'est plus dans le bundle).
-/* Non bloquant pour la creation du marche, mais l'erreur ERP est RELAYEE a l'ecran
-   (jamais avalee). */
-function autolinkClientERP(marche){
-  if(!marche)return Promise.resolve();
-  return apiFetch('/api/marche-autolink',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({marche_id:marche.id,maitre_ouvrage:marche.maitre_ouvrage,ville:marche.ville||null,lieu_chantier:marche.lieu_chantier||null})})
-    .then(function(d){
-      d=d||{};
-      if(d.action==='created_new'&&d.client){toast('Client ERP cree : '+d.client.raison_sociale+' (ICE a completer)');}
-      else if(d.action==='linked_existing'&&d.client){toast('Marche lie au client ERP : '+d.client.raison_sociale);}
-    })
-    .catch(function(e){
-      /* Secret absent (fail-closed) : l'ERP n'a PAS ete appele -> information, pas erreur.
-         Un secret FAUX (l'ERP a refuse) reste, lui, une erreur. */
-      if(String(e.message||'').indexOf('autolink_non_configure')>=0){
-        toast('Rattachement ERP non configure — client a rattacher manuellement dans l\'ERP',true);
-      }else{
-        toast('Auto-lien client ERP echoue : '+e.message,false);
-      }
-    });
+// RATTACHEMENT CLIENT ERP — manuel (le lien auto a ete retire, decision Karim 2026-09-25).
+/* Rappel discret apres creation/attribution d'un marche : le rattachement du
+   client dans l'ERP est MANUEL (decision Karim : le lien auto n'ecrivait plus
+   rien depuis le 18/05, le rattachement a la main + le batch de rattrapage font
+   le travail). Simple information, jamais une erreur, apres le toast de creation. */
+function rappelRattacherERP(){
+  setTimeout(function(){toast('Pensez a rattacher le client dans l\'ERP (rattachement manuel)',true);},3000);
 }
 
 // CAUTIONS INLINE dans marche
