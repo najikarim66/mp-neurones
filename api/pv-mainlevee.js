@@ -185,6 +185,11 @@
   /* Vrai seulement si un principal Entra est present (userDetails). */
   function principalAutorise(p) { return !!(p && p.userDetails); }
 
+  /* Autolink ERP : le secret partagé est-il configuré ? FAIL-CLOSED — si absent/vide,
+   * l'endpoint MP refuse (401) et n'appelle JAMAIS l'ERP sans secret. Ne lit qu'une
+   * PRÉSENCE, jamais la valeur (les valeurs de secret ne transitent pas par ce module). */
+  function autolinkConfigure(secret) { return typeof secret === 'string' && secret.trim().length > 0; }
+
   /* Date de piece (PV, mainlevee, accuse) : AAAA-MM-JJ obligatoire. Refuse le vide
    * -> un depot sans date saisie est rejete, JAMAIS complete par la date du jour
    * (doctrine : quand le systeme ne sait pas, il ne propose pas une valeur plausible). */
@@ -267,6 +272,7 @@
     pieceRecevable: pieceRecevable,
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
+    autolinkConfigure: autolinkConfigure,
     dateReceptionValide: dateReceptionValide,
     motifMainleveeValide: motifMainleveeValide,
     appliquerMainleveeManuelle: appliquerMainleveeManuelle,

@@ -665,6 +665,56 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route marche-autolink : POST /api/marche-autolink
+  // Sort l'appel ERP du bundle (le secret quitte le JS livre). Auth Entra obligatoire
+  // (comme pv-reception). FAIL-CLOSED : si MP_AUTOLINK_SECRET absent -> 401, jamais
+  // d'appel ERP sans secret. L'erreur ERP est RELAYEE (jamais avalee). Le secret vient
+  // de process.env, aucune valeur en dur cote client ni ici.
+  if (fn === "marcheAutolink") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+
+      const secret = process.env.MP_AUTOLINK_SECRET;
+      if (!MPMainlevee.autolinkConfigure(secret)) {
+        context.res = { status: 401, body: { error: "Autolink ERP non configure (MP_AUTOLINK_SECRET absent) — fail-closed, aucun appel ERP" } };
+        return;
+      }
+
+      const body = req.body || {};
+      const marche_id = String(body.marche_id || "").trim();
+      const maitre_ouvrage = String(body.maitre_ouvrage || "").trim();
+      if (!marche_id || !maitre_ouvrage) { context.res = { status: 400, body: { error: "Manquant : marche_id, maitre_ouvrage" } }; return; }
+
+      const doFetch = (typeof globalThis.fetch === "function") ? globalThis.fetch : require("node-fetch");
+      let erpResp, erpText;
+      try {
+        erpResp = await doFetch("https://erp.neurones.ma/api/marches-mp/auto-link-or-create-client", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-MP-Autolink-Secret": secret },
+          body: JSON.stringify({ marche_id: marche_id, maitre_ouvrage: maitre_ouvrage, ville: body.ville || null, lieu_chantier: body.lieu_chantier || null })
+        });
+        erpText = await erpResp.text();
+      } catch (e) {
+        context.res = { status: 502, body: { error: "ERP injoignable : " + e.message } };
+        return;
+      }
+      if (!erpResp.ok) {
+        // Erreur ERP RELAYEE (jamais avalee) — libelle humain cote ecran.
+        context.res = { status: 502, body: { error: "L'ERP a refuse l'autolink (HTTP " + erpResp.status + ")", detail: String(erpText || "").slice(0, 300) } };
+        return;
+      }
+      let data = null; try { data = JSON.parse(erpText); } catch (e) { data = null; }
+      context.res = { status: 200, body: data || { ok: true } };
+      return;
+    } catch (e) {
+      context.log.error("marcheAutolink error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

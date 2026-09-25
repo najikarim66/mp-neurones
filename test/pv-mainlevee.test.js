@@ -210,6 +210,10 @@ check('ne mute pas l\'entree', cLib.statut === 'active', cLib.statut);
 check('sans motif -> refuse (null), aucune liberation', MPM.appliquerLiberationDirecte(cLib, '  ', 'x', '2026-09-24') === null, '');
 check('caution non active -> refuse (null)', MPM.appliquerLiberationDirecte({ statut: 'liberee' }, 'motif', 'x', '2026-09-24') === null, '');
 
+console.log('\n=== 16. Autolink ERP : FAIL-CLOSED (jamais d\'appel ERP sans secret) ===');
+check('secret absent/vide -> non configure (endpoint doit refuser 401, aucun appel ERP)', MPM.autolinkConfigure('') === false && MPM.autolinkConfigure('   ') === false && MPM.autolinkConfigure(null) === false && MPM.autolinkConfigure(undefined) === false, '');
+check('secret present -> configure', MPM.autolinkConfigure('un-secret') === true, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
