@@ -727,6 +727,62 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route caution-acte-compare : POST /api/caution-acte-compare
+  // Cas B : compare une caution DEJA saisie a ce que l'OCR lit sur son acte, et renvoie
+  // les ECARTS. N'ECRIT RIEN (ni caution, ni blob) — la donnee saisie fait foi ; l'ecart
+  // est une alerte pour decision humaine. Sert la MESURE des faux ecarts (10 actes) avant
+  // toute generalisation. FAIL-SOFT : sans ANTHROPIC_API_KEY -> { configure:false } (200).
+  if (fn === "cautionActeCompare") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+
+      const body = req.body || {};
+      const cautionId = String(body.cautionId || "").trim();
+      const marcheId = String(body.marcheId || "").trim();
+      const contentType = String(body.content_type || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+      if (!cautionId || !marcheId) { context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId" } }; return; }
+      const ext = PV_TYPES[contentType];
+      if (!ext) { context.res = { status: 400, body: { error: "content_type non autorise (pdf, jpeg ou png)" } }; return; }
+      let buf; try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+      if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+
+      // Caution STOCKEE (partition marcheId) — fait foi, jamais modifiee ici.
+      let caution = null;
+      try { const r = await getDb().container("mp_cautions").item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
+      if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
+
+      const ocr = require("./lib/ocr-acte.js");
+
+      let referentiel = [];
+      try {
+        const bs = (await getDb().container("mp_banques").items.readAll().fetchAll()).resources;
+        referentiel = bs.map(function (b) { return b.nom || b.name || b.libelle || ""; }).filter(Boolean);
+      } catch (e) { referentiel = []; }
+
+      let cacheC = null;
+      try { const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_cache", partitionKey: { paths: ["/id"] } }); cacheC = cc.container; } catch (e) { cacheC = null; }
+      const cacheGet = cacheC ? function (cle) { return cacheC.item(cle, cle).read().then(function (r) { return r.resource; }).catch(function () { return null; }); } : null;
+      const cacheSet = cacheC ? function (cle, res) { return cacheC.items.upsert({ id: cle, resultat: res, le: new Date().toISOString() }); } : null;
+
+      const res = await ocr.extraireActe(buf, contentType, referentiel, cacheGet, cacheSet);
+      if (!res.configure) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente) — comparaison indisponible" } }; return; }
+
+      // ECARTS — module pur gate. Aucune ecriture : ni caution, ni blob.
+      const ecarts = MPMainlevee.comparerActe(caution, res.champs);
+
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, ecarts: ecarts, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut || null } };
+      return;
+    } catch (e) {
+      context.log.error("cautionActeCompare error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

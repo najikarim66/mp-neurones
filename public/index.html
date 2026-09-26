@@ -1421,7 +1421,7 @@ function pgCautions(){
     if(c.statut==='active'){libBtn='<button class="act" onclick="demanderMainleveeManuelle(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\')" title="Demander la mainlevée au maître d\'ouvrage (motif obligatoire, tracé)">Mainlevée</button><button class="act" onclick="deposerLiberationDirecte(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\')" title="Libérer directement (motif obligatoire, tracé)" style="color:var(--green-soft)">Libérer</button>';}
     else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'mainlevee_client\')" title="Déposer la mainlevée reçue du maître d\'ouvrage" style="color:var(--green-soft);font-weight:600">Mainlevée reçue</button>';}
     else if(c.statut==='mainlevee_recue'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'accuse_banque\')" title="Déposer l\'accusé de la banque (libère la caution)" style="color:var(--green-soft);font-weight:600">Accusé banque</button>';}
-    return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span>'+piecesLiens(c)+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">Modifier</button>'+libBtn+'<button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">Supprimer</button></div></td></tr>';
+    return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span>'+piecesLiens(c)+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">Modifier</button>'+libBtn+'<button class="act" onclick="openCompareActe(\''+c.id+'\',\''+esc(String(c.marche_id))+'\')" title="Comparer l\'acte scanne a la fiche (OCR, sans rien modifier)">Comparer l\'acte</button><button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">Supprimer</button></div></td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty">Aucune caution avec ce filtre</div></td></tr>';
   var table='<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N°</th><th>Marché / AO</th><th>Type</th><th>Banque</th><th>Montant</th><th>Émission</th><th>État</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">Engagé ('+fctx+')</td><td style="font-family:var(--FM);font-weight:600">'+fmad(agg.engage)+'</td><td colspan="3"></td></tr></tfoot></table></div></div>';
 
@@ -1535,6 +1535,57 @@ function ocrActe(){
       if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';S._ocrActe=null;
       toast('Lecture OCR echouee : '+e.message,false);
     });
+  };
+  reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
+  reader.readAsDataURL(file);
+}
+/* ===== CAS B — comparer un acte scanne a la fiche caution deja saisie. LECTURE SEULE :
+   rien n'est ecrit (ni caution, ni blob). L'ecart est une alerte a juger (vrai ecart =
+   corriger la fiche a la main ; faux ecart = mauvaise lecture OCR). Sert la mesure des
+   10 actes qui conditionne la generalisation de B. ===== */
+function openCompareActe(cautionId, marcheId){
+  var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
+  var ref=c?((c.num||'—')+' — '+(TC[c.type]||c.type)+' — '+fmad(c.montant)+' — '+(c.banque||'—')):'';
+  var html='<div class="info-box info-blue" style="font-size:12px">Compare l\'acte scanne a la fiche saisie. <b>Rien n\'est modifie</b> — la fiche fait foi, l\'ecart est une alerte a juger.</div>'+
+    (ref?'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Caution : '+esc(ref)+'</div>':'')+
+    '<div class="fg"><label>Acte scanne (PDF, JPG ou PNG)</label><input class="fc" id="cmp_file" type="file" accept="application/pdf,image/jpeg,image/png"></div>'+
+    '<button class="btn btn-sm btn-prim" id="cmp_btn" onclick="comparerActeUI(\''+esc(cautionId)+'\',\''+esc(marcheId)+'\')">Comparer</button>'+
+    '<div id="cmp_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
+    '<div id="cmp_result" style="margin-top:8px"></div>';
+  openMod('Comparer l\'acte a la fiche',html,null);
+}
+function fmtCmp(k,val){ if(val==null||val==='')return '—'; if(k==='montant')return fmad(val); if(k==='date_emission'||k==='date_echeance')return fdat(val); return String(val); }
+function comparePanelHTML(r){
+  var ec=r.ecarts||[],cf=r.confiances||{},lb=r.lu_brut||{};
+  if(!ec.length){return '<div class="info-box info-green" style="font-size:12px">Aucun ecart — l\'acte concorde avec la fiche (sur les champs lus par l\'OCR).</div>';}
+  var luKey={montant:'montant',banque:'banque',num:'reference',date_emission:'date_emission',date_echeance:'echeance'};
+  var lbl={montant:'Montant',banque:'Banque',num:'N Caution',date_emission:'Emission',date_echeance:'Echeance'};
+  var rows=ec.map(function(e){
+    var k=e.champ,ok=luKey[k]||k,etat=cf[ok]||'non_lu',brut=lb[ok];
+    var trace=(brut!=null&&String(brut)!==String(e.lu==null?'':e.lu))?(' <span style="color:#7A7369">(lu : '+esc(brut)+')</span>'):'';
+    return '<tr><td style="font-size:12px">'+esc(lbl[k]||k)+'</td><td style="font-size:12px">'+esc(fmtCmp(k,e.stocke))+'</td><td style="font-size:12px">'+esc(fmtCmp(k,e.lu))+trace+'</td><td>'+ocrBadge(etat)+'</td></tr>';
+  }).join('');
+  return '<div class="info-box info-amber" style="font-size:12px">'+ec.length+' ecart(s) — la fiche fait foi, rien n\'est modifie. Juge chaque ligne : vrai ecart (corriger la fiche) ou faux ecart (mauvaise lecture OCR).</div>'+
+    '<div class="tw"><table><thead><tr><th>Champ</th><th>Fiche (saisi)</th><th>Acte (lu)</th><th>Confiance</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+}
+function comparerActeUI(cautionId, marcheId){
+  var fileEl=document.getElementById('cmp_file'),btn=document.getElementById('cmp_btn');
+  var statusEl=document.getElementById('cmp_status'),resEl=document.getElementById('cmp_result');
+  if(!fileEl||!fileEl.files||!fileEl.files.length){toast('Selectionne l\'acte',false);return;}
+  var file=fileEl.files[0],okTypes={'application/pdf':1,'image/jpeg':1,'image/png':1};
+  if(!okTypes[file.type]){toast('Type non autorise (PDF, JPG ou PNG)',false);return;}
+  if(file.size>20*1024*1024){toast('Fichier trop volumineux (max 20 Mo)',false);return;}
+  if(btn)btn.disabled=true;if(statusEl)statusEl.textContent='Lecture et comparaison...';
+  var reader=new FileReader();
+  reader.onload=function(){
+    var s=String(reader.result||''),b64=s.indexOf(',')>=0?s.split(',')[1]:s;
+    apiFetch('/api/caution-acte-compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cautionId:String(cautionId),marcheId:String(marcheId),content_type:file.type,nom_original:file.name,data_base64:b64})})
+    .then(function(r){
+      r=r||{};if(btn)btn.disabled=false;if(statusEl)statusEl.textContent=r.cache?'(lecture en cache)':'';
+      if(!r.configure){if(resEl)resEl.innerHTML='<div class="info-box info-amber" style="font-size:12px">OCR non configure — comparaison indisponible.</div>';return;}
+      if(resEl)resEl.innerHTML=comparePanelHTML(r);
+    })
+    .catch(function(e){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Comparaison echouee : '+e.message,false);});
   };
   reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
   reader.readAsDataURL(file);
