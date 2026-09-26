@@ -1,0 +1,35 @@
+name: Gate OCR acte
+
+# Garde-fou du lot "OCR acte de caution". Rejoue la normalisation reelle de
+# api/lib/ocr-acte.js sur une fixture piegee (sans reseau, SDK non charge) et
+# echoue si :
+#  - le pont provisoire -> soumission ne s'applique pas (type mal range) ;
+#  - un type non reconnu n'est pas mis a null / confiance non_lu ;
+#  - la valeur BRUTE lue (lu_brut) est effacee par une traduction.
+# Deterministe, sans dependances (node pur).
+
+on:
+  push:
+    paths:
+      - 'api/lib/ocr-acte.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/pv-mainlevee.js'
+      - 'test/ocr-acte.test.js'
+      - '.github/workflows/ocr-acte-gate.yml'
+  pull_request:
+    paths:
+      - 'api/lib/ocr-acte.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/pv-mainlevee.js'
+      - 'test/ocr-acte.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate OCR acte (node, sans dependances)
+        run: node test/ocr-acte.test.js

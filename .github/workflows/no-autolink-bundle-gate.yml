@@ -1,0 +1,30 @@
+name: Gate no-autolink bundle
+
+# Garde-fou du retrait autolink. Echoue si une reference a "autolink" ou au
+# domaine ERP (erp.neurones.ma) reapparait dans le bundle livre au navigateur
+# (public/index.html, public/pv-mainlevee.js) — le lien client auto a ete retire
+# (0 ecriture depuis le 18/05), le rattachement est manuel. Deterministe, node pur.
+
+on:
+  push:
+    paths:
+      - 'public/index.html'
+      - 'public/pv-mainlevee.js'
+      - 'test/no-autolink-bundle.js'
+      - '.github/workflows/no-autolink-bundle-gate.yml'
+  pull_request:
+    paths:
+      - 'public/index.html'
+      - 'public/pv-mainlevee.js'
+      - 'test/no-autolink-bundle.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate no-autolink bundle (node, sans dependances)
+        run: node test/no-autolink-bundle.js

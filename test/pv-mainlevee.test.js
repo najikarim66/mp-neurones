@@ -110,7 +110,7 @@ console.log('\n=== 7. Lecture des pieces : resolution depuis le doc, jamais un c
 check('non authentifie (pas de principal) -> refuse', MPM.principalAutorise(null) === false && MPM.principalAutorise({}) === false, '');
 check('authentifie (userDetails) -> autorise', MPM.principalAutorise({ userDetails: 'a@neurones.ma' }) === true, '');
 var mPv = { id: 'm1', pv_reception_definitive: { blob: 'm1/pv-reception-definitive.pdf', nom_original: 'PV scan.pdf' }, date_reception_definitive_reelle: '2026-09-24' };
-var cMl = { id: 'c1', marche_id: 'm1', mainlevee_client: { blob: 'm1/caution-c1/mainlevee_client.pdf' }, date_mainlevee_recue: '2026-09-25', accuse_banque: { blob: 'm1/caution-c1/accuse_banque.pdf' }, date_liberation: '2026-09-30' };
+var cMl = { id: 'c1', marche_id: 'm1', mainlevee_client: { blob: 'm1/caution-c1/mainlevee_client.pdf' }, date_mainlevee_recue: '2026-09-25', accuse_banque: { blob: 'm1/caution-c1/accuse_banque.pdf' }, date_liberation: '2026-09-30', acte: { blob: 'actes/abc123.pdf', nom_original: 'acte scan.pdf' }, date_emission: '2026-01-05' };
 check('resout le blob du PV depuis le marche', MPM.resoudreBlobPiece('pv', mPv, null) === 'm1/pv-reception-definitive.pdf', '');
 check('resout le blob de la mainlevee client depuis la caution', MPM.resoudreBlobPiece('mainlevee_client', null, cMl) === 'm1/caution-c1/mainlevee_client.pdf', '');
 check('resout le blob de l\'accuse banque depuis la caution', MPM.resoudreBlobPiece('accuse_banque', null, cMl) === 'm1/caution-c1/accuse_banque.pdf', '');
@@ -120,6 +120,10 @@ check('piece absente du doc -> null (rien a servir)', MPM.resoudreBlobPiece('pv'
 check('libelle humain du PV, sans nom de fichier interne', (function () { var l = MPM.libellePiece('pv'); return l.indexOf('.pdf') < 0 && l.indexOf('/') < 0 && l.length > 0; })(), MPM.libellePiece('pv'));
 check('libelles distincts pour les 3 types', MPM.libellePiece('pv') !== MPM.libellePiece('mainlevee_client') && MPM.libellePiece('mainlevee_client') !== MPM.libellePiece('accuse_banque'), '');
 check('conteneur PV vs pieces caution correctement route', MPM.conteneurPiece('pv') === 'mp-pv-reception' && MPM.conteneurPiece('mainlevee_client') === 'mp-preuves' && MPM.conteneurPiece('accuse_banque') === 'mp-preuves', '');
+// Acte de caution (cas A) : lisible via /api/piece comme les autres, depuis caution.acte.blob
+check('resout le blob de l\'acte depuis la caution', MPM.resoudreBlobPiece('acte', null, cMl) === 'actes/abc123.pdf', MPM.resoudreBlobPiece('acte', null, cMl));
+check('conteneur de l\'acte = mp-preuves', MPM.conteneurPiece('acte') === 'mp-preuves', MPM.conteneurPiece('acte'));
+check('libelle acte humain (sans nom de fichier), date = date_emission', MPM.libellePiece('acte') === 'Acte de caution' && MPM.libellePiece('acte').indexOf('/') < 0 && MPM.dateChampPiece('acte') === 'date_emission', JSON.stringify([MPM.libellePiece('acte'), MPM.dateChampPiece('acte')]));
 
 console.log('\n=== 8. Mail du lundi : file de relance + PAS de mail si vide ===');
 var gmStub = function (id) { return id === 'm1' ? { ref: 'MRC-1', titre: 'T1', maitre_ouvrage: 'Client A' } : { ref: 'MRC-2', titre: 'T2', maitre_ouvrage: 'Client B' }; };

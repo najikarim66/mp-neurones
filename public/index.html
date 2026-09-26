@@ -1201,6 +1201,7 @@ function lienPiece(type, marcheId, cautionId, dateISO){
 function piecesLiens(c){
   if(!c)return '';
   var out='';
+  if(c.acte)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('acte',c.marche_id,c.id,c.date_emission)+'</div>';
   if(c.mainlevee_client)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('mainlevee_client',c.marche_id,c.id,c.date_mainlevee_recue)+'</div>';
   if(c.accuse_banque)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('accuse_banque',c.marche_id,c.id,c.date_liberation)+'</div>';
   return out;

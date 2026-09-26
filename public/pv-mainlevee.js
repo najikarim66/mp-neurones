@@ -179,7 +179,8 @@
   var PIECE_LECTURE = {
     pv:               { sur: 'marche',  champ: 'pv_reception_definitive', dateChamp: 'date_reception_definitive_reelle', conteneur: 'mp-pv-reception', label: 'PV de reception definitive' },
     mainlevee_client: { sur: 'caution', champ: 'mainlevee_client',        dateChamp: 'date_mainlevee_recue',            conteneur: 'mp-preuves',      label: 'Mainlevee recue' },
-    accuse_banque:    { sur: 'caution', champ: 'accuse_banque',           dateChamp: 'date_liberation',                 conteneur: 'mp-preuves',      label: 'Accuse bancaire' }
+    accuse_banque:    { sur: 'caution', champ: 'accuse_banque',           dateChamp: 'date_liberation',                 conteneur: 'mp-preuves',      label: 'Accuse bancaire' },
+    acte:             { sur: 'caution', champ: 'acte',                    dateChamp: 'date_emission',                   conteneur: 'mp-preuves',      label: 'Acte de caution' }
   };
 
   /* Vrai seulement si un principal Entra est present (userDetails). */
