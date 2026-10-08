@@ -22,6 +22,26 @@ jobs:
         with:
           submodules: true
           lfs: false
+      # Garde de version (modele ERP/RH 878acef) : grave l'identite du deploiement.
+      # - public/version.json : build (run_number) + commit court + date UTC + apiContractMin
+      #   (LU depuis api/contrat-api.json du MEME commit -> le contrat que CE web exige).
+      # - api/version.json : meme build/commit/date, servi par GET /api/version.
+      # Une seule source de contrat (api/contrat-api.json), un seul endroit a bumper.
+      - name: Graver l'identite de version (public/version.json + api/version.json)
+        shell: bash
+        run: |
+          node -e '
+            const fs = require("fs");
+            let contrat = {}; try { contrat = JSON.parse(fs.readFileSync("api/contrat-api.json", "utf8")); } catch (e) {}
+            const apiContractMin = (Number.isInteger(contrat.version) && contrat.version > 0) ? contrat.version : null;
+            const build = process.env.GITHUB_RUN_NUMBER || null;
+            const commit = (process.env.GITHUB_SHA || "").slice(0, 7) || null;
+            const buildDate = new Date().toISOString();
+            fs.writeFileSync("public/version.json", JSON.stringify({ app: "mp-neurones-front", build, commit, buildDate, apiContractMin }));
+            fs.writeFileSync("api/version.json", JSON.stringify({ app: "mp-neurones-api", build, commit, buildDate }));
+            console.log("public/version.json ->", fs.readFileSync("public/version.json", "utf8"));
+            console.log("api/version.json ->", fs.readFileSync("api/version.json", "utf8"));
+          '
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token

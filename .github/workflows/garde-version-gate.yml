@@ -1,0 +1,28 @@
+name: Gate garde version
+
+# Garde-fou de la garde de version MP (modele ERP/RH 878acef). Rejoue le verdict pur
+# + le rendu (bandeaux marques, badge) sur fixtures : API < contrat exige -> bloquant ;
+# onglet perime (build deploye > execute) -> bloquant ; numero inconnu -> ne conclut
+# jamais ; interrupteur ; libelles RH/ERP. Deterministe, node pur, sans dependance.
+
+on:
+  push:
+    paths:
+      - 'public/garde-version.js'
+      - 'test/garde-version.test.js'
+      - '.github/workflows/garde-version-gate.yml'
+  pull_request:
+    paths:
+      - 'public/garde-version.js'
+      - 'test/garde-version.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate garde version (node, sans dependances)
+        run: node test/garde-version.test.js

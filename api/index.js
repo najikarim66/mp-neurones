@@ -85,6 +85,29 @@ function getAuthenticatedUser(req) {
 module.exports = async function (context, req) {
   const fn = context.executionContext.functionName;
 
+  // Route version : GET /api/version — identite + CONTRAT de l'API (garde de version,
+  // modele ERP/RH 878acef). Sert { apiContract (contrat-api.json du meme commit),
+  // build/commit/buildDate (version.json grave par la CI), gardeVersionActive (mp_config,
+  // defaut true) }. Le front compare apiContract a l'apiContractMin grave dans SON
+  // version.json. Non sensible : pas de garde de principal (doit repondre meme en marge d'auth).
+  if (fn === "version") {
+    var contrat = {}, vj = {};
+    try { contrat = require("./contrat-api.json"); } catch (e) { contrat = {}; }
+    try { vj = require("./version.json"); } catch (e) { vj = {}; }
+    var apiContract = (contrat && Number.isInteger(contrat.version) && contrat.version > 0) ? contrat.version : null;
+    var gardeVersionActive = true;
+    try {
+      var cfgs = (await getDb().container("mp_config").items.readAll().fetchAll()).resources;
+      for (var i = 0; i < cfgs.length; i++) { if (cfgs[i] && typeof cfgs[i].gardeVersionActive === "boolean") { gardeVersionActive = cfgs[i].gardeVersionActive; break; } }
+    } catch (e) { gardeVersionActive = true; }
+    context.res = {
+      status: 200,
+      headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
+      body: { app: "mp-neurones-api", apiContract: apiContract, build: vj.build || null, commit: vj.commit || null, buildDate: vj.buildDate || null, gardeVersionActive: gardeVersionActive }
+    };
+    return;
+  }
+
   // Route ping
   if (fn === "ping") {
     context.res = {

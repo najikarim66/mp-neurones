@@ -5,3 +5,6 @@ local.settings.json
 .DS_Store
 .env
 *.backup-*
+# Identite de version gravee par la CI (jamais committee : ephemere, propre au deploiement)
+public/version.json
+api/version.json

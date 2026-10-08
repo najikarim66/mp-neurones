@@ -1,0 +1,8 @@
+{
+  "_lire": "LE CONTRAT ENTRE LE WEB ET L'API MP. Un seul numero, lu par les DEUX cotes depuis CE fichier du meme commit : la CI le grave dans public/version.json (champ apiContractMin, ce que l'onglet EXIGE) et l'API le sert sur GET /api/version (champ apiContract, ce que le serveur OFFRE). Le web suspend les ecritures si l'API en sert un plus petit, en le disant. Aucune comparaison de commit, aucun delai.",
+  "_quand_bumper": "SEULEMENT quand un changement d'API casse un web plus ancien : champ obligatoire ajoute a une ecriture, format de reponse change, action/route renommee ou retiree, regle de calcul dont le web depend. Bumper dans le MEME commit que le changement d'API, et jamais pour un ajout retro-compatible (nouvelle route, champ optionnel, correctif interne). Un bump inutile suspend les ecritures de tout le monde pendant une mise en service.",
+  "_historique": [
+    { "version": 1, "le": "2026-10-08", "pourquoi": "Numero de depart. Fixe l'etat du contrat au jour ou la garde de version est posee sur MP (modele ERP/RH 878acef)." }
+  ],
+  "version": 1
+}

@@ -241,10 +241,11 @@ input,select,textarea{font-family:inherit}
 </style>
 </head>
 <body>
+<div id="version-bandeau" style="position:fixed;top:0;left:0;right:0;z-index:9999"></div>
 <div id="wrap">
 <div id="sb-ov" onclick="toggleSb()"></div>
   <nav id="sb">
-    <div class="sb-hd"><div class="sb-brand">MP Manager</div><div class="sb-sub">v3.2 &middot; Cosmos &middot; Multi-utilisateurs</div></div>
+    <div class="sb-hd"><div id="mp-ident-slot"><div class="sb-brand">NEURONES</div><div class="sb-sub">Marchés Publics</div></div></div>
     <div class="sb-lbl">Navigation</div>
     <div class="ni on" data-page="dashboard"><span class="ni-ic">&#128202;</span>Tableau de bord</div>
     <div class="ni" data-page="ao"><span class="ni-ic">&#128221;</span>Appels d'offres</div>
@@ -292,6 +293,7 @@ input,select,textarea{font-family:inherit}
 <script src="echeances.js"></script>
 <script src="cautions-calc.js"></script>
 <script src="pv-mainlevee.js"></script>
+<script src="garde-version.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
 var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',soumission:'Caution de soumission',avance_demarrage:"Caution avance demarrage"};
@@ -340,10 +342,44 @@ function fromCosmos(ckey, item){
 /* === Appels API === */
 function apiFetch(url, opts){
   opts=opts||{};
+  /* Garde de version : si bloquant (onglet perime ou API en retard), on REFUSE les
+     ECRITURES (POST/PUT/PATCH/DELETE) vers l'API — rien n'est envoye, message nomme.
+     Les LECTURES (GET/HEAD) passent toujours (on ne coupe jamais la consultation). */
+  var _m=(opts.method||'GET').toUpperCase();
+  if(_m!=='GET'&&_m!=='HEAD'&&S._versionBloquant){
+    return Promise.reject(new Error(S._versionMessage||(typeof GardeVersion!=='undefined'?GardeVersion.MSG_REFUS_API:'Enregistrement suspendu (version)')));
+  }
   return fetch(url, opts).then(function(r){
     if(!r.ok) return r.text().then(function(t){throw new Error('HTTP '+r.status+': '+t);});
     if(r.status===204) return null;
     return r.json();
+  });
+}
+/* ===== Garde de version (modele ERP/RH 878acef) : identite EXECUTEE figee au
+   chargement, version.json relu SANS CACHE a intervalle ; badge haut-gauche ;
+   bandeau rouge (onglet perime) / jaune (API en retard) ; ecritures suspendues
+   quand bloquant (la suspension vit dans apiFetch ci-dessus). ===== */
+var _execVersion=null, _lastApiVersion=null;
+function renderBadgeVersion(){ var el=document.getElementById('mp-ident-slot'); if(el&&typeof GardeVersion!=='undefined') el.innerHTML=GardeVersion.badgeHTML(_execVersion||{}, _lastApiVersion||{}); }
+function renderBandeauVersion(v){ var el=document.getElementById('version-bandeau'); if(el&&typeof GardeVersion!=='undefined') el.innerHTML=GardeVersion.bandeauHTML(v); }
+function evaluerVersion(){
+  if(typeof GardeVersion==='undefined') return Promise.resolve();
+  var pFront=fetch('version.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;});
+  var pApi=apiFetch('/api/version').catch(function(){return null;});
+  return Promise.all([pFront,pApi]).then(function(res){
+    var deploye=res[0], apiv=res[1];
+    if(apiv) _lastApiVersion=apiv;
+    var v=GardeVersion.verdictVersion(_execVersion, deploye, apiv);
+    S._versionBloquant=!!v.bloquant; S._versionMessage=v.message;
+    renderBandeauVersion(v); renderBadgeVersion();
+    return v;
+  });
+}
+function demarrerGardeVersion(){
+  if(typeof GardeVersion==='undefined') return;
+  fetch('version.json',{cache:'no-store'}).then(function(r){return r.ok?r.json():null;}).catch(function(){return null;}).then(function(j){
+    _execVersion=j; renderBadgeVersion(); evaluerVersion();
+    setInterval(evaluerVersion, 5*60*1000);
   });
 }
 function apiList(ckey){
@@ -4274,7 +4310,7 @@ apiLoadAll = function(){
    ======================================================================== */
 
 
-window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
+window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();demarrerGardeVersion();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>
