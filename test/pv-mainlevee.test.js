@@ -247,6 +247,26 @@ check('montant illisible -> null (PAS zero)', MPM.parserMontant('illisible') ===
 // (3) montant illisible = confiance zero, pas un zero ; (badge) 3 etats
 check('confiance : >=80 lu, <80 douteux, absent non_lu (pas de %)', MPM.etatConfiance(80) === 'lu' && MPM.etatConfiance(79) === 'douteux' && MPM.etatConfiance(null) === 'non_lu' && MPM.etatConfiance('x') === 'non_lu', '');
 
+console.log('\n=== 18. Marche termine auto : derniere caution liberee -> termine, trace, reversible ===');
+var mT = { id: 'mT', ref: 'M/1', statut: 'en_cours', reception_definitive_prononcee: true };
+var cLib = { marche_id: 'mT', statut: 'liberee', type: 'bonne_execution' };
+var cAct = { marche_id: 'mT', statut: 'active', type: 'retenue_garantie' };
+var cLib2 = { marche_id: 'mT', statut: 'liberee', type: 'retenue_garantie' };
+check('2 cautions, une seule liberee -> ne termine pas', MPM.marcheDoitTerminer(mT, [cLib, cAct]) === false, '');
+check('2 cautions, la SECONDE liberee -> doit terminer (gate rouge)', MPM.marcheDoitTerminer(mT, [cLib, cLib2]) === true, '');
+var majT = MPM.appliquerStatutMarche(mT, [cLib, cLib2], '2026-10-08');
+check('applique -> termine + avancement 100 + trace "toutes cautions liberees le 08/10"', !!majT && majT.statut === 'termine' && majT.avancement === 100 && /toutes cautions lib.r.es le 08\/10/.test(majT.termine_trace || '') && majT.termine_le === '2026-10-08', JSON.stringify(majT && { s: majT.statut, t: majT.termine_trace, l: majT.termine_le }));
+check('ne mute pas l\'entree marche', mT.statut === 'en_cours', mT.statut);
+check('PV reception def ABSENT -> ne termine pas (meme toutes liberees)', MPM.marcheDoitTerminer({ id: 'x', statut: 'en_cours', reception_definitive_prononcee: false }, [cLib, cLib2]) === false, '');
+check('marche SANS caution -> ne termine jamais par ce chemin', MPM.marcheDoitTerminer(mT, []) === false, '');
+check('restituee compte comme terminale (>=1 liberee)', MPM.marcheDoitTerminer(mT, [cLib, { statut: 'restituee', type: 'soumission' }]) === true, '');
+check('toutes restituees, aucune liberee -> ne termine pas (>=1 liberee exigee)', MPM.marcheDoitTerminer(mT, [{ statut: 'restituee' }, { statut: 'restituee' }]) === false, '');
+var mDone = { id: 'mD', statut: 'termine', reception_definitive_prononcee: true, avancement: 100 };
+var majR = MPM.appliquerStatutMarche(mDone, [cLib, cAct], '2026-10-08');
+check('liberation annulee (caution repasse active) -> retour en_cours, trace', !!majR && majR.statut === 'en_cours' && /en cours/i.test(majR.termine_trace || ''), JSON.stringify(majR && { s: majR.statut, t: majR.termine_trace }));
+check('aucun changement a appliquer -> null (idempotent)', MPM.appliquerStatutMarche(mT, [cLib, cAct], '2026-10-08') === null, '');
+check('marche suspendu -> la regle ne l\'ecrase pas (null)', MPM.appliquerStatutMarche({ id: 's', statut: 'suspendu', reception_definitive_prononcee: true }, [cLib, cLib2], '2026-10-08') === null, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

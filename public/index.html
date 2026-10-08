@@ -560,15 +560,22 @@ function getAvenantsDelaiSup(marcheId){
   if(!marcheId||!S.avenants)return 0;
   return S.avenants.filter(function(a){return a.marche_id===marcheId;}).reduce(function(s,a){return s+(Number(a.delai_supplementaire_jours)||0);},0);
 }
+/* Statut marché auto (règle Karim 08/10) : délègue au module pur appliquerStatutMarche
+   (toutes cautions terminales + PV présent -> terminé ; libération annulée -> en cours ;
+   tracé). Idempotent : null si rien à changer. Les deux sens (terminer / revenir en
+   cours) sont gérés, d'où l'appel après TOUTE modification de caution, pas seulement
+   quand elle passe à « libérée ». */
 function checkAutoTermine(mid){
-  var m=S.marches.find(function(x){return x.id===mid;});
-  if(!m||m.statut==='termine')return;
-  var mc=S.cautions.filter(function(c){return c.marche_id===mid&&(c.type==='bonne_execution'||c.type==='retenue_garantie');});
-  if(mc.length<1)return;
-  if(mc.every(function(c){return c.statut==='liberee';})){
-    m.statut='termine';m.avancement=100;
-    saveItem('marches',m).then(function(){sbStats();render();toast('Marche '+m.ref+' passe automatiquement a Termine - toutes les cautions sont liberees');}).catch(function(e){toast('Erreur save auto-termine: '+e.message);});
-  }
+  var m=S.marches.find(function(x){return String(x.id)===String(mid);});
+  if(!m)return;
+  var mc=S.cautions.filter(function(c){return String(c.marche_id)===String(mid);});
+  var maj=MPMainlevee.appliquerStatutMarche(m, mc, new Date().toISOString().slice(0,10));
+  if(!maj)return;
+  m.statut=maj.statut;
+  if(maj.avancement!==undefined)m.avancement=maj.avancement;
+  m.termine_le=maj.termine_le;
+  m.termine_trace=maj.termine_trace;
+  saveItem('marches',m).then(function(){sbStats();render();toast('Marche '+m.ref+' : '+maj.termine_trace);}).catch(function(e){toast('Erreur statut marche: '+e.message,false);});
 }
 
 // DASHBOARD
@@ -1174,10 +1181,11 @@ function deposerPiece(cautionId, marcheId, pieceType){
       data_base64:b64
     })}).then(function(r){
       r=r||{};
-      return apiList('cautions').then(function(cs){
-        S.cautions=cs;sbStats();render();closeMod();
+      /* Recharge AUSSI les marches : l'accuse peut avoir termine le marche cote serveur. */
+      return Promise.all([apiList('cautions'),apiList('marches')]).then(function(rr){
+        S.cautions=rr[0];S.marches=rr[1];sbStats();render();closeMod();
         var st=(SMC[r.nouveau_statut]||{l:r.nouveau_statut}).l;
-        toast('Piece deposee — caution '+(r.caution||'')+' : '+st);
+        toast((r.marche_statut==='termine'?'Marche termine — ':'')+'Piece deposee — caution '+(r.caution||'')+' : '+st);
       });
     }).catch(function(e){
       if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';
@@ -1226,7 +1234,7 @@ function deposerLiberationDirecte(cautionId, marcheId){
   if(!motif||!motif.trim()){toast('Motif obligatoire',false);return;}
   if(!confirm('Liberer directement la caution '+((c&&c.num)||'')+' ? L\'argent est considere revenu (aucun accuse bancaire dans le systeme).'))return;
   apiFetch('/api/caution-liberation-directe',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cautionId:String(cautionId),marcheId:String(marcheId),motif:motif})})
-  .then(function(r){r=r||{};return apiList('cautions').then(function(cs){S.cautions=cs;sbStats();render();toast('Caution liberee (directe, tracee) — '+(r.caution||''));});})
+  .then(function(r){r=r||{};return Promise.all([apiList('cautions'),apiList('marches')]).then(function(rr){S.cautions=rr[0];S.marches=rr[1];sbStats();render();toast((r.marche_statut==='termine'?'Marche termine — ':'')+'Caution liberee (directe, tracee) — '+(r.caution||''));});})
   .catch(function(e){toast('Echec : '+e.message,false);});
 }
 
@@ -1628,8 +1636,7 @@ function editCaution(id){
       if(S._ocrActe){ if(S._ocrActe.acte)c.acte=S._ocrActe.acte; if(S._ocrActe.lu_brut)c.ocr_lu_brut=S._ocrActe.lu_brut; }
       else if(srv){ if(srv.acte)c.acte=srv.acte; if(srv.ocr_lu_brut)c.ocr_lu_brut=srv.ocr_lu_brut; }
       return saveItem('cautions',c);
-    }).then(function(){sbStats();render();toast('Caution mise a jour');}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
-    if(c.statut==='liberee'&&oldStatut!=='liberee')checkAutoTermine(c.marche_id);
+    }).then(function(){sbStats();render();toast('Caution mise a jour');checkAutoTermine(c.marche_id);}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
   });
 }
 /* Action principale du bouton L : adapte selon statut actuel de la caution */

@@ -147,6 +147,47 @@
     return out;
   }
 
+  /* ===== Marche TERMINE automatique (decision Karim 08/10) =====
+   * Toutes les cautions du marche dans un etat terminal (liberee OU restituee) avec
+   * AU MOINS UNE liberee, ET le PV de reception definitive present -> le marche passe
+   * « termine », trace « toutes cautions liberees le JJ/MM ». Reversible : si une
+   * liberation est annulee (une caution quitte l'etat terminal), un marche « termine »
+   * redevient « en cours », trace. Un marche SANS caution ne se termine jamais par ce
+   * chemin ; on n'ecrase jamais un marche suspendu/resilie ; les decomptes/factures en
+   * attente n'entrent PAS dans la decision (arbitrage Karim : on ne regarde que les cautions). */
+  function _jjmm(dateISO) {
+    var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateISO || ''));
+    return m ? (m[3] + '/' + m[2]) : String(dateISO || '');
+  }
+  function marcheDoitTerminer(marche, cautions) {
+    if (!marche || !cautions || !cautions.length) return false;
+    if (!estRecevable(marche)) return false;
+    var terminale = cautions.every(function (c) { return c && (c.statut === 'liberee' || c.statut === 'restituee'); });
+    if (!terminale) return false;
+    return cautions.some(function (c) { return c && c.statut === 'liberee'; });
+  }
+  /* COPIE du marche avec statut/trace mis a jour, ou null si rien a changer (idempotent)
+   * ou si le marche est suspendu/resilie. dateISO = date de l'evenement (AAAA-MM-JJ). */
+  function appliquerStatutMarche(marche, cautions, dateISO) {
+    if (!marche) return null;
+    if (marche.statut === 'suspendu' || marche.statut === 'resilie') return null;
+    var doit = marcheDoitTerminer(marche, cautions), out = {};
+    if (doit && marche.statut !== 'termine') {
+      Object.keys(marche).forEach(function (k) { out[k] = marche[k]; });
+      out.statut = 'termine'; out.avancement = 100;
+      out.termine_le = dateISO || null;
+      out.termine_trace = 'toutes cautions liberees le ' + _jjmm(dateISO);
+      return out;
+    }
+    if (!doit && marche.statut === 'termine') {
+      Object.keys(marche).forEach(function (k) { out[k] = marche[k]; });
+      out.statut = 'en_cours'; out.termine_le = null;
+      out.termine_trace = 'retour en cours le ' + _jjmm(dateISO) + ' (liberation annulee)';
+      return out;
+    }
+    return null;
+  }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -357,6 +398,8 @@
     pieceRecevable: pieceRecevable,
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
+    marcheDoitTerminer: marcheDoitTerminer,
+    appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,
     ocrConfigure: ocrConfigure,
     comparerActe: comparerActe,

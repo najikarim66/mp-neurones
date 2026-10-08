@@ -47,6 +47,28 @@ function getDb() {
   return _db;
 }
 
+// Recalcule le statut d'un marche apres un changement de caution (regle Karim 08/10) :
+// delegue au module pur appliquerStatutMarche (toutes cautions terminales + PV present
+// -> termine, trace ; liberation annulee -> en cours). N'ecrit le marche QUE si le
+// statut change. Best-effort : une erreur ici ne casse pas le depot/liberation. Renvoie
+// le nouveau statut, ou null si aucun changement.
+async function recomputeMarcheStatut(marcheId, dateISO) {
+  try {
+    const marchesC = getDb().container("mp_marches");
+    const r = await marchesC.item(marcheId, marcheId).read();
+    const m = r.resource;
+    if (!m) return null;
+    const cs = (await getDb().container("mp_cautions").items.query({
+      query: "SELECT * FROM c WHERE c.marcheId = @m",
+      parameters: [{ name: "@m", value: marcheId }]
+    }).fetchAll()).resources;
+    const maj = MPMainlevee.appliquerStatutMarche(m, cs, dateISO);
+    if (!maj) return null;
+    await marchesC.items.upsert(maj);
+    return maj.statut;
+  } catch (e) { return null; }
+}
+
 // Verifie qu'un user est authentifie via Entra ID (en-tete x-ms-client-principal injecte par SWA)
 function getAuthenticatedUser(req) {
   const header = req.headers && req.headers["x-ms-client-principal"];
@@ -470,10 +492,12 @@ module.exports = async function (context, req) {
       };
       const maj = MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle);
       await cautionsC.items.upsert(maj);
+      // L'accuse bancaire fait passer la caution a « liberee » -> peut terminer le marche (regle Karim).
+      const marcheStatutPiece = await recomputeMarcheStatut(marcheId, dateReelle);
 
       context.res = {
         status: 200,
-        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle }
+        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle, marche_statut: marcheStatutPiece }
       };
       return;
     } catch (e) {
@@ -655,8 +679,10 @@ module.exports = async function (context, req) {
       const maj = MPMainlevee.appliquerLiberationDirecte(caution, motif, user.userDetails || null, dateISO);
       if (!maj) { context.res = { status: 409, body: { error: "Liberation directe impossible : la caution n'est pas active (statut " + caution.statut + ")" } }; return; }
       await cautionsC.items.upsert(maj);
+      // Liberation directe -> « liberee » -> peut terminer le marche (regle Karim).
+      const marcheStatutLib = await recomputeMarcheStatut(marcheId, dateISO);
 
-      context.res = { status: 200, body: { ok: true, caution: maj.num, statut: maj.statut, liberation_par: maj.liberation_par, motif: maj.liberation_motif } };
+      context.res = { status: 200, body: { ok: true, caution: maj.num, statut: maj.statut, liberation_par: maj.liberation_par, motif: maj.liberation_motif, marche_statut: marcheStatutLib } };
       return;
     } catch (e) {
       context.log.error("cautionLiberationDirecte error:", e.message);
