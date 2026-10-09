@@ -615,6 +615,31 @@ function checkAutoTermine(mid){
 }
 
 // DASHBOARD
+/* Cautions sans acte joint — nommees au dashboard (num, type, marche, banque), hors
+   etats terminaux (liberee/restituee/expiree). Pour inciter a joindre l'acte (cas A ou B). */
+function cautionsSansActeHTML(){
+  var sans=(S.cautions||[]).filter(function(c){ return !c.acte && ['liberee','restituee','expiree'].indexOf(c.statut)<0; });
+  if(!sans.length) return '';
+  var items=sans.slice(0,15).map(function(c){ var m=gm(c.marche_id); return '<li style="font-size:12px;margin-bottom:2px">N° '+esc(c.num||'—')+' — '+esc(TC[c.type]||c.type)+' — '+esc(m.ref||'marché inconnu')+' — '+esc(c.banque||'banque non renseignée')+'</li>'; }).join('');
+  var reste=sans.length>15?('<li style="font-size:12px;color:#7A7369">+'+(sans.length-15)+' autre(s)…</li>'):'';
+  return '<div class="card"><div class="sh"><div class="st">Cautions sans acte joint ('+sans.length+')</div></div><div style="font-size:12px;color:#7A7369;margin-bottom:6px">Joindre l\'acte via « Comparer l\'acte » (cas B) ou le formulaire caution (cas A).</div><ul style="margin:0;padding-left:18px">'+items+reste+'</ul></div>';
+}
+/* Carte « Mesure OCR (cas B) » — rend la lecture renvoyee par /api/ocr-mesure. */
+function mesureCasBHTML(s){
+  s=s||{};
+  function pct(x){ return x==null?'—':(Math.round(x*100)+' %'); }
+  var reco={en_attente:{t:'En attente — '+(s.nbVerdictees||0)+'/10 comparaisons verdictées',c:'#b45309'},ne_pas_generaliser:{t:'B ne part pas — plus de fausses lectures que d\'écarts réels',c:'#b91c1c'},peut_generaliser:{t:'B peut être généralisé — écarts réels ≥ fausses lectures',c:'#166534'}}[s.recommandation]||{t:'En attente',c:'#b45309'};
+  var champs=Object.keys(s.parChamp||{}).map(function(k){ var p=s.parChamp[k]; return '<li style="font-size:12px">'+esc(CMP_LBL[k]||k)+' : '+p.total+' écart(s), fausses '+pct(p.tauxFausse)+'</li>'; }).join('');
+  return '<div class="card"><div class="sh"><div class="st">Mesure OCR (cas B)</div></div>'+
+    '<div style="font-size:13px;font-weight:600;color:'+reco.c+'">'+esc(reco.t)+'</div>'+
+    '<div style="font-size:12px;color:#7A7369;margin-top:4px">Verdictées : '+(s.nbVerdictees||0)+' · écarts : '+(s.nbEcarts||0)+' (vrais '+(s.nbVrais||0)+', fausses '+(s.nbMauvaises||0)+', ignorés '+(s.nbIgnores||0)+')</div>'+
+    '<div style="font-size:12px;margin-top:4px">Taux d\'écarts réels : <b>'+pct(s.tauxEcartsReels)+'</b> · fausses lectures : <b>'+pct(s.tauxFaussesLectures)+'</b></div>'+
+    (champs?'<ul style="margin:6px 0 0;padding-left:18px">'+champs+'</ul>':'')+'</div>';
+}
+function chargerMesureDashboard(){
+  var slot=document.getElementById('mesure-casb-slot'); if(!slot)return;
+  apiFetch('/api/ocr-mesure').then(function(s){ slot.innerHTML=mesureCasBHTML(s); }).catch(function(){ slot.innerHTML=''; });
+}
 function pgDash(){
   var ec=S.marches.filter(function(m){return m.statut==='en_cours';});
   var pf=ec.reduce(function(a,m){return a+m.montant;},0);
@@ -633,7 +658,8 @@ function pgDash(){
     return '<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>'+t+'</span><span style="color:#7A7369">'+ms.length+' - '+fmad(tot)+'</span></div><div class="prog-bar-big"><div class="prog-bar-fill" style="width:'+pct+'%"></div></div></div>';
   }).join('');
   var recRows=rec.map(function(m){return '<tr style="cursor:pointer" onclick="editMarche(\''+m.id+'\')"><td><b style="font-size:12px">'+m.ref+'</b><div style="font-size:12px;color:#7A7369">'+m.titre+'</div></td><td style="font-size:12px">'+m.maitre_ouvrage+'</td><td>'+prg(m.avancement)+'</td><td>'+bdg(m.statut,SMM)+'</td></tr>';}).join('');
-  return '<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
+  setTimeout(chargerMesureDashboard,0); // lecture mesure cas B (async, apres injection DOM)
+  return cautionsSansActeHTML()+'<div id="mesure-casb-slot"></div>'+'<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
   '<div class="g2"><div class="card"><div class="sh"><div class="st">Repartition par type</div></div>'+byType+'</div><div class="card"><div class="sh"><div class="st">Marches recents</div><button class="btn btn-sm" onclick="nav(\'marches\')">Voir tout</button></div><div class="tw"><table><thead><tr><th>Reference</th><th>Maitre d\'ouvrage</th><th>Avanc.</th><th>Statut</th></tr></thead><tbody>'+recRows+'</tbody></table></div></div></div>';
 }
 
@@ -1600,18 +1626,34 @@ function openCompareActe(cautionId, marcheId){
   openMod('Comparer l\'acte a la fiche',html,null);
 }
 function fmtCmp(k,val){ if(val==null||val==='')return '—'; if(k==='montant')return fmad(val); if(k==='date_emission'||k==='date_echeance')return fdat(val); return String(val); }
-function comparePanelHTML(r){
-  var ec=r.ecarts||[],cf=r.confiances||{},lb=r.lu_brut||{};
-  if(!ec.length){return '<div class="info-box info-green" style="font-size:12px">Aucun ecart — l\'acte concorde avec la fiche (sur les champs lus par l\'OCR).</div>';}
-  var luKey={montant:'montant',banque:'banque',num:'reference',date_emission:'date_emission',date_echeance:'echeance'};
-  var lbl={montant:'Montant',banque:'Banque',num:'N Caution',date_emission:'Emission',date_echeance:'Echeance'};
-  var rows=ec.map(function(e){
-    var k=e.champ,ok=luKey[k]||k,etat=cf[ok]||'non_lu',brut=lb[ok];
-    var trace=(brut!=null&&String(brut)!==String(e.lu==null?'':e.lu))?(' <span style="color:#7A7369">(lu : '+esc(brut)+')</span>'):'';
-    return '<tr><td style="font-size:12px">'+esc(lbl[k]||k)+'</td><td style="font-size:12px">'+esc(fmtCmp(k,e.stocke))+'</td><td style="font-size:12px">'+esc(fmtCmp(k,e.lu))+trace+'</td><td>'+ocrBadge(etat)+'</td></tr>';
+var CMP_LBL={montant:'Montant',banque:'Banque',num:'N Caution',date_emission:'Emission',date_echeance:'Echeance'};
+function verdictSelectHTML(i){
+  return '<select class="fc" id="cmp_v_'+i+'" style="font-size:12px;padding:2px 4px">'+
+    '<option value="">— juger —</option>'+
+    '<option value="vrai_ecart">vrai ecart (corriger la fiche)</option>'+
+    '<option value="mauvaise_lecture">mauvaise lecture OCR</option>'+
+    '<option value="ignore">ignorer</option></select>';
+}
+/* Rend le panneau de comparaison depuis S._cmpResult (ecarts normalises : champ,
+   valeur_saisie, valeur_acte, confiance). Chaque ecart recoit un verdict a saisir ;
+   « Enregistrer » ecrit au journal mp_ocr_comparaisons. Une comparaison SANS ecart
+   (acte concordant) est enregistrable aussi -> elle compte dans les 10. */
+function comparePanelHTML(){
+  var cmp=S._cmpResult; if(!cmp)return '';
+  if(!cmp.ecarts.length){
+    return '<div class="info-box info-green" style="font-size:12px">Aucun ecart — l\'acte concorde avec la fiche (sur les champs lus par l\'OCR).</div>'+
+      '<button class="btn btn-sm btn-prim" id="cmp_save_btn" onclick="enregistrerComparaison()">Enregistrer la comparaison (acte concordant)</button>';
+  }
+  var rows=cmp.ecarts.map(function(e,i){
+    return '<tr><td style="font-size:12px">'+esc(CMP_LBL[e.champ]||e.champ)+'</td>'+
+      '<td style="font-size:12px">'+esc(fmtCmp(e.champ,e.valeur_saisie))+'</td>'+
+      '<td style="font-size:12px">'+esc(fmtCmp(e.champ,e.valeur_acte))+'</td>'+
+      '<td>'+ocrBadge(e.confiance)+'</td>'+
+      '<td>'+verdictSelectHTML(i)+'</td></tr>';
   }).join('');
-  return '<div class="info-box info-amber" style="font-size:12px">'+ec.length+' ecart(s) — la fiche fait foi, rien n\'est modifie. Juge chaque ligne : vrai ecart (corriger la fiche) ou faux ecart (mauvaise lecture OCR).</div>'+
-    '<div class="tw"><table><thead><tr><th>Champ</th><th>Fiche (saisi)</th><th>Acte (lu)</th><th>Confiance</th></tr></thead><tbody>'+rows+'</tbody></table></div>';
+  return '<div class="info-box info-amber" style="font-size:12px">'+cmp.ecarts.length+' ecart(s) — la fiche fait foi, rien n\'est modifie. Juge chaque ligne, puis enregistre au journal.</div>'+
+    '<div class="tw"><table><thead><tr><th>Champ</th><th>Fiche (saisi)</th><th>Acte (lu)</th><th>Confiance</th><th>Verdict</th></tr></thead><tbody>'+rows+'</tbody></table></div>'+
+    '<button class="btn btn-sm btn-prim" id="cmp_save_btn" onclick="enregistrerComparaison()" style="margin-top:8px">Enregistrer la comparaison</button>';
 }
 function comparerActeUI(cautionId, marcheId){
   var fileEl=document.getElementById('cmp_file'),btn=document.getElementById('cmp_btn');
@@ -1620,6 +1662,7 @@ function comparerActeUI(cautionId, marcheId){
   var file=fileEl.files[0],okTypes={'application/pdf':1,'image/jpeg':1,'image/png':1};
   if(!okTypes[file.type]){toast('Type non autorise (PDF, JPG ou PNG)',false);return;}
   if(file.size>20*1024*1024){toast('Fichier trop volumineux (max 20 Mo)',false);return;}
+  var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
   if(btn)btn.disabled=true;if(statusEl)statusEl.textContent='Lecture et comparaison...';
   var reader=new FileReader();
   reader.onload=function(){
@@ -1627,13 +1670,36 @@ function comparerActeUI(cautionId, marcheId){
     apiFetch('/api/caution-acte-compare',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({cautionId:String(cautionId),marcheId:String(marcheId),content_type:file.type,nom_original:file.name,data_base64:b64})})
     .then(function(r){
       r=r||{};if(btn)btn.disabled=false;if(statusEl)statusEl.textContent=r.cache?'(lecture en cache)':'';
-      if(!r.configure){if(resEl)resEl.innerHTML='<div class="info-box info-amber" style="font-size:12px">OCR non configure — comparaison indisponible.</div>';return;}
-      if(resEl)resEl.innerHTML=comparePanelHTML(r);
+      if(!r.configure){S._cmpResult=null;if(resEl)resEl.innerHTML='<div class="info-box info-amber" style="font-size:12px">OCR non configure — comparaison indisponible.</div>';return;}
+      /* Normalise les ecarts pour le journal ; la valeur lue sur l'acte ne quitte pas ce flux. */
+      var luKey={montant:'montant',banque:'banque',num:'reference',date_emission:'date_emission',date_echeance:'echeance'},cf=r.confiances||{};
+      S._cmpResult={
+        cautionId:String(cautionId), marcheId:String(marcheId), caution_num:(c?(c.num||''):''), acte_hash:r.hash||'',
+        champs_compares:['montant','banque','num','date_emission','date_echeance'],
+        ecarts:(r.ecarts||[]).map(function(e){ var ok=luKey[e.champ]||e.champ; return { champ:e.champ, valeur_acte:(e.lu==null?null:e.lu), valeur_saisie:(e.stocke==null?null:e.stocke), confiance:cf[ok]||'non_lu' }; })
+      };
+      if(statusEl)statusEl.textContent=(r.cache?'(lecture en cache) ':'')+'acte classe dans mp-preuves, rattache a la caution.';
+      if(resEl)resEl.innerHTML=comparePanelHTML();
     })
     .catch(function(e){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Comparaison echouee : '+e.message,false);});
   };
   reader.onerror=function(){if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';toast('Lecture du fichier impossible',false);};
   reader.readAsDataURL(file);
+}
+/* Verdict humain par ecart obligatoire (sauf acte concordant) -> ecrit la comparaison
+   au journal mp_ocr_comparaisons. Recharge les cautions (l'acte vient d'etre rattache). */
+function enregistrerComparaison(){
+  var cmp=S._cmpResult; if(!cmp){toast('Aucune comparaison a enregistrer',false);return;}
+  var ecarts=cmp.ecarts.map(function(e,i){ var sel=document.getElementById('cmp_v_'+i); return {champ:e.champ,valeur_acte:e.valeur_acte,valeur_saisie:e.valeur_saisie,confiance:e.confiance,verdict:sel?sel.value:''}; });
+  var manquants=ecarts.filter(function(e){return !e.verdict;});
+  if(manquants.length){toast('Juge chaque ecart avant d\'enregistrer ('+manquants.length+' sans verdict)',false);return;}
+  var btn=document.getElementById('cmp_save_btn'); if(btn)btn.disabled=true;
+  apiFetch('/api/ocr-comparaison',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({
+    cautionId:cmp.cautionId, marcheId:cmp.marcheId, caution_num:cmp.caution_num, acte_hash:cmp.acte_hash, champs_compares:cmp.champs_compares, ecarts:ecarts
+  })}).then(function(){
+    S._cmpResult=null;
+    return apiList('cautions').then(function(cs){S.cautions=cs;sbStats();render();closeMod();toast('Comparaison enregistree au journal');});
+  }).catch(function(e){ if(btn)btn.disabled=false; toast('Echec enregistrement: '+e.message,false); });
 }
 function cautionFormHTML(c){
   return ocrSectionHTML()+'<div class="fg"><label>Marche *</label><select class="fc" id="cmar" onchange="mfull(\'cmar\')">'+S.marches.map(function(m){return mopt(m,c&&c.marche_id===m.id);}).join('')+'</select><div id="cmar-full" style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc((gm((c&&c.marche_id)||(S.marches[0]&&S.marches[0].id))||{}).titre||'')+'</div></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N Caution *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Echeance</label><input class="fc" id="cech" type="date" value="'+(c&&c.date_echeance?c.date_echeance:'')+'"></div></div><div class="fg"><label>Statut</label><select class="fc" id="cstat">'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.statut===e[0]?' selected':!c&&e[0]==='active'?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select></div>'+
@@ -1648,7 +1714,9 @@ function newCaution(){
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
     var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,date_emission:v('cdem')||null,date_echeance:v('cech')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
-    if(S._ocrActe){ if(S._ocrActe.acte)newC.acte=S._ocrActe.acte; if(S._ocrActe.lu_brut)newC.ocr_lu_brut=S._ocrActe.lu_brut; }
+    /* On rattache l'acte (reference blob) ; la valeur LUE sur l'acte ne va PAS sur la
+       caution — elle ne vit que dans le journal mp_ocr_comparaisons. */
+    if(S._ocrActe&&S._ocrActe.acte){ newC.acte=S._ocrActe.acte; }
     saveItem('cautions',newC).then(function(){sbStats();render();toast('Caution creee');});
   });
 }
@@ -1669,8 +1737,8 @@ function editCaution(id){
       if(srv) MPMainlevee.preserverChampsServeur(c, srv, MPMainlevee.CHAMPS_PIECES_CAUTION);
       /* Acte + trace OCR : un nouvel OCR dans ce formulaire remplace ; sinon on garde
          ce que le serveur porte deja (un simple edit ne doit pas effacer l'acte lu). */
-      if(S._ocrActe){ if(S._ocrActe.acte)c.acte=S._ocrActe.acte; if(S._ocrActe.lu_brut)c.ocr_lu_brut=S._ocrActe.lu_brut; }
-      else if(srv){ if(srv.acte)c.acte=srv.acte; if(srv.ocr_lu_brut)c.ocr_lu_brut=srv.ocr_lu_brut; }
+      if(S._ocrActe&&S._ocrActe.acte){ c.acte=S._ocrActe.acte; }
+      else if(srv&&srv.acte){ c.acte=srv.acte; }
       return saveItem('cautions',c);
     }).then(function(){sbStats();render();toast('Caution mise a jour');checkAutoTermine(c.marche_id);}).catch(function(e){toast('Erreur enregistrement: '+e.message,false);});
   });

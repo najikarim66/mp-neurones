@@ -265,6 +265,55 @@
    * extraction n'est PAS servie comme fraiche (variante du defaut « 2 modeles » de l'ERP). */
   function cleCacheOcr(hashHex, modele) { return String(modele || '') + ':' + String(hashHex || ''); }
 
+  /* ===== Journal du cas B : lecture automatique de la mesure (garde Karim).
+   * Verdict humain par ecart, VERROUILLE a ces trois valeurs. */
+  var VERDICTS_ECART = ['vrai_ecart', 'mauvaise_lecture', 'ignore'];
+  /* Une comparaison est VERDICTEE quand elle n'a aucun ecart (l'acte concorde) OU que
+   * CHAQUE ecart porte un verdict connu. Une seule case vide -> pas encore jugee. */
+  function _estVerdicte(c) {
+    var e = (c && c.ecarts) || [];
+    if (!e.length) return true;
+    for (var i = 0; i < e.length; i++) { if (VERDICTS_ECART.indexOf(e[i] && e[i].verdict) < 0) return false; }
+    return true;
+  }
+  /* LECTURE de la mesure (sur le journal mp_ocr_comparaisons) : taux d'ecarts REELS et
+   * de FAUSSES lectures (global + par champ), et une recommandation qui n'est jamais
+   * « peut generaliser » avant 10 comparaisons VERDICTEES, et qui refuse B si les
+   * fausses lectures l'emportent sur les ecarts reels. « ignore » n'entre pas dans les
+   * taux (denominateur = vrais + mauvaises). PUR : aucune ecriture, aucune horloge. */
+  function statsMesure(comparaisons) {
+    comparaisons = comparaisons || [];
+    var verdictees = comparaisons.filter(_estVerdicte);
+    var nbVrais = 0, nbMauvaises = 0, nbIgnores = 0, nbEcarts = 0, parChamp = {};
+    verdictees.forEach(function (c) {
+      ((c && c.ecarts) || []).forEach(function (e) {
+        nbEcarts++;
+        var ch = e.champ || '?';
+        if (!parChamp[ch]) parChamp[ch] = { total: 0, vraies: 0, mauvaises: 0, ignores: 0, tauxFausse: 0 };
+        parChamp[ch].total++;
+        if (e.verdict === 'vrai_ecart') { nbVrais++; parChamp[ch].vraies++; }
+        else if (e.verdict === 'mauvaise_lecture') { nbMauvaises++; parChamp[ch].mauvaises++; }
+        else if (e.verdict === 'ignore') { nbIgnores++; parChamp[ch].ignores++; }
+      });
+    });
+    Object.keys(parChamp).forEach(function (ch) {
+      var p = parChamp[ch], denom = p.vraies + p.mauvaises;
+      p.tauxFausse = denom > 0 ? (p.mauvaises / denom) : 0;
+    });
+    var denomGlobal = nbVrais + nbMauvaises;
+    var decisionPrete = verdictees.length >= 10;
+    return {
+      nbComparaisons: comparaisons.length,
+      nbVerdictees: verdictees.length,
+      decisionPrete: decisionPrete,
+      nbEcarts: nbEcarts, nbVrais: nbVrais, nbMauvaises: nbMauvaises, nbIgnores: nbIgnores,
+      tauxEcartsReels: denomGlobal > 0 ? (nbVrais / denomGlobal) : null,
+      tauxFaussesLectures: denomGlobal > 0 ? (nbMauvaises / denomGlobal) : null,
+      parChamp: parChamp,
+      recommandation: !decisionPrete ? 'en_attente' : (nbMauvaises > nbVrais ? 'ne_pas_generaliser' : 'peut_generaliser')
+    };
+  }
+
   var TYPES_OCR_CONNUS = ['soumission', 'bonne_execution', 'retenue_garantie'];
   /* Le type lu par l'OCR est CONTRAINT aux types connus : l'OCR propose, la liste
    * verrouille. Renvoie un type connu ou null (l'utilisateur choisit alors).
@@ -404,6 +453,8 @@
     ocrConfigure: ocrConfigure,
     comparerActe: comparerActe,
     cleCacheOcr: cleCacheOcr,
+    VERDICTS_ECART: VERDICTS_ECART,
+    statsMesure: statsMesure,
     TYPES_OCR_CONNUS: TYPES_OCR_CONNUS,
     normaliserTypeOcr: normaliserTypeOcr,
     normaliserBanqueOcr: normaliserBanqueOcr,

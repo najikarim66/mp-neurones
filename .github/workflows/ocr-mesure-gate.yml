@@ -1,0 +1,30 @@
+name: Gate mesure OCR
+
+# Garde-fou de la lecture du journal cas B (statsMesure) : comptage par verdict,
+# « verdictee » = 0 ecart OU tous les ecarts juges, taux reels/fausses (global + par
+# champ), et la recommandation qui n'est JAMAIS « peut generaliser » avant 10
+# comparaisons verdictees et refuse B si fausses > vraies. Deterministe, node pur.
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/ocr-mesure.test.js'
+      - '.github/workflows/ocr-mesure-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/ocr-mesure.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate mesure OCR (node, sans dependances)
+        run: node test/ocr-mesure.test.js

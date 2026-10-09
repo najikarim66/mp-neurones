@@ -827,13 +827,102 @@ module.exports = async function (context, req) {
       const res = await ocr.extraireActe(buf, contentType, referentiel, cacheGet, cacheSet);
       if (!res.configure) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente) — comparaison indisponible" } }; return; }
 
-      // ECARTS — module pur gate. Aucune ecriture : ni caution, ni blob.
+      // ECARTS — module pur gate.
       const ecarts = MPMainlevee.comparerActe(caution, res.champs);
 
-      context.res = { status: 200, body: { configure: true, cache: !!res.cache, ecarts: ecarts, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut || null } };
+      // CLASSEMENT de l'acte (comme au cas A) : blob prive par hash dans mp-preuves,
+      // rattache a la caution (lien de lecture + dashboard « sans acte »). SEUL le champ
+      // `acte` (reference blob) est ajoute — les champs metier de la fiche ne sont PAS
+      // touches (la fiche fait foi). La valeur LUE sur l'acte ne va PAS sur la caution :
+      // elle ne vit que dans le journal mp_ocr_comparaisons.
+      var blobName = "actes/" + res.hash + "." + ext;
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      var acte = null;
+      if (conn) {
+        try {
+          const svc = BlobServiceClient.fromConnectionString(conn);
+          const contc = svc.getContainerClient(PIECE_CONTAINER);
+          await contc.createIfNotExists();
+          await contc.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+          acte = { blob: blobName, nom_original: String(body.nom_original || "acte." + ext), taille: buf.length, content_type: contentType, depose_le: new Date().toISOString(), depose_par: user.userDetails || null };
+          caution.acte = acte;
+          await getDb().container("mp_cautions").items.upsert(caution);
+        } catch (e) { acte = null; }
+      }
+
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, ecarts: ecarts, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut || null, hash: res.hash, acte: acte } };
       return;
     } catch (e) {
       context.log.error("cautionActeCompare error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route ocr-comparaison : POST /api/ocr-comparaison — JOURNAL du cas B.
+  // Ecrit UNE comparaison verdictee dans mp_ocr_comparaisons : caution, date, champs
+  // compares, ecarts {champ, valeur_acte, valeur_saisie, confiance, verdict}, qui/quand.
+  // La valeur LUE sur l'acte ne vit QUE dans ce journal (jamais sur la caution/dashboard).
+  if (fn === "ocrComparaison") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const body = req.body || {};
+      const cautionId = String(body.cautionId || "").trim();
+      const marcheId = String(body.marcheId || "").trim();
+      if (!cautionId || !marcheId) { context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId" } }; return; }
+      const now = new Date().toISOString();
+      const qui = user.userDetails || null;
+      const ecartsIn = Array.isArray(body.ecarts) ? body.ecarts : [];
+      const ecarts = ecartsIn.map(function (e) {
+        var verdict = MPMainlevee.VERDICTS_ECART.indexOf(e && e.verdict) >= 0 ? e.verdict : null;
+        return {
+          champ: String((e && e.champ) || ""),
+          valeur_acte: (e && e.valeur_acte != null) ? e.valeur_acte : null,
+          valeur_saisie: (e && e.valeur_saisie != null) ? e.valeur_saisie : null,
+          confiance: (e && e.confiance) || null,
+          verdict: verdict,
+          verdict_par: verdict ? qui : null,
+          verdict_le: verdict ? now : null
+        };
+      });
+      const doc = {
+        id: "cmp_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8),
+        cautionId: cautionId,
+        marcheId: marcheId,
+        caution_num: String(body.caution_num || ""),
+        acte_hash: String(body.acte_hash || ""),
+        champs_compares: Array.isArray(body.champs_compares) ? body.champs_compares : [],
+        ecarts: ecarts,
+        compare_par: qui,
+        compare_le: now
+      };
+      const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_comparaisons", partitionKey: { paths: ["/id"] } });
+      await cc.container.items.upsert(doc);
+      context.res = { status: 200, body: { ok: true, id: doc.id } };
+      return;
+    } catch (e) {
+      context.log.error("ocrComparaison error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route ocr-mesure : GET /api/ocr-mesure — LECTURE automatique de la mesure cas B.
+  // Lit tout le journal et renvoie statsMesure (module pur gate) : taux d'ecarts reels,
+  // fausses lectures (global + par champ), et la recommandation (en_attente < 10
+  // verdictees ; ne_pas_generaliser si fausses > vraies ; peut_generaliser sinon).
+  if (fn === "ocrMesure") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      let comps = [];
+      try { comps = (await getDb().container("mp_ocr_comparaisons").items.readAll().fetchAll()).resources; } catch (e) { comps = []; }
+      context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: MPMainlevee.statsMesure(comps) };
+      return;
+    } catch (e) {
+      context.log.error("ocrMesure error:", e.message);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }
