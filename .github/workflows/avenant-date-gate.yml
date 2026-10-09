@@ -1,0 +1,28 @@
+name: Gate date avenant
+
+# Garde-fou : la date de signature de l'avenant est la date DU DOCUMENT, jamais
+# defaultee a aujourd'hui, label explicite sur les deux formulaires (nouvel + edition),
+# sauvegarde refusant une date vide, repli NOMME a l'affichage (doctrine #2). Meme
+# classe de defaut que la date du PV. Deterministe, node pur, sans dependance.
+
+on:
+  push:
+    paths:
+      - 'public/index.html'
+      - 'test/avenant-date.test.js'
+      - '.github/workflows/avenant-date-gate.yml'
+  pull_request:
+    paths:
+      - 'public/index.html'
+      - 'test/avenant-date.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate date avenant (node, sans dependances)
+        run: node test/avenant-date.test.js
