@@ -423,6 +423,12 @@ module.exports = async function (context, req) {
         await cautionsC.items.batch(ops, marcheId);
       }
 
+      // (4) STATUT MARCHE (regle Karim 08/10) : le depot du PV change une condition de
+      // terminaison (reception_definitive_prononcee). Si les cautions sont deja TOUTES
+      // liberees (regularisations / marches anciens, ordre inverse du cycle), le marche
+      // se termine ICI — meme declencheur qu'une liberation de caution (cas 40/2024).
+      const marcheStatutPv = await recomputeMarcheStatut(marcheId, dateISO);
+
       // Reponse : libelles humains uniquement (jamais l'id ni le chemin blob).
       context.res = {
         status: 200,
@@ -431,7 +437,8 @@ module.exports = async function (context, req) {
           marche: marche.ref,
           date_reception_definitive_reelle: dateReelle,
           cautions_basculees: batch.count,
-          montant_bascule: batch.total
+          montant_bascule: batch.total,
+          marche_statut: marcheStatutPv
         }
       };
       return;

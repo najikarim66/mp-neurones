@@ -267,6 +267,23 @@ check('liberation annulee (caution repasse active) -> retour en_cours, trace', !
 check('aucun changement a appliquer -> null (idempotent)', MPM.appliquerStatutMarche(mT, [cLib, cAct], '2026-10-08') === null, '');
 check('marche suspendu -> la regle ne l\'ecrase pas (null)', MPM.appliquerStatutMarche({ id: 's', statut: 'suspendu', reception_definitive_prononcee: true }, [cLib, cLib2], '2026-10-08') === null, '');
 
+console.log('\n=== 19. Depot du PV = declencheur de terminaison (cas 40/2024, ordre inverse) ===');
+var _fs = require('fs'), _path = require('path');
+var m40abs = { id: 'm40', ref: '40/2024', statut: 'en_cours', reception_definitive_prononcee: false };
+var m40pv = { id: 'm40', ref: '40/2024', statut: 'en_cours', reception_definitive_prononcee: true };
+var c40 = [{ statut: 'liberee', type: 'bonne_execution' }, { statut: 'liberee', type: 'retenue_garantie' }];
+check('40/2024 : cautions deja liberees MAIS PV absent -> ne termine pas', MPM.marcheDoitTerminer(m40abs, c40) === false, '');
+check('40/2024 : depot du PV (reception_definitive_prononcee=true) -> termine', MPM.marcheDoitTerminer(m40pv, c40) === true, '');
+var maj40 = MPM.appliquerStatutMarche(m40pv, c40, '2026-10-09');
+check('40/2024 : applique -> termine + trace « toutes cautions liberees le 09/10 »', !!maj40 && maj40.statut === 'termine' && /toutes cautions lib.r.es le 09\/10/.test(maj40.termine_trace || ''), JSON.stringify(maj40 && maj40.termine_trace));
+// Cablage : le depot du PV (route pvReception) doit rappeler recomputeMarcheStatut, sinon
+// un marche aux cautions deja liberees reste « en cours » apres le PV (le bug trouve sur 40/2024).
+var _apiIndex = _fs.readFileSync(_path.join(__dirname, '..', 'api', 'index.js'), 'utf8');
+var _pvStart = _apiIndex.indexOf('"pvReception"');
+var _pvNext = _apiIndex.indexOf('if (fn === "', _pvStart + 5);
+var _pvBlock = (_pvStart >= 0 && _pvNext > _pvStart) ? _apiIndex.slice(_pvStart, _pvNext) : '';
+check('pvReception cable recomputeMarcheStatut (le depot du PV declenche la terminaison)', _pvBlock.indexOf('recomputeMarcheStatut') >= 0, 'bloc pvReception len=' + _pvBlock.length);
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
