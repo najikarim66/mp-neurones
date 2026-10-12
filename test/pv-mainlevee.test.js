@@ -307,6 +307,11 @@ console.log('\n=== 22. Cas A : construite depuis les valeurs CONFIRMEES au formu
 check('monte depuis les champs du formulaire (montant CORRIGE), marcheId impose, acte joint', (function () { var b = MPM.construireCautionCasA({ montant: 99072, num: 'X-1', type: 'bonne_execution', banque: 'CIH', date_echeance: '2026-05-01' }, 'm1', { blob: 'actes/h.pdf' }); return b && b.marche_id === 'm1' && b.montant === 99072 && b.num === 'X-1' && b.type === 'bonne_execution' && b.date_echeance === '2026-05-01' && b.acte && b.acte.blob === 'actes/h.pdf' && b.statut === 'active'; })(), '');
 check('sans marcheId -> refuse (null) — invariant 2b, pas de creation hors marche', MPM.construireCautionCasA({ montant: 1 }, '') === null && MPM.construireCautionCasA({ montant: 1 }, null) === null, '');
 
+console.log('\n=== 23. Toggle garde de version : DG seul (meme source de role que RH : rh_users.role) ===');
+check('role dg -> peut basculer', MPM.peutBasculerGarde('dg') === true, '');
+check('autres roles -> refus (comptable, secretaire, employe, vide, null)', MPM.peutBasculerGarde('comptable') === false && MPM.peutBasculerGarde('secretaire') === false && MPM.peutBasculerGarde('employe') === false && MPM.peutBasculerGarde('') === false && MPM.peutBasculerGarde(null) === false, '');
+check('casse/espaces toleres (DG, " dg ")', MPM.peutBasculerGarde('DG') === true && MPM.peutBasculerGarde(' dg ') === true, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

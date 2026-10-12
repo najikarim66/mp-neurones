@@ -252,6 +252,7 @@ input,select,textarea{font-family:inherit}
     <div class="ni" data-page="marches"><span class="ni-ic">&#128203;</span>Marchés</div>
     <div class="ni" data-page="cautions"><span class="ni-ic">&#127970;</span>Cautions bancaires</div>
     <div class="ni" data-page="paiements"><span class="ni-ic">&#128176;</span>Paiements</div>
+    <div class="ni" data-page="parametres"><span class="ni-ic">&#9881;</span>Paramètres</div>
     <div class="ni" data-page="rapports"><span class="ni-ic">&#128202;</span>Rapports</div>
     <div class="sb-foot" id="sbf"></div>
     <div class="sb-user" id="sbu" style="display:none">
@@ -346,7 +347,9 @@ function apiFetch(url, opts){
      ECRITURES (POST/PUT/PATCH/DELETE) vers l'API — rien n'est envoye, message nomme.
      Les LECTURES (GET/HEAD) passent toujours (on ne coupe jamais la consultation). */
   var _m=(opts.method||'GET').toUpperCase();
-  if(_m!=='GET'&&_m!=='HEAD'&&S._versionBloquant){
+  /* La bascule de la garde est l'echappatoire du DG : jamais suspendue par la garde
+     elle-meme (sinon on ne pourrait plus l'eteindre quand elle bloque). */
+  if(_m!=='GET'&&_m!=='HEAD'&&S._versionBloquant&&String(url).indexOf('/api/garde-version-toggle')<0){
     return Promise.reject(new Error(S._versionMessage||(typeof GardeVersion!=='undefined'?GardeVersion.MSG_REFUS_API:'Enregistrement suspendu (version)')));
   }
   return fetch(url, opts).then(function(r){
@@ -381,6 +384,33 @@ function demarrerGardeVersion(){
     _execVersion=j; renderBadgeVersion(); evaluerVersion();
     setInterval(evaluerVersion, 5*60*1000);
   });
+}
+/* Role de l'utilisateur (meme source que RH) : sert a montrer le controle « Garde de
+   version » au DG seul. Best-effort : en cas d'echec, DG=false (controle masque). */
+function chargerRole(){ return apiFetch('/api/role').then(function(r){ r=r||{}; S._isDg=!!r.isDg; S._role=r.role||null; }).catch(function(){ S._isDg=false; }); }
+/* Paramètres MP → Garde de version (Active/Inactive). DG seul ; l'ecran affiche l'etat
+   LU du serveur apres ecriture (pas l'etat clique) ; la bascule Inactive fait disparaitre
+   le bandeau a la relecture suivante, sans rechargement. */
+function pgParametres(){
+  setTimeout(chargerParamGarde,0);
+  return '<div class="card"><div class="sh"><div class="st">Garde de version</div></div>'+
+    '<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Le bandeau « nouvelle version / mise en service » et la suspension des enregistrements. Modification réservée au DG.</div>'+
+    '<div id="param-garde">Chargement…</div></div>';
+}
+function chargerParamGarde(){
+  var el=document.getElementById('param-garde'); if(!el)return;
+  apiFetch('/api/version').then(function(v){
+    v=v||{}; var actif=v.gardeVersionActive!==false;
+    var etat='<div style="font-size:13px;margin-bottom:8px">État actuel : <b style="color:'+(actif?'#166534':'#b91c1c')+'">'+(actif?'Active':'Inactive')+'</b></div>';
+    if(!S._isDg){ el.innerHTML=etat+'<div style="font-size:12px;color:#7A7369">Modification réservée au DG.</div>'; return; }
+    el.innerHTML=etat+'<div style="display:flex;gap:8px"><button class="btn btn-sm'+(actif?' btn-prim':'')+'" onclick="basculerGarde(true)">Active</button><button class="btn btn-sm'+(!actif?' btn-prim':'')+'" onclick="basculerGarde(false)">Inactive</button></div>';
+  }).catch(function(){ el.innerHTML='<div style="font-size:12px;color:#b91c1c">Lecture impossible.</div>'; });
+}
+function basculerGarde(active){
+  apiFetch('/api/garde-version-toggle',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({active:!!active})})
+  .then(function(){ toast('Garde de version '+(active?'activée':'désactivée')); return evaluerVersion(); })
+  .then(function(){ chargerParamGarde(); })
+  .catch(function(e){ toast('Refusé : '+e.message,false); });
 }
 function apiList(ckey){
   return apiFetch(API_BASE+'/'+CONTAINERS[ckey]).then(function(items){
@@ -548,7 +578,7 @@ function resetDemo(){
 }
 
 // NAVIGATION
-var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',paiements:'Paiements',rapports:'Rapports',indices:'Indices HCP'};
+var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',paiements:'Paiements',rapports:'Rapports',indices:'Indices HCP',parametres:'Parametres'};
 function nav(page){
   objVals(S._charts).forEach(function(c){try{c.destroy();}catch(e){}});
   S._charts={};S.page=page;S.search='';S.sf='';S.tf='';S.bf='';
@@ -570,7 +600,7 @@ function sbStats(){
   document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:12px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div>';
 }
 function render(){
-  var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,paiements:pgPaiements,rapports:pgRapports};
+  var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,paiements:pgPaiements,rapports:pgRapports,parametres:pgParametres};
   var fn=pages[S.page]||pgDash;
   document.getElementById('pb').innerHTML=fn();
   if(S.page==='rapports')setTimeout(initCharts,80);
@@ -4549,7 +4579,7 @@ apiLoadAll = function(){
    ======================================================================== */
 
 
-window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();demarrerGardeVersion();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
+window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();demarrerGardeVersion();chargerRole();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
 </body>
 </html>

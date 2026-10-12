@@ -1,0 +1,32 @@
+name: Gate toggle garde version
+
+# Garde-fou du toggle « Garde de version » (DG seul). Complète les gates pures
+# peutBasculerGarde (pv-mainlevee) et verdictVersion interrupteur (garde-version).
+# Vérrou de câblage : endpoint gaté DG (403 nommé) + trace mp_config ; contrôle
+# réservé au DG côté UI ; bascule exemptée du write-guard. Node pur, sans dépendance.
+
+on:
+  push:
+    paths:
+      - 'api/index.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/garde-toggle.test.js'
+      - '.github/workflows/garde-toggle-gate.yml'
+  pull_request:
+    paths:
+      - 'api/index.js'
+      - 'public/index.html'
+      - 'test/garde-toggle.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate toggle garde version (node, sans dependances)
+        run: node test/garde-toggle.test.js

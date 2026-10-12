@@ -82,6 +82,18 @@ function getAuthenticatedUser(req) {
   }
 }
 
+// Role de l'utilisateur, MEME source que le RH : conteneur rh_users (DB partagee),
+// cle = email en minuscules, champ role (dg/comptable/...). Compte inactif -> null.
+async function getRoleFromDb(email) {
+  if (!email) return null;
+  try {
+    const e = String(email).toLowerCase();
+    const r = await getDb().container("rh_users").item(e, e).read();
+    const u = r.resource;
+    return (u && u.actif !== false && u.role) ? String(u.role) : null;
+  } catch (e) { return null; }
+}
+
 module.exports = async function (context, req) {
   const fn = context.executionContext.functionName;
 
@@ -106,6 +118,47 @@ module.exports = async function (context, req) {
       body: { app: "mp-neurones-api", apiContract: apiContract, build: vj.build || null, commit: vj.commit || null, buildDate: vj.buildDate || null, gardeVersionActive: gardeVersionActive }
     };
     return;
+  }
+
+  // Route role : GET /api/role — l'identite + le role de l'utilisateur (rh_users, DB
+  // partagee) pour que le front montre le controle « Garde de version » au DG seul.
+  if (fn === "roleGet") {
+    const user = getAuthenticatedUser(req);
+    if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+    const email = user.userDetails || null;
+    const role = await getRoleFromDb(email);
+    context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { email: email, role: role, isDg: MPMainlevee.peutBasculerGarde(role) } };
+    return;
+  }
+
+  // Route garde-version-toggle : POST /api/garde-version-toggle { active } — bascule
+  // gardeVersionActive dans mp_config. DG SEUL (meme source de role que RH). Chaque
+  // bascule TRACEE (qui, quand, de -> vers). Renvoie l'etat ECRIT (le front relit ensuite
+  // /api/version pour afficher l'etat lu du serveur, pas l'etat clique).
+  if (fn === "gardeVersionToggle") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const email = user.userDetails || null;
+      const role = await getRoleFromDb(email);
+      if (!MPMainlevee.peutBasculerGarde(role)) { context.res = { status: 403, body: { error: "Bascule de la garde de version : reservee au DG." } }; return; }
+      const active = !!(req.body && req.body.active);
+      const cc = (await getDb().containers.createIfNotExists({ id: "mp_config", partitionKey: { paths: ["/id"] } })).container;
+      let doc = null;
+      try { doc = (await cc.item("parametres", "parametres").read()).resource; } catch (e) { doc = null; }
+      if (!doc) doc = { id: "parametres" };
+      const avant = (typeof doc.gardeVersionActive === "boolean") ? doc.gardeVersionActive : true;
+      doc.gardeVersionActive = active;
+      doc.gardeVersionActive_trace = (Array.isArray(doc.gardeVersionActive_trace) ? doc.gardeVersionActive_trace : []).concat([{ par: email, le: new Date().toISOString(), de: avant, vers: active }]);
+      await cc.items.upsert(doc);
+      context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { gardeVersionActive: active } };
+      return;
+    } catch (e) {
+      context.log.error("gardeVersionToggle error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
   }
 
   // Route ping

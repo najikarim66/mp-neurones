@@ -201,6 +201,10 @@
    * (aucun autre champ de l'AO). Meme garantie anti-clobber que patchActeOps. */
   function patchActeProvOps(acte) { return [{ op: 'add', path: '/caution_prov/acte', value: acte }]; }
 
+  /* Toggle de la garde de version : réservé au DG (même source de rôle que RH :
+   * rh_users.role dans la DB partagée). Tolère casse/espaces. */
+  function peutBasculerGarde(role) { return String(role == null ? '' : role).trim().toLowerCase() === 'dg'; }
+
   /* CAS A (rapprochement) : construit la caution a creer depuis les champs CONFIRMES au
    * formulaire (jamais la valeur lue brute : si l'OCR a mal lu un montant, l'ecran le
    * corrige et c'est la valeur corrigee qui est portee). marcheId IMPOSE (invariant 2b :
@@ -579,6 +583,7 @@
     patchActeOps: patchActeOps,
     patchActeProvOps: patchActeProvOps,
     construireCautionCasA: construireCautionCasA,
+    peutBasculerGarde: peutBasculerGarde,
     normaliserNumCaution: normaliserNumCaution,
     apparierActe: apparierActe,
     marcheDoitTerminer: marcheDoitTerminer,
