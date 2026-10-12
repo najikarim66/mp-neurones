@@ -624,6 +624,14 @@ function cautionsSansActeHTML(){
   var reste=sans.length>15?('<li style="font-size:12px;color:#7A7369">+'+(sans.length-15)+' autre(s)…</li>'):'';
   return '<div class="card"><div class="sh"><div class="st">Cautions sans acte joint ('+sans.length+')</div></div><div style="font-size:12px;color:#7A7369;margin-bottom:6px">Joindre l\'acte via « Comparer l\'acte » (cas B) ou le formulaire caution (cas A).</div><ul style="margin:0;padding-left:18px">'+items+reste+'</ul></div>';
 }
+/* Cautions sans marché rattaché — anomalie (une caution DOIT avoir un marché).
+   Vide aujourd'hui (0), et le reste grâce au refus API (invariant marcheId). */
+function cautionsSansMarcheHTML(){
+  var sans=(S.cautions||[]).filter(function(c){ return typeof MPMainlevee!=='undefined' ? !MPMainlevee.cautionMarcheIdValide(c) : !c.marche_id; });
+  if(!sans.length) return '';
+  var items=sans.slice(0,20).map(function(c){ return '<li style="font-size:12px;margin-bottom:2px">N° '+esc(c.num||'—')+' — '+esc(c.banque||'banque non renseignée')+' — '+fmad(c.montant)+'</li>'; }).join('');
+  return '<div class="card" style="border-left:3px solid #b91c1c"><div class="sh"><div class="st">Cautions sans marché ('+sans.length+')</div></div><div style="font-size:12px;color:#7A7369;margin-bottom:6px">Anomalie : une caution doit être rattachée à un marché (l\'API refuse désormais toute caution sans marché).</div><ul style="margin:0;padding-left:18px">'+items+'</ul></div>';
+}
 /* Carte « Mesure OCR (cas B) » — rend la lecture renvoyee par /api/ocr-mesure. */
 function mesureCasBHTML(s){
   s=s||{};
@@ -659,7 +667,7 @@ function pgDash(){
   }).join('');
   var recRows=rec.map(function(m){return '<tr style="cursor:pointer" onclick="editMarche(\''+m.id+'\')"><td><b style="font-size:12px">'+m.ref+'</b><div style="font-size:12px;color:#7A7369">'+m.titre+'</div></td><td style="font-size:12px">'+m.maitre_ouvrage+'</td><td>'+prg(m.avancement)+'</td><td>'+bdg(m.statut,SMM)+'</td></tr>';}).join('');
   setTimeout(chargerMesureDashboard,0); // lecture mesure cas B (async, apres injection DOM)
-  return cautionsSansActeHTML()+'<div id="mesure-casb-slot"></div>'+'<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
+  return cautionsSansMarcheHTML()+cautionsSansActeHTML()+'<div id="mesure-casb-slot"></div>'+'<div class="krow"><div class="kpi k1"><div class="kl">Total marches</div><div class="kv">'+S.marches.length+'</div><div class="kf">'+ec.length+' en cours</div></div><div class="kpi k2"><div class="kl">Portefeuille actif</div><div class="kv sm">'+fmad(pf)+'</div></div><div class="kpi k3"><div class="kl">Cautions actives</div><div class="kv">'+S.cautions.filter(function(c){return c.statut==='active';}).length+'</div><div class="kf">'+recDefList.length+' rec. def. a demander</div></div><div class="kpi k4"><div class="kl">Total encaisse</div><div class="kv sm">'+fmad(enc)+'</div><div class="kf">'+pap.length+' paiements en attente</div></div></div>'+(alerts?'<div class="card"><div class="sh"><div class="st">Alertes</div></div>'+alerts+'</div>':'')+
   '<div class="g2"><div class="card"><div class="sh"><div class="st">Repartition par type</div></div>'+byType+'</div><div class="card"><div class="sh"><div class="st">Marches recents</div><button class="btn btn-sm" onclick="nav(\'marches\')">Voir tout</button></div><div class="tw"><table><thead><tr><th>Reference</th><th>Maitre d\'ouvrage</th><th>Avanc.</th><th>Statut</th></tr></thead><tbody>'+recRows+'</tbody></table></div></div></div>';
 }
 

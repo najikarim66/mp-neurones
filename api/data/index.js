@@ -14,6 +14,7 @@ const {
   remove,
   generateId,
 } = require("../_shared/cosmos");
+const MPMainlevee = require("../pv-mainlevee.js");
 
 const ALLOWED_CONTAINERS = new Set([
   "mp_marches",
@@ -58,6 +59,11 @@ module.exports = async function (context, req) {
         if (!body || typeof body !== "object") {
           return respond(context, 400, { error: "Body JSON requis" });
         }
+        // INVARIANT (Karim) : une caution DOIT porter un marcheId, sinon elle s'ecrit
+        // dans une partition vide au lieu de sa fiche. Pas d'exception (cas A comme B).
+        if (container === "mp_cautions" && !MPMainlevee.cautionMarcheIdValide(body)) {
+          return respond(context, 400, { error: "Caution refusee : marcheId obligatoire (une caution sans marche ne peut pas etre enregistree)." });
+        }
         if (!body.id) body.id = generateId(container.split("_")[1] || "doc");
         body.createdAt = body.createdAt || new Date().toISOString();
         body.updatedAt = new Date().toISOString();
@@ -70,6 +76,9 @@ module.exports = async function (context, req) {
         const body = req.body;
         if (!body || typeof body !== "object") {
           return respond(context, 400, { error: "Body JSON requis" });
+        }
+        if (container === "mp_cautions" && !MPMainlevee.cautionMarcheIdValide(body)) {
+          return respond(context, 400, { error: "Caution refusee : marcheId obligatoire (une caution sans marche ne peut pas etre enregistree)." });
         }
         body.id = id;
         body.updatedAt = new Date().toISOString();

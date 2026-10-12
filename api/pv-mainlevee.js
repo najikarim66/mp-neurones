@@ -188,6 +188,16 @@
     return null;
   }
 
+  /* INVARIANT (decision Karim) : une caution DOIT porter un marcheId — sinon elle
+   * s'ecrit dans une partition vide au lieu de sa fiche. Refuse a l'API (creation,
+   * depot d'acte, cas A comme B). Tolere marcheId (Cosmos) OU marche_id (cote app). */
+  function cautionMarcheIdValide(doc) {
+    return !!(doc && String((doc.marcheId != null ? doc.marcheId : doc.marche_id) || '').trim());
+  }
+  /* Operations de PATCH Cosmos pour RATTACHER un acte : touche le SEUL chemin /acte,
+   * aucun autre champ de la caution (anti-clobber ; un depot d'acte = une cle patchee). */
+  function patchActeOps(acte) { return [{ op: 'add', path: '/acte', value: acte }]; }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -480,6 +490,8 @@
     pieceRecevable: pieceRecevable,
     appliquerPiece: appliquerPiece,
     principalAutorise: principalAutorise,
+    cautionMarcheIdValide: cautionMarcheIdValide,
+    patchActeOps: patchActeOps,
     marcheDoitTerminer: marcheDoitTerminer,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,

@@ -1,0 +1,32 @@
+name: Gate invariant marcheId + PATCH acte
+
+# Garde-fou : une caution sans marcheId est refusee a l'API (POST + PUT), et le
+# rattachement d'acte ecrit par PATCH cible (/acte seul), jamais par upsert de la
+# caution entiere (anti-clobber). Verrou de cablage complementaire des gates pures
+# cautionMarcheIdValide / patchActeOps. Deterministe, node pur, sans dependance.
+
+on:
+  push:
+    paths:
+      - 'api/data/index.js'
+      - 'api/index.js'
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/acte-invariant-patch.test.js'
+      - '.github/workflows/acte-invariant-patch-gate.yml'
+  pull_request:
+    paths:
+      - 'api/data/index.js'
+      - 'api/index.js'
+      - 'test/acte-invariant-patch.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate invariant marcheId + PATCH acte (node, sans dependances)
+        run: node test/acte-invariant-patch.test.js

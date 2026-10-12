@@ -284,6 +284,20 @@ var _pvNext = _apiIndex.indexOf('if (fn === "', _pvStart + 5);
 var _pvBlock = (_pvStart >= 0 && _pvNext > _pvStart) ? _apiIndex.slice(_pvStart, _pvNext) : '';
 check('pvReception cable recomputeMarcheStatut (le depot du PV declenche la terminaison)', _pvBlock.indexOf('recomputeMarcheStatut') >= 0, 'bloc pvReception len=' + _pvBlock.length);
 
+console.log('\n=== 20. Invariant : une caution DOIT porter un marcheId (refus API sinon) ===');
+check('marcheId present -> valide', MPM.cautionMarcheIdValide({ marcheId: 'm1' }) === true, '');
+check('marche_id (cote app) present -> valide', MPM.cautionMarcheIdValide({ marche_id: 'm1' }) === true, '');
+check('marcheId vide -> refuse', MPM.cautionMarcheIdValide({ marcheId: '' }) === false, '');
+check('marcheId espaces -> refuse', MPM.cautionMarcheIdValide({ marcheId: '   ' }) === false, '');
+check('aucun -> refuse', MPM.cautionMarcheIdValide({}) === false && MPM.cautionMarcheIdValide(null) === false, '');
+
+console.log('\n=== 21. PATCH acte : operations qui ne touchent QUE /acte (aucun autre champ) ===');
+var ops = MPM.patchActeOps({ blob: 'actes/x.pdf', nom_original: 'a.pdf' });
+check('une seule operation', Array.isArray(ops) && ops.length === 1, JSON.stringify(ops));
+check('op sur le SEUL chemin /acte', ops[0] && ops[0].path === '/acte', JSON.stringify(ops[0]));
+check('valeur = l\'objet acte fourni', ops[0] && ops[0].value && ops[0].value.blob === 'actes/x.pdf', '');
+check('aucun chemin autre que /acte', ops.every(function (o) { return o.path === '/acte'; }), '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

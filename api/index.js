@@ -845,8 +845,8 @@ module.exports = async function (context, req) {
           await contc.createIfNotExists();
           await contc.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
           acte = { blob: blobName, nom_original: String(body.nom_original || "acte." + ext), taille: buf.length, content_type: contentType, depose_le: new Date().toISOString(), depose_par: user.userDetails || null };
-          caution.acte = acte;
-          await getDb().container("mp_cautions").items.upsert(caution);
+          // PATCH CIBLE : ne touche que /acte — aucun autre champ de la caution (anti-clobber).
+          await getDb().container("mp_cautions").item(cautionId, marcheId).patch(MPMainlevee.patchActeOps(acte));
         } catch (e) { acte = null; }
       }
 
