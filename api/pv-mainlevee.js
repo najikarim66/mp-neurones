@@ -286,6 +286,24 @@
     }
     return { liste: out, ajoutes: ajoutes, doublons: doublons, refuses: refuses, nonPdf: nonPdf };
   }
+  /* Garde de version — réarmement au déploiement. gardeBuild = build où l'état de la
+   * garde a été fixé pour la dernière fois (toggle ou réarmement). On réarme quand le
+   * build DÉPLOYÉ est strictement plus récent (le DG avait éteint pour l'ancien build ;
+   * un nouveau build la réactive). Build déployé illisible -> ne conclut jamais (doctrine
+   * #35). gardeBuild absent -> jamais armé pour un build -> réarmer. */
+  function doitRearmerGarde(gardeBuild, deployBuild) {
+    var d = Number(deployBuild);
+    if (!isFinite(d) || d <= 0) return false;
+    var g = Number(gardeBuild);
+    if (!isFinite(g)) return true;
+    return d > g;
+  }
+  /* Pastille ambre « garde inactive » dans l'en-tête : DG SEUL, et seulement quand la
+   * garde est explicitement Inactive (false strict ; undefined pendant le chargement
+   * n'allume rien). */
+  function pastilleGardeInactive(isDg, gardeVersionActive) {
+    return isDg === true && gardeVersionActive === false;
+  }
   /* Premier match SUR gagne (step 4). candidats = liste unifiee {kind:'caution'|
    * 'provisoire', id, marcheId, num, banque, montant, type, acte}. Renvoie
    * {mode:'doublon_hash'|'deja_acte'|'a'|'b'|'c'|'a_choisir', cible, candidates, marchePropose}. */
@@ -624,6 +642,8 @@
     apparierActe: apparierActe,
     ligneSureRapprochement: ligneSureRapprochement,
     ajouterFichiersLot: ajouterFichiersLot,
+    doitRearmerGarde: doitRearmerGarde,
+    pastilleGardeInactive: pastilleGardeInactive,
     marcheDoitTerminer: marcheDoitTerminer,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,

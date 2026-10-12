@@ -1,0 +1,33 @@
+name: Gate réarmement garde version
+
+# Garde de version : réarmement au déploiement + pastille ambre DG.
+# ① pur : doitRearmerGarde (réarme ssi build déployé strictement plus récent),
+# pastilleGardeInactive (DG seul, Inactive strict). ② câblage : /api/version réarme
+# + trace « réarmée par déploiement » + estampille gardeBuild ; toggle estampille
+# gardeBuild ; en-tête allume la pastille. Node pur, sans dépendance.
+
+on:
+  push:
+    paths:
+      - 'api/index.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/garde-rearm.test.js'
+      - '.github/workflows/garde-rearm-gate.yml'
+  pull_request:
+    paths:
+      - 'api/index.js'
+      - 'public/index.html'
+      - 'test/garde-rearm.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate réarmement garde version (node, sans dependances)
+        run: node test/garde-rearm.test.js

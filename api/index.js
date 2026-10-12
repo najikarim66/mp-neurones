@@ -109,8 +109,21 @@ module.exports = async function (context, req) {
     var apiContract = (contrat && Number.isInteger(contrat.version) && contrat.version > 0) ? contrat.version : null;
     var gardeVersionActive = true;
     try {
-      var cfgs = (await getDb().container("mp_config").items.readAll().fetchAll()).resources;
-      for (var i = 0; i < cfgs.length; i++) { if (cfgs[i] && typeof cfgs[i].gardeVersionActive === "boolean") { gardeVersionActive = cfgs[i].gardeVersionActive; break; } }
+      const cont = getDb().container("mp_config");
+      let doc = null;
+      try { doc = (await cont.item("parametres", "parametres").read()).resource; } catch (e) { doc = null; }
+      if (doc && typeof doc.gardeVersionActive === "boolean") gardeVersionActive = doc.gardeVersionActive;
+      // Réarmement au déploiement : un build strictement plus récent que celui en vigueur
+      // réactive la garde (tracé « réarmée par déploiement »), même si le DG l'avait éteinte
+      // pour le build précédent. Idempotent (une seule écriture par nouveau build).
+      if (doc && MPMainlevee.doitRearmerGarde(doc.gardeBuild, vj.build)) {
+        const avant = (typeof doc.gardeVersionActive === "boolean") ? doc.gardeVersionActive : true;
+        doc.gardeVersionActive = true;
+        doc.gardeBuild = vj.build;
+        doc.gardeVersionActive_trace = (Array.isArray(doc.gardeVersionActive_trace) ? doc.gardeVersionActive_trace : []).concat([{ par: "déploiement", le: new Date().toISOString(), de: avant, vers: true, motif: "réarmée par déploiement", build: vj.build }]);
+        await cont.items.upsert(doc);
+        gardeVersionActive = true;
+      }
     } catch (e) { gardeVersionActive = true; }
     context.res = {
       status: 200,
@@ -150,6 +163,10 @@ module.exports = async function (context, req) {
       if (!doc) doc = { id: "parametres" };
       const avant = (typeof doc.gardeVersionActive === "boolean") ? doc.gardeVersionActive : true;
       doc.gardeVersionActive = active;
+      // Estampille le build courant : l'état fixé par le DG « tient » jusqu'au prochain
+      // déploiement (sinon /api/version réarmerait aussitôt et « Inactive » serait vain).
+      let vjT = {}; try { vjT = require("./version.json"); } catch (e) { vjT = {}; }
+      doc.gardeBuild = vjT.build;
       doc.gardeVersionActive_trace = (Array.isArray(doc.gardeVersionActive_trace) ? doc.gardeVersionActive_trace : []).concat([{ par: email, le: new Date().toISOString(), de: avant, vers: active }]);
       await cc.items.upsert(doc);
       context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: { gardeVersionActive: active } };

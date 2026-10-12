@@ -363,7 +363,15 @@ function apiFetch(url, opts){
    bandeau rouge (onglet perime) / jaune (API en retard) ; ecritures suspendues
    quand bloquant (la suspension vit dans apiFetch ci-dessus). ===== */
 var _execVersion=null, _lastApiVersion=null;
-function renderBadgeVersion(){ var el=document.getElementById('mp-ident-slot'); if(el&&typeof GardeVersion!=='undefined') el.innerHTML=GardeVersion.badgeHTML(_execVersion||{}, _lastApiVersion||{}); }
+function renderBadgeVersion(){
+  var el=document.getElementById('mp-ident-slot'); if(!el)return;
+  var h=(typeof GardeVersion!=='undefined')?GardeVersion.badgeHTML(_execVersion||{}, _lastApiVersion||{}):'';
+  // Pastille ambre « garde inactive » — DG seul, tant que la garde est Inactive.
+  if(typeof MPMainlevee!=='undefined' && MPMainlevee.pastilleGardeInactive(S._isDg,(_lastApiVersion||{}).gardeVersionActive)){
+    h+='<div title="Garde de version INACTIVE — réactivée au prochain déploiement" style="margin-top:3px;font-size:11px;color:#b45309;white-space:nowrap"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:#f59e0b;margin-right:4px;vertical-align:middle"></span>Garde inactive</div>';
+  }
+  el.innerHTML=h;
+}
 function renderBandeauVersion(v){ var el=document.getElementById('version-bandeau'); if(el&&typeof GardeVersion!=='undefined') el.innerHTML=GardeVersion.bandeauHTML(v); }
 function evaluerVersion(){
   if(typeof GardeVersion==='undefined') return Promise.resolve();
@@ -387,7 +395,7 @@ function demarrerGardeVersion(){
 }
 /* Role de l'utilisateur (meme source que RH) : sert a montrer le controle « Garde de
    version » au DG seul. Best-effort : en cas d'echec, DG=false (controle masque). */
-function chargerRole(){ return apiFetch('/api/role').then(function(r){ r=r||{}; S._isDg=!!r.isDg; S._role=r.role||null; }).catch(function(){ S._isDg=false; }); }
+function chargerRole(){ return apiFetch('/api/role').then(function(r){ r=r||{}; S._isDg=!!r.isDg; S._role=r.role||null; renderBadgeVersion(); }).catch(function(){ S._isDg=false; }); }
 /* Paramètres MP → Garde de version (Active/Inactive). DG seul ; l'ecran affiche l'etat
    LU du serveur apres ecriture (pas l'etat clique) ; la bascule Inactive fait disparaitre
    le bandeau a la relecture suivante, sans rechargement. */
