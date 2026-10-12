@@ -314,6 +314,39 @@
     };
   }
 
+  /* Ecarts a TRAITER pour le dashboard : a plat, les ecarts soit VRAIS (a corriger la
+   * fiche), soit PAS ENCORE juges (a verdicter — sinon un ecart issu d'un depot
+   * automatique resterait invisible). Exclut mauvaise_lecture et ignore (resolus).
+   * Porte le contexte humain : caution, champ, valeur fiche vs acte, qui/quand, et
+   * l'id de la comparaison (pour poser le verdict). PUR. */
+  function ecartsATraiter(comparaisons) {
+    comparaisons = comparaisons || [];
+    var out = [];
+    comparaisons.forEach(function (c) {
+      ((c && c.ecarts) || []).forEach(function (e) {
+        var v = e && e.verdict;
+        if (v === 'vrai_ecart' || v == null || v === '') {
+          out.push({
+            comparaisonId: c.id || null,
+            cautionId: c.cautionId || null,
+            marcheId: c.marcheId || null,
+            caution_num: c.caution_num || '',
+            champ: e.champ,
+            valeur_saisie: (e.valeur_saisie === undefined ? null : e.valeur_saisie),
+            valeur_acte: (e.valeur_acte === undefined ? null : e.valeur_acte),
+            confiance: e.confiance || null,
+            verdict: (v == null || v === '') ? null : v,
+            verdict_par: e.verdict_par || null,
+            verdict_le: e.verdict_le || null,
+            compare_par: c.compare_par || null,
+            compare_le: c.compare_le || null
+          });
+        }
+      });
+    });
+    return out;
+  }
+
   var TYPES_OCR_CONNUS = ['soumission', 'bonne_execution', 'retenue_garantie'];
   /* Le type lu par l'OCR est CONTRAINT aux types connus : l'OCR propose, la liste
    * verrouille. Renvoie un type connu ou null (l'utilisateur choisit alors).
@@ -455,6 +488,7 @@
     cleCacheOcr: cleCacheOcr,
     VERDICTS_ECART: VERDICTS_ECART,
     statsMesure: statsMesure,
+    ecartsATraiter: ecartsATraiter,
     TYPES_OCR_CONNUS: TYPES_OCR_CONNUS,
     normaliserTypeOcr: normaliserTypeOcr,
     normaliserBanqueOcr: normaliserBanqueOcr,

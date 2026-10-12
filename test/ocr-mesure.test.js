@@ -52,6 +52,23 @@ check('10 verdictees, fausses > vraies -> ne_pas_generaliser (B ne part pas)', M
 console.log('\n=== 5. Vocabulaire des verdicts exporte + verrouille ===');
 check('VERDICTS_ECART = vrai_ecart, mauvaise_lecture, ignore', Array.isArray(MPM.VERDICTS_ECART) && MPM.VERDICTS_ECART.indexOf('vrai_ecart') >= 0 && MPM.VERDICTS_ECART.indexOf('mauvaise_lecture') >= 0 && MPM.VERDICTS_ECART.indexOf('ignore') >= 0 && MPM.VERDICTS_ECART.length === 3, JSON.stringify(MPM.VERDICTS_ECART));
 
+console.log('\n=== 6. ecartsATraiter : ce qui va au bloc dashboard (a corriger / a juger) ===');
+function cmpC(num, cautionId, ecarts) { return { id: 'cmp_' + cautionId, cautionId: cautionId, marcheId: 'm1', caution_num: num, compare_le: '2026-10-09T15:00:00Z', compare_par: 'imane@neurones.ma', ecarts: (ecarts || []).map(function (e) { return { champ: e[0], valeur_acte: e[2] || 'A', valeur_saisie: e[3] || 'F', confiance: 'lu', verdict: e[1] }; }) }; }
+var jrn = [
+  cmpC('N1', 'c1', [['montant', 'vrai_ecart', '100', '90']]),   // a corriger
+  cmpC('N2', 'c2', [['banque', 'mauvaise_lecture']]),            // resolu (OCR faux) -> PAS au bloc
+  cmpC('N3', 'c3', [['num', 'ignore']]),                         // ignore -> PAS au bloc
+  cmpC('N4', 'c4', [['date_echeance', null]]),                   // pas encore juge -> au bloc (a juger)
+  cmpC('N5', 'c5', [])                                           // concordant -> rien
+];
+var at = MPM.ecartsATraiter(jrn);
+check('ne retient que vrai_ecart + non juge (exclut mauvaise_lecture, ignore, concordant)', at.length === 2, JSON.stringify(at.map(function (x) { return x.caution_num + ':' + x.champ + ':' + x.verdict; })));
+var vrai = at.filter(function (x) { return x.verdict === 'vrai_ecart'; })[0];
+check('vrai_ecart porte caution, champ, fiche vs acte, qui, quand', !!vrai && vrai.caution_num === 'N1' && vrai.champ === 'montant' && vrai.valeur_saisie === '90' && vrai.valeur_acte === '100' && vrai.compare_par === 'imane@neurones.ma' && !!vrai.compare_le && vrai.comparaisonId === 'cmp_c1', JSON.stringify(vrai));
+var ajuger = at.filter(function (x) { return x.verdict == null; })[0];
+check('non juge present pour verdict (sinon un ecart cas A reste invisible a jamais)', !!ajuger && ajuger.caution_num === 'N4' && ajuger.champ === 'date_echeance', JSON.stringify(ajuger));
+check('journal vide -> liste vide', MPM.ecartsATraiter([]).length === 0, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

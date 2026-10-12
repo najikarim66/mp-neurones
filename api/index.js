@@ -919,7 +919,9 @@ module.exports = async function (context, req) {
       if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
       let comps = [];
       try { comps = (await getDb().container("mp_ocr_comparaisons").items.readAll().fetchAll()).resources; } catch (e) { comps = []; }
-      context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: MPMainlevee.statsMesure(comps) };
+      var mesure = MPMainlevee.statsMesure(comps);
+      mesure.ecartsATraiter = MPMainlevee.ecartsATraiter(comps);
+      context.res = { status: 200, headers: { "Cache-Control": "no-store" }, body: mesure };
       return;
     } catch (e) {
       context.log.error("ocrMesure error:", e.message);
