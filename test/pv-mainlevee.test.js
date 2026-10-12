@@ -297,6 +297,12 @@ check('une seule operation', Array.isArray(ops) && ops.length === 1, JSON.string
 check('op sur le SEUL chemin /acte', ops[0] && ops[0].path === '/acte', JSON.stringify(ops[0]));
 check('valeur = l\'objet acte fourni', ops[0] && ops[0].value && ops[0].value.blob === 'actes/x.pdf', '');
 check('aucun chemin autre que /acte', ops.every(function (o) { return o.path === '/acte'; }), '');
+var opsP = MPM.patchActeProvOps({ blob: 'actes/y.pdf' });
+check('prov : une op, path /caution_prov/acte uniquement', Array.isArray(opsP) && opsP.length === 1 && opsP[0].path === '/caution_prov/acte' && opsP[0].value.blob === 'actes/y.pdf', JSON.stringify(opsP));
+
+console.log('\n=== 22. Cas A : construite depuis les valeurs CONFIRMEES au formulaire (jamais la valeur lue brute) ===');
+check('monte depuis les champs du formulaire (montant CORRIGE), marcheId impose, acte joint', (function () { var b = MPM.construireCautionCasA({ montant: 99072, num: 'X-1', type: 'bonne_execution', banque: 'CIH', date_echeance: '2026-05-01' }, 'm1', { blob: 'actes/h.pdf' }); return b && b.marche_id === 'm1' && b.montant === 99072 && b.num === 'X-1' && b.type === 'bonne_execution' && b.date_echeance === '2026-05-01' && b.acte && b.acte.blob === 'actes/h.pdf' && b.statut === 'active'; })(), '');
+check('sans marcheId -> refuse (null) — invariant 2b, pas de creation hors marche', MPM.construireCautionCasA({ montant: 1 }, '') === null && MPM.construireCautionCasA({ montant: 1 }, null) === null, '');
 
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }

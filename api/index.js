@@ -988,6 +988,64 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route caution-prov-acte : POST /api/caution-prov-acte — acte d'une PROVISOIRE (portee
+  // par l'AO : a.caution_prov). Miroir de caution-acte-compare : OCR (cache hash), PATCH
+  // /caution_prov/acte (patchActeProvOps -> aucun AUTRE champ de l'AO), compare caution_prov
+  // vs acte -> ecarts (le client journalise). PDF seulement ; refus « deja un acte ».
+  if (fn === "cautionProvActe") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const body = req.body || {};
+      const aoId = String(body.aoId || "").trim();
+      const contentType = String(body.content_type || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+      if (!aoId) { context.res = { status: 400, body: { error: "Manquant : aoId" } }; return; }
+      if (contentType !== "application/pdf") { context.res = { status: 400, body: { error: "Format non accepte : scannez en PDF." } }; return; }
+      let buf; try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+      if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+
+      const aosC = getDb().container("mp_aos");
+      let ao = null; try { ao = (await aosC.item(aoId, aoId).read()).resource || null; } catch (e) { ao = null; }
+      if (!ao || !ao.caution_prov) { context.res = { status: 404, body: { error: "AO ou caution provisoire introuvable" } }; return; }
+      if (ao.caution_prov.acte) { context.res = { status: 200, body: { refus: "deja_acte", message: "cette provisoire a deja un acte (remplacement depuis la fiche)" } }; return; }
+
+      const ocr = require("./lib/ocr-acte.js");
+      let referentiel = [];
+      try { const bs = (await getDb().container("mp_banques").items.readAll().fetchAll()).resources; referentiel = bs.map(function (b) { return b.nom || b.name || b.libelle || ""; }).filter(Boolean); } catch (e) { referentiel = []; }
+      let cacheC = null;
+      try { const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_cache", partitionKey: { paths: ["/id"] } }); cacheC = cc.container; } catch (e) { cacheC = null; }
+      const cacheGet = cacheC ? function (cle) { return cacheC.item(cle, cle).read().then(function (r) { return r.resource; }).catch(function () { return null; }); } : null;
+      const cacheSet = cacheC ? function (cle, res) { return cacheC.items.upsert({ id: cle, resultat: res, le: new Date().toISOString() }); } : null;
+
+      const res = await ocr.extraireActe(buf, contentType, referentiel, cacheGet, cacheSet);
+      if (!res.configure) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente)" } }; return; }
+      const ecarts = MPMainlevee.comparerActe(ao.caution_prov, res.champs);
+
+      var blobName = "actes/" + res.hash + ".pdf";
+      var acte = null;
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (conn) {
+        try {
+          const svc = BlobServiceClient.fromConnectionString(conn);
+          const cont = svc.getContainerClient(PIECE_CONTAINER);
+          await cont.createIfNotExists();
+          await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+          acte = { blob: blobName, nom_original: String(body.nom_original || "acte.pdf"), taille: buf.length, content_type: contentType, depose_le: new Date().toISOString(), depose_par: user.userDetails || null };
+          await aosC.item(aoId, aoId).patch(MPMainlevee.patchActeProvOps(acte));
+        } catch (e) { acte = null; }
+      }
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, ecarts: ecarts, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut || null, hash: res.hash, acte: acte } };
+      return;
+    } catch (e) {
+      context.log.error("cautionProvActe error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

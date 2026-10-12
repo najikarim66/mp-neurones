@@ -197,6 +197,29 @@
   /* Operations de PATCH Cosmos pour RATTACHER un acte : touche le SEUL chemin /acte,
    * aucun autre champ de la caution (anti-clobber ; un depot d'acte = une cle patchee). */
   function patchActeOps(acte) { return [{ op: 'add', path: '/acte', value: acte }]; }
+  /* PATCH d'un acte de PROVISOIRE : touche le SEUL chemin /caution_prov/acte sur l'AO
+   * (aucun autre champ de l'AO). Meme garantie anti-clobber que patchActeOps. */
+  function patchActeProvOps(acte) { return [{ op: 'add', path: '/caution_prov/acte', value: acte }]; }
+
+  /* CAS A (rapprochement) : construit la caution a creer depuis les champs CONFIRMES au
+   * formulaire (jamais la valeur lue brute : si l'OCR a mal lu un montant, l'ecran le
+   * corrige et c'est la valeur corrigee qui est portee). marcheId IMPOSE (invariant 2b :
+   * null si absent, aucune creation hors marche). L'acte (reference blob) est joint. */
+  function construireCautionCasA(champs, marcheId, acte) {
+    if (!cautionMarcheIdValide({ marche_id: marcheId })) return null;
+    champs = champs || {};
+    return {
+      marche_id: String(marcheId),
+      type: champs.type || null,
+      num: champs.num || null,
+      montant: (champs.montant != null ? champs.montant : null),
+      banque: champs.banque || null,
+      date_emission: champs.date_emission || null,
+      date_echeance: champs.date_echeance || null,
+      statut: champs.statut || 'active',
+      acte: acte || null
+    };
+  }
 
   /* ===== APPARIEMENT d'un acte a une caution (« Rapprochement des actes »), PUR. ===== */
   /* Normalisation du N° de caution = la norm de l'ERP : MAJUSCULE, sans espaces, tirets,
@@ -550,6 +573,8 @@
     principalAutorise: principalAutorise,
     cautionMarcheIdValide: cautionMarcheIdValide,
     patchActeOps: patchActeOps,
+    patchActeProvOps: patchActeProvOps,
+    construireCautionCasA: construireCautionCasA,
     normaliserNumCaution: normaliserNumCaution,
     apparierActe: apparierActe,
     marcheDoitTerminer: marcheDoitTerminer,
