@@ -1830,6 +1830,7 @@ function rapprUnFichier(i,done){
       r.champs=x.champs; r.marche_lu=x.marche_lu; r.hash=x.hash; r.acte=x.acte; r.confiances=x.confiances;
       var lu={num:x.champs&&x.champs.num,banque:x.champs&&x.champs.banque,montant:x.champs&&x.champs.montant,type:x.champs&&x.champs.type,marche_ref:x.marche_lu&&x.marche_lu.reference,marche_objet:x.marche_lu&&x.marche_lu.objet,marche_mo:x.marche_lu&&x.marche_lu.maitre_ouvrage};
       var ap=MPMainlevee.apparierActe(lu,x.hash,rapprCandidats(S._rappr.marchePre),S.marches);
+      r.sure=MPMainlevee.ligneSureRapprochement(ap,x.champs&&x.champs.montant); // N° exact ET montant égal
       if(ap.mode==='doublon_hash'){ r.etat='doublon'; r.message='déjà rattaché à N° '+((ap.cible&&ap.cible.num)||'?'); }
       else if(ap.mode==='deja_acte'){ r.etat='deja'; r.message='la caution N° '+((ap.cible&&ap.cible.num)||'?')+' a déjà un acte'; }
       else if(ap.mode==='a'||ap.mode==='b'){ r.etat='lu'; r.cibleVal=ap.cible.kind+':'+ap.cible.id+':'+ap.cible.marcheId; r.marcheSel=ap.cible.marcheId; }
@@ -1888,7 +1889,7 @@ function rapprAttacherLigne(i,silencieux){
 function rapprAttacherSures(){
   var R=S._rappr;
   // « sûre » = proposé (mode a/b résolu sur une caution existante), N° non douteux.
-  var sures=[]; R.rows.forEach(function(r,i){ if(r.etat==='lu'&&r.cibleVal&&r.cibleVal.indexOf('creer:')!==0&&(!r.confiances||r.confiances.numero!=='douteux')){ sures.push(i); } });
+  var sures=[]; R.rows.forEach(function(r,i){ if(r.etat==='lu'&&r.sure===true&&r.cibleVal&&r.cibleVal.indexOf('creer:')!==0){ sures.push(i); } });
   if(!sures.length){ toast('Aucune ligne sûre (N° exact) à attacher — faites ligne par ligne',false); return; }
   R.phase='committing'; rapprRender();
   var k=0; (function next(){ if(k>=sures.length){ R.phase='review'; return rapprRafraichir(); } rapprAttacherLigne(sures[k++],true).then(next); })();

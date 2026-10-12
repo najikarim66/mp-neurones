@@ -52,6 +52,21 @@ check('num inconnu, marche illisible -> mode c, marche propose null (a choisir)'
 console.log('\n=== normaliserNumCaution ===');
 check('norm : MAJ, sans espaces/tirets/slash/point', MPM.normaliserNumCaution(' a-12/34.5 ') === 'A12345', MPM.normaliserNumCaution(' a-12/34.5 '));
 
+console.log('\n=== Revue : « ligne sûre » = N° exact ET montant égal ; réf ambiguë -> à choisir ===');
+// (a) N° connu mais montant DIFFERENT -> proposé, PAS sûr
+var apA = MPM.apparierActe({ num: '694066', banque: 'BMCE Bank', montant: 99999, type: 'retenue_garantie' }, 'h', cands, marches);
+check('(a) N° connu, montant different -> mode a mais NON sûre', apA.mode === 'a' && MPM.ligneSureRapprochement(apA, 99999) === false, '');
+check('(a bis) N° connu + montant EGAL -> sûre', (function () { var r = MPM.apparierActe({ num: '694066', montant: 36249 }, 'h', cands, marches); return MPM.ligneSureRapprochement(r, 36249) === true; })(), '');
+check('montant illisible (null/0) -> jamais sûre', MPM.ligneSureRapprochement(apA, 0) === false && MPM.ligneSureRapprochement(apA, null) === false, '');
+check('mode b/c/doublon/deja -> jamais sûre', MPM.ligneSureRapprochement({ mode: 'b', cible: { montant: 1 } }, 1) === false && MPM.ligneSureRapprochement({ mode: 'c' }, 1) === false, '');
+// (b) même réf sur DEUX marchés de deux MO -> à choisir (marché non proposé au hasard)
+var m2ref = [{ id: 'ma', ref: 'DUP/2025', objet: 'A', maitre_ouvrage: 'MO-A' }, { id: 'mb', ref: 'DUP/2025', objet: 'B', maitre_ouvrage: 'MO-B' }];
+check('(b) réf portée par 2 marchés (2 MO) -> mode c, marché NON proposé (à choisir)', (function () { var r = MPM.apparierActe({ num: 'NEUF-X', marche_ref: 'DUP/2025' }, 'h', [], m2ref); return r.mode === 'c' && !r.marchePropose; })(), '');
+// (c) réf lue à UN CHIFFRE près d'un marché existant, MO différent -> à choisir, pas attachée
+check('(c) réf à un chiffre près + MO différent -> mode c, marché non proposé', (function () { var r = MPM.apparierActe({ num: 'NEUF-Y', marche_ref: '19/2025', marche_mo: 'AUTRE MO' }, 'h', [], marches); return r.mode === 'c' && !r.marchePropose; })(), '');
+// (d) acte déjà joint redéposé -> doublon nommé (existant intact : aucune écriture déclenchée côté module)
+check('(d) hash déjà rattaché -> doublon_hash (rien à faire)', (function () { var cc = [{ kind: 'caution', id: 'z', marcheId: 'm545', num: 'Z', banque: 'X', montant: 1, type: 'bonne_execution', acte: { blob: 'actes/deadbeef.pdf' } }]; var r = MPM.apparierActe({ num: 'Z' }, 'deadbeef', cc, marches); return r.mode === 'doublon_hash' && r.cible.id === 'z'; })(), '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

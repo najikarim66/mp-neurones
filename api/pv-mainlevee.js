@@ -243,12 +243,25 @@
   function _resoudreMarcheLu(lu, marches) {
     marches = marches || []; lu = lu || {};
     var ref = normaliserNumCaution(lu.marche_ref), i;
-    if (ref) { for (i = 0; i < marches.length; i++) { if (normaliserNumCaution(marches[i].ref) === ref) return marches[i]; } }
+    if (ref) {
+      var hits = marches.filter(function (m) { return normaliserNumCaution(m.ref) === ref; });
+      if (hits.length === 1) return hits[0];
+      if (hits.length > 1) return null; // réf portée par plusieurs marchés -> ambigu, « à choisir »
+    }
     var obj = _lc(lu.marche_objet);
     if (obj) { for (i = 0; i < marches.length; i++) { if (_lc(marches[i].objet).indexOf(obj) >= 0 || _lc(marches[i].titre).indexOf(obj) >= 0) return marches[i]; } }
     var mo = _lc(lu.marche_mo);
     if (mo) { for (i = 0; i < marches.length; i++) { if (_lc(marches[i].maitre_ouvrage) === mo) return marches[i]; } }
     return null;
+  }
+  /* LIGNE SÛRE (attachable en masse par « Attacher les lignes sûres ») — DÉFINITION :
+   * N° lu = N° d'une caution existante (appariement mode 'a') ET montant lu = montant
+   * enregistré. Tout le reste (réf seule, réf+MO, N° à montant différent, N° sur deux
+   * cautions, acte déjà joint) est « proposé » -> « Attacher » ligne par ligne, JAMAIS sûr. */
+  function ligneSureRapprochement(app, montantLu) {
+    if (!app || app.mode !== 'a' || !app.cible) return false;
+    var ms = Math.round(+app.cible.montant || 0), ml = Math.round(+montantLu || 0);
+    return ml !== 0 && ms === ml;
   }
   /* Premier match SUR gagne (step 4). candidats = liste unifiee {kind:'caution'|
    * 'provisoire', id, marcheId, num, banque, montant, type, acte}. Renvoie
@@ -586,6 +599,7 @@
     peutBasculerGarde: peutBasculerGarde,
     normaliserNumCaution: normaliserNumCaution,
     apparierActe: apparierActe,
+    ligneSureRapprochement: ligneSureRapprochement,
     marcheDoitTerminer: marcheDoitTerminer,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,
