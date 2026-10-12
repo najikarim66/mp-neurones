@@ -1,0 +1,31 @@
+name: Gate appariement acte
+
+# Garde-fou du coeur d'appariement « Rapprochement des actes » (module pur
+# apparierActe / normaliserNumCaution) : premier match sur gagne — doublon_hash,
+# (a) N° normalise (dont 694066, l'ecart de format de vendredi), (b) type+banque+
+# montant sans acte (ambiguite 2 marches -> a_choisir), (c) sans correspondance ;
+# deja_acte = refus nomme. Deterministe, node pur, sans dependance.
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/apparier-acte.test.js'
+      - '.github/workflows/apparier-acte-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/apparier-acte.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate appariement acte (node, sans dependances)
+        run: node test/apparier-acte.test.js

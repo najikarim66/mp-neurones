@@ -198,6 +198,64 @@
    * aucun autre champ de la caution (anti-clobber ; un depot d'acte = une cle patchee). */
   function patchActeOps(acte) { return [{ op: 'add', path: '/acte', value: acte }]; }
 
+  /* ===== APPARIEMENT d'un acte a une caution (« Rapprochement des actes »), PUR. ===== */
+  /* Normalisation du N° de caution = la norm de l'ERP : MAJUSCULE, sans espaces, tirets,
+   * slash ni points. (L'egalite est aussi testee apres retrait des zeros de tete.) */
+  function normaliserNumCaution(n) { return String(n == null ? '' : n).toUpperCase().replace(/[\s\-\/.]/g, ''); }
+  function _numMatch(a, b) {
+    var na = normaliserNumCaution(a), nb = normaliserNumCaution(b);
+    if (!na || !nb) return false;
+    if (na === nb) return true;
+    var za = na.replace(/^0+/, ''), zb = nb.replace(/^0+/, '');
+    return !!za && za === zb;
+  }
+  function _lc(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
+  function _blobHasHash(acte, hash) { return !!(acte && hash && String(acte.blob || acte.hash || '').indexOf(String(hash)) >= 0); }
+  /* Marche LU sur l'acte -> marche en base : par reference (normalisee), sinon objet/
+   * intitule (contient), sinon maitre d'ouvrage. null si rien de sur. */
+  function _resoudreMarcheLu(lu, marches) {
+    marches = marches || []; lu = lu || {};
+    var ref = normaliserNumCaution(lu.marche_ref), i;
+    if (ref) { for (i = 0; i < marches.length; i++) { if (normaliserNumCaution(marches[i].ref) === ref) return marches[i]; } }
+    var obj = _lc(lu.marche_objet);
+    if (obj) { for (i = 0; i < marches.length; i++) { if (_lc(marches[i].objet).indexOf(obj) >= 0 || _lc(marches[i].titre).indexOf(obj) >= 0) return marches[i]; } }
+    var mo = _lc(lu.marche_mo);
+    if (mo) { for (i = 0; i < marches.length; i++) { if (_lc(marches[i].maitre_ouvrage) === mo) return marches[i]; } }
+    return null;
+  }
+  /* Premier match SUR gagne (step 4). candidats = liste unifiee {kind:'caution'|
+   * 'provisoire', id, marcheId, num, banque, montant, type, acte}. Renvoie
+   * {mode:'doublon_hash'|'deja_acte'|'a'|'b'|'c'|'a_choisir', cible, candidates, marchePropose}. */
+  function apparierActe(lu, hash, candidats, marches) {
+    lu = lu || {}; candidats = candidats || []; marches = marches || [];
+    var i;
+    // 0. le hash est deja rattache -> doublon, rien a faire
+    for (i = 0; i < candidats.length; i++) { if (_blobHasHash(candidats[i].acte, hash)) return { mode: 'doublon_hash', cible: candidats[i], candidates: [], marchePropose: null }; }
+    // a. N° normalise
+    var parNum = candidats.filter(function (c) { return _numMatch(lu.num, c.num); });
+    if (parNum.length === 1) {
+      if (parNum[0].acte) return { mode: 'deja_acte', cible: parNum[0], candidates: [], marchePropose: null };
+      return { mode: 'a', cible: parNum[0], candidates: [], marchePropose: null };
+    }
+    if (parNum.length > 1) {
+      var aff = parNum.filter(function (c) { return (!lu.type || c.type === lu.type) && (lu.montant == null || Math.round(+c.montant || 0) === Math.round(+lu.montant || 0)); });
+      if (aff.length === 1 && !aff[0].acte) return { mode: 'a', cible: aff[0], candidates: [], marchePropose: null };
+      return { mode: 'a_choisir', cible: null, candidates: parNum, marchePropose: null };
+    }
+    // b. type + banque + montant parmi les cautions SANS acte
+    var parBM = candidats.filter(function (c) {
+      return !c.acte && lu.type && c.type === lu.type && lu.banque && _lc(c.banque) === _lc(lu.banque) && lu.montant != null && Math.round(+c.montant || 0) === Math.round(+lu.montant || 0);
+    });
+    if (parBM.length === 1) return { mode: 'b', cible: parBM[0], candidates: [], marchePropose: null };
+    if (parBM.length > 1) {
+      var mLu = _resoudreMarcheLu(lu, marches);
+      if (mLu) { var dis = parBM.filter(function (c) { return String(c.marcheId) === String(mLu.id); }); if (dis.length === 1) return { mode: 'b', cible: dis[0], candidates: [], marchePropose: mLu }; }
+      return { mode: 'a_choisir', cible: null, candidates: parBM, marchePropose: mLu || null };
+    }
+    // c. sans correspondance
+    return { mode: 'c', cible: null, candidates: [], marchePropose: _resoudreMarcheLu(lu, marches) };
+  }
+
   function transitionPiece(pieceType) { return PIECE_TRANSITIONS[pieceType] || null; }
 
   /* Une piece est recevable si : la transition existe, la caution est def/RG,
@@ -492,6 +550,8 @@
     principalAutorise: principalAutorise,
     cautionMarcheIdValide: cautionMarcheIdValide,
     patchActeOps: patchActeOps,
+    normaliserNumCaution: normaliserNumCaution,
+    apparierActe: apparierActe,
     marcheDoitTerminer: marcheDoitTerminer,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,
