@@ -930,6 +930,64 @@ module.exports = async function (context, req) {
     }
   }
 
+  // Route actes-match : POST /api/actes/match — « Rapprochement des actes », UN appel PAR
+  // fichier. OCR (sonnet) lit N°/banque/montant/type + le marche (ref/objet/MO), cache par
+  // hash, depose le blob par hash (content-addressed, PAS d'attache ici : la PATCH se fait
+  // a « Attacher »). Regle 1 : PDF seulement ; plusieurs N° distincts -> refus nomme.
+  // N'APPARIE PAS : l'appariement (MPMainlevee.apparierActe) tourne cote navigateur sur
+  // mp_cautions + provisoires deja en memoire (source unique).
+  if (fn === "actesMatch") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const body = req.body || {};
+      const contentType = String(body.content_type || "").trim();
+      const dataB64 = String(body.data_base64 || "");
+      if (contentType !== "application/pdf") { context.res = { status: 400, body: { error: "Format non accepte : scannez en PDF." } }; return; }
+      let buf; try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+      if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+      if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+
+      const ocr = require("./lib/ocr-acte.js");
+      let referentiel = [];
+      try { const bs = (await getDb().container("mp_banques").items.readAll().fetchAll()).resources; referentiel = bs.map(function (b) { return b.nom || b.name || b.libelle || ""; }).filter(Boolean); } catch (e) { referentiel = []; }
+      let cacheC = null;
+      try { const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_cache", partitionKey: { paths: ["/id"] } }); cacheC = cc.container; } catch (e) { cacheC = null; }
+      const cacheGet = cacheC ? function (cle) { return cacheC.item(cle, cle).read().then(function (r) { return r.resource; }).catch(function () { return null; }); } : null;
+      const cacheSet = cacheC ? function (cle, res) { return cacheC.items.upsert({ id: cle, resultat: res, le: new Date().toISOString() }); } : null;
+
+      const res = await ocr.lireActeRapprochement(buf, contentType, referentiel, cacheGet, cacheSet);
+      if (!res.configure) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente)" } }; return; }
+
+      // Regle 1 : un fichier = un acte. Plusieurs N° distincts -> refus nomme, rien d'ecrit.
+      const nums = [];
+      (res.actes || []).forEach(function (a) { const n = MPMainlevee.normaliserNumCaution(a.numero); if (n && nums.indexOf(n) < 0) nums.push(n); });
+      if (nums.length > 1) { context.res = { status: 200, body: { configure: true, refus: "multi_actes", nb: nums.length, message: "ce fichier contient " + nums.length + " actes — un fichier par acte" } }; return; }
+
+      // Blob par hash (content-addressed). Pas d'attache a une caution ici.
+      var blobName = "actes/" + res.hash + ".pdf";
+      var acte = null;
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (conn) {
+        try {
+          const svc = BlobServiceClient.fromConnectionString(conn);
+          const cont = svc.getContainerClient(PIECE_CONTAINER);
+          await cont.createIfNotExists();
+          await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+          acte = { blob: blobName, nom_original: String(body.nom_original || "acte.pdf"), taille: buf.length, content_type: contentType, depose_le: new Date().toISOString(), depose_par: user.userDetails || null };
+        } catch (e) { acte = null; }
+      }
+      const a0 = (res.actes && res.actes[0]) || { numero: null, banque: null, montant: null, type: null, confiances: {}, lu_brut: {} };
+      context.res = { status: 200, body: { configure: true, cache: !!res.cache, hash: res.hash, champs: { num: a0.numero, banque: a0.banque, montant: a0.montant, type: a0.type }, confiances: a0.confiances, lu_brut: a0.lu_brut, marche_lu: res.marche_lu, acte: acte } };
+      return;
+    } catch (e) {
+      context.log.error("actesMatch error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   // Route data
   if (fn === "data") {
     try {

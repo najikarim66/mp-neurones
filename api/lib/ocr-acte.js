@@ -25,7 +25,7 @@ const PROMPT = [
 ].join("\n");
 
 /* Extrait les champs bruts via le modèle. Renvoie l'objet parsé (ou lève). */
-async function _appelModele(buffer, contentType) {
+async function _appelModele(buffer, contentType, prompt) {
   const Anthropic = require("@anthropic-ai/sdk");
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   const source = (contentType === "application/pdf")
@@ -34,13 +34,58 @@ async function _appelModele(buffer, contentType) {
   const resp = await client.messages.create({
     model: MPMainlevee.MODELE_OCR, // claude-sonnet-5 — jamais haiku
     max_tokens: 1024,
-    messages: [{ role: "user", content: [source, { type: "text", text: PROMPT }] }]
+    messages: [{ role: "user", content: [source, { type: "text", text: prompt || PROMPT }] }]
   });
   var txt = "";
   (resp.content || []).forEach(function (b) { if (b.type === "text") txt += b.text; });
   var m = txt.match(/\{[\s\S]*\}/);
   if (!m) throw new Error("Reponse OCR non-JSON");
   return JSON.parse(m[0]);
+}
+
+/* Prompt « Rapprochement des actes » : liste CHAQUE acte distinct du fichier (pour
+ * refuser un fichier multi-actes) + le marché lu (réf/objet/MO) pour l'appariement. */
+const PROMPT_RAPPROCHEMENT = [
+  "Tu lis un fichier qui doit contenir UN SEUL acte de caution bancaire marocain.",
+  "Rends UNIQUEMENT un JSON strict :",
+  '{ "actes": [ { "numero": <n° de la caution tel que lu>, "banque": <chaine>,',
+  '    "montant": <chaine telle que lue, ex "99 072,00 MAD">, "type": <"provisoire"|"definitive"|"RG" tel que lu>,',
+  '    "confiances": { "numero":0-100, "banque":0-100, "montant":0-100, "type":0-100 } } ],',
+  '  "marche": { "reference": <réf du marché public si lisible, sinon null>, "objet": <objet/intitulé si lisible>, "maitre_ouvrage": <MO si lisible> } }',
+  "\"actes\" liste CHAQUE acte DISTINCT present (numero de caution DIFFERENT = acte different) ; normalement UN seul element.",
+  "Si un champ n'est pas lisible : omets-le et mets sa confiance a 0. N'INVENTE JAMAIS une valeur."
+].join("\n");
+
+/* Lecture d'un fichier pour le rapprochement. Renvoie { configure, hash, cache,
+ * actes:[{numero,banque(ref),montant(num|null),type(connu|null),lu_brut,confiances}],
+ * marche_lu:{reference,objet,maitre_ouvrage} }. N'ECRIT PAS le blob (l'endpoint le fait). */
+async function lireActeRapprochement(buffer, contentType, referentielBanques, cacheGet, cacheSet) {
+  if (!MPMainlevee.ocrConfigure(process.env.ANTHROPIC_API_KEY)) return { configure: false };
+  var hash = hashActe(buffer);
+  var cle = "rappr:" + MPMainlevee.cleCacheOcr(hash, MPMainlevee.MODELE_OCR);
+  if (cacheGet) { try { var hit = await cacheGet(cle); if (hit && hit.resultat) return { configure: true, cache: true, hash: hash, actes: hit.resultat.actes, marche_lu: hit.resultat.marche_lu }; } catch (e) {} }
+  var brut = await _appelModele(buffer, contentType, PROMPT_RAPPROCHEMENT);
+  var actesBruts = Array.isArray(brut && brut.actes) ? brut.actes : [];
+  var actes = actesBruts.map(function (a) {
+    a = a || {}; var cf = a.confiances || {};
+    var montant = MPMainlevee.parserMontant(a.montant);
+    var banque = MPMainlevee.normaliserBanqueOcr(a.banque, referentielBanques);
+    var type = MPMainlevee.normaliserTypeOcr(a.type);
+    return {
+      numero: (a.numero != null && String(a.numero).trim()) ? String(a.numero).trim() : null,
+      banque: banque, montant: montant, type: type,
+      lu_brut: { numero: a.numero != null ? String(a.numero) : null, banque: a.banque != null ? String(a.banque) : null, montant: a.montant != null ? String(a.montant) : null, type: a.type != null ? String(a.type) : null },
+      confiances: {
+        numero: MPMainlevee.etatConfiance(cf.numero), banque: (banque == null) ? "non_lu" : MPMainlevee.etatConfiance(cf.banque),
+        montant: (montant == null) ? "non_lu" : MPMainlevee.etatConfiance(cf.montant), type: (type == null) ? "non_lu" : MPMainlevee.etatConfiance(cf.type)
+      }
+    };
+  });
+  var m = (brut && brut.marche) || {};
+  var marche_lu = { reference: m.reference || null, objet: m.objet || null, maitre_ouvrage: m.maitre_ouvrage || null };
+  var res = { actes: actes, marche_lu: marche_lu };
+  if (cacheSet) { try { await cacheSet(cle, res); } catch (e) {} }
+  return { configure: true, cache: false, hash: hash, actes: actes, marche_lu: marche_lu };
 }
 
 /* Normalise la sortie brute -> champs contraints + etats de confiance (module pur).
@@ -92,4 +137,4 @@ async function extraireActe(buffer, contentType, referentielBanques, cacheGet, c
   return { configure: true, cache: false, hash: hash, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut };
 }
 
-module.exports = { extraireActe, hashActe, _normaliser };
+module.exports = { extraireActe, hashActe, _normaliser, lireActeRapprochement };
