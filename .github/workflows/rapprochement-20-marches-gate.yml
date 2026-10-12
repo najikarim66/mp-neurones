@@ -1,0 +1,30 @@
+name: Gate rapprochement 20 marches
+
+# Cas de reference GLOBAL : un depot, 20 actes de marches differents, chaque ligne
+# affectee a SON marche sans choix utilisateur. 11 actes reels de vendredi (par N°,
+# mode a) + 9 nouveaux (marche lu : ref/objet/MO, mode c), 0 « a choisir » quand la
+# reference est presente. Deterministe, node pur, sans dependance.
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/rapprochement-20-marches.test.js'
+      - '.github/workflows/rapprochement-20-marches-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'test/rapprochement-20-marches.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate rapprochement 20 marches (node, sans dependances)
+        run: node test/rapprochement-20-marches.test.js
