@@ -552,6 +552,24 @@ module.exports = async function (context, req) {
       const type = String((req.query && req.query.type) || "").trim();
       const marcheId = String((req.query && req.query.marcheId) || "").trim();
       const cautionId = String((req.query && req.query.cautionId) || "").trim();
+      const aoId = String((req.query && req.query.aoId) || "").trim();
+      // Acte d'une PROVISOIRE : le blob vit sur l'AO (a.caution_prov.acte), lu UNIQUEMENT
+      // depuis le doc AO (jamais un chemin fourni). Conteneur mp-preuves.
+      if (type === "acte" && aoId) {
+        let ao = null;
+        try { ao = (await getDb().container("mp_aos").item(aoId, aoId).read()).resource || null; } catch (e) { ao = null; }
+        const bnProv = MPMainlevee.resoudreBlobActeProv(ao);
+        if (!bnProv) { context.res = { status: 404, body: { error: "Acte de provisoire introuvable" } }; return; }
+        const connP = process.env.STORAGE_CONNECTION_STRING;
+        if (!connP) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+        const refP = ao.caution_prov.acte || {};
+        const bcP = BlobServiceClient.fromConnectionString(connP).getContainerClient(PIECE_CONTAINER).getBlockBlobClient(bnProv);
+        let bufP;
+        try { bufP = await bcP.downloadToBuffer(); } catch (e) { context.res = { status: 404, body: { error: "Fichier absent du stockage" } }; return; }
+        const nomP = String(refP.nom_original || "acte.pdf").replace(/[\r\n"\\]/g, "_");
+        context.res = { status: 200, isRaw: true, headers: { "Content-Type": refP.content_type || "application/pdf", "Content-Disposition": 'inline; filename="' + nomP + '"', "Cache-Control": "private, no-store" }, body: bufP };
+        return;
+      }
       const src = MPMainlevee.PIECE_LECTURE[type];
       if (!src) { context.res = { status: 400, body: { error: "type de piece inconnu" } }; return; }
       if (!marcheId) { context.res = { status: 400, body: { error: "marcheId requis" } }; return; }

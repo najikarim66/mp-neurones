@@ -123,6 +123,9 @@ check('conteneur PV vs pieces caution correctement route', MPM.conteneurPiece('p
 // Acte de caution (cas A) : lisible via /api/piece comme les autres, depuis caution.acte.blob
 check('resout le blob de l\'acte depuis la caution', MPM.resoudreBlobPiece('acte', null, cMl) === 'actes/abc123.pdf', MPM.resoudreBlobPiece('acte', null, cMl));
 check('conteneur de l\'acte = mp-preuves', MPM.conteneurPiece('acte') === 'mp-preuves', MPM.conteneurPiece('acte'));
+// Acte d'une PROVISOIRE : blob lu depuis a.caution_prov.acte (sur l'AO), jamais ailleurs
+check('resout le blob de l\'acte d\'une provisoire depuis l\'AO', MPM.resoudreBlobActeProv({ caution_prov: { acte: { blob: 'actes/prov1.pdf' } } }) === 'actes/prov1.pdf', '');
+check('AO sans acte de provisoire -> null', MPM.resoudreBlobActeProv({ caution_prov: {} }) === null && MPM.resoudreBlobActeProv({}) === null && MPM.resoudreBlobActeProv(null) === null, '');
 check('libelle acte humain (sans nom de fichier), date = date_emission', MPM.libellePiece('acte') === 'Acte de caution' && MPM.libellePiece('acte').indexOf('/') < 0 && MPM.dateChampPiece('acte') === 'date_emission', JSON.stringify([MPM.libellePiece('acte'), MPM.dateChampPiece('acte')]));
 
 console.log('\n=== 8. Mail du lundi : file de relance + PAS de mail si vide ===');

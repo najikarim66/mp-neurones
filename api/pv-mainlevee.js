@@ -518,6 +518,10 @@
   /* Conteneur Blob d'un type de piece (null si type inconnu). */
   function conteneurPiece(type) { var s = _sourcePiece(type); return s ? s.conteneur : null; }
 
+  /* Acte d'une PROVISOIRE : le blob vit sur l'AO (a.caution_prov.acte), pas sur une
+   * mp_cautions. Renvoie le nom du blob LU depuis le doc AO, ou null. Conteneur mp-preuves. */
+  function resoudreBlobActeProv(ao) { return (ao && ao.caution_prov && ao.caution_prov.acte && ao.caution_prov.acte.blob) || null; }
+
   /* Libelle humain (jamais le nom de fichier interne). L'appelant y ajoute la date formatee. */
   function libellePiece(type) { var s = _sourcePiece(type); return s ? s.label : ''; }
 
@@ -596,6 +600,7 @@
     appliquerMainleveeManuelle: appliquerMainleveeManuelle,
     appliquerLiberationDirecte: appliquerLiberationDirecte,
     resoudreBlobPiece: resoudreBlobPiece,
+    resoudreBlobActeProv: resoudreBlobActeProv,
     conteneurPiece: conteneurPiece,
     libellePiece: libellePiece,
     dateChampPiece: dateChampPiece,
