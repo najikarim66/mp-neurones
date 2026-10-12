@@ -1769,9 +1769,18 @@ function rapprRender(){ var el=document.getElementById('rappr-body'); if(el)el.i
 function rapprPhaseHTML(){
   var R=S._rappr;
   if(R.phase==='select'){
-    return '<div class="info-box info-blue" style="font-size:12px">Déposez les actes en <b>PDF, un acte par fichier</b>. Glissez-en autant que nécessaire d\'un coup. '+(R.marchePre?('Marché présélectionné : <b>'+esc((gm(R.marchePre)||{}).ref||'')+'</b>.'):'')+'</div>'+
-      '<div class="fg"><input class="fc" id="rappr_files" type="file" accept="application/pdf" multiple></div>'+
-      '<button class="btn btn-sm btn-prim" onclick="rapprAnalyser()">Analyser</button>';
+    if(!R.files)R.files=[];
+    var dzStyle='border:2px dashed #C9C2B6;border-radius:8px;padding:18px;text-align:center;cursor:pointer;color:#7A7369;font-size:13px;background:#FAF8F5';
+    var liste=R.files.length
+      ? '<div class="tw" style="margin-top:8px"><table><thead><tr><th>Fichier</th><th>Taille</th><th></th></tr></thead><tbody>'+
+        R.files.map(function(f,i){return '<tr><td style="font-size:12px">'+esc(f.name)+'</td><td style="font-size:12px;white-space:nowrap">'+rapprTaille(f.size)+'</td><td><button class="act" onclick="rapprRetirer('+i+')">Retirer</button></td></tr>';}).join('')+
+        '</tbody></table></div>'
+      : '<div style="font-size:12px;color:#7A7369;margin-top:8px">Aucun fichier pour l\'instant.</div>';
+    return '<div class="info-box info-blue" style="font-size:12px">Déposez les actes en <b>PDF, un acte par fichier</b>. Glissez les PDF sur la zone, <b>plusieurs à la fois</b>, ou cliquez dessus et choisissez-les avec Ctrl maintenu ; vous pouvez en ajouter avant de cliquer Analyser (jusqu\'à 20 par dépôt). '+(R.marchePre?('Marché présélectionné : <b>'+esc((gm(R.marchePre)||{}).ref||'')+'</b>.'):'')+'</div>'+
+      '<div id="rappr_dz" style="'+dzStyle+'" onclick="document.getElementById(\'rappr_files\').click()" ondragover="rapprDragOver(event)" ondragleave="rapprDragLeave(event)" ondrop="rapprDrop(event)">Glissez les PDF ici (plusieurs à la fois) ou cliquez pour les choisir</div>'+
+      '<input id="rappr_files" type="file" accept="application/pdf" multiple style="display:none" onchange="rapprChoisir(event)">'+
+      liste+
+      '<div style="display:flex;gap:10px;align-items:center;margin-top:8px"><span id="rappr_count" style="font-size:12px">'+R.files.length+' fichier(s)</span><button class="btn btn-sm btn-prim" onclick="rapprAnalyser()"'+(R.files.length?'':' disabled')+'>Analyser</button></div>';
   }
   var done=R.rows.filter(function(r){return r.etat!=='pending';}).length;
   var head='<div style="font-size:12px;margin-bottom:6px">'+done+'/'+R.rows.length+' fichier(s) analysé(s)'+(R.phase==='committing'?' · attache en cours…':'')+'</div>';
@@ -1804,11 +1813,25 @@ function rapprCibleOptions(r){
 }
 function rapprSetMarche(i,mid){ var r=S._rappr.rows[i]; r.marcheSel=mid; r.cibleVal=null; rapprRender(); }
 function rapprSetCible(i,val){ S._rappr.rows[i].cibleVal=val; }
+function rapprTaille(n){ n=+n||0; if(n<1024)return n+' o'; if(n<1048576)return Math.round(n/1024)+' Ko'; return (Math.round(n/104857.6)/10)+' Mo'; }
+function rapprDragOver(e){ e.preventDefault(); var dz=document.getElementById('rappr_dz'); if(dz){dz.style.background='#F0EDE7';dz.style.borderColor='#A89F90';} }
+function rapprDragLeave(e){ e.preventDefault(); var dz=document.getElementById('rappr_dz'); if(dz){dz.style.background='#FAF8F5';dz.style.borderColor='#C9C2B6';} }
+function rapprDrop(e){ e.preventDefault(); rapprDragLeave(e); rapprAjouter(e.dataTransfer&&e.dataTransfer.files); }
+function rapprChoisir(e){ rapprAjouter(e.target&&e.target.files); if(e.target)e.target.value=''; }
+function rapprAjouter(fileList){
+  if(!fileList||!fileList.length)return;
+  var entrants=[],i; for(i=0;i<fileList.length;i++){ entrants.push(fileList[i]); } /* boucle ES5 sur la FileList — pas Array.from */
+  if(!S._rappr.files)S._rappr.files=[];
+  var res=MPMainlevee.ajouterFichiersLot(S._rappr.files,entrants,20);
+  S._rappr.files=res.liste;
+  if(res.nonPdf.length)toast('Ignoré(s), non-PDF : '+res.nonPdf.join(', '),false);
+  if(res.doublons.length)toast('Doublon(s) ignoré(s) : '+res.doublons.join(', '),false);
+  if(res.refuses.length)toast('20 au plus par dépôt — refusé(s) : '+res.refuses.join(', '),false);
+  rapprRender();
+}
+function rapprRetirer(i){ if(S._rappr.files)S._rappr.files.splice(i,1); rapprRender(); }
 function rapprAnalyser(){
-  var el=document.getElementById('rappr_files'); if(!el||!el.files||!el.files.length){toast('Sélectionnez des PDF',false);return;}
-  var fs=Array.from(el.files); var mauvais=fs.filter(function(f){return f.type!=='application/pdf';});
-  if(mauvais.length){toast('Fichiers non-PDF ignorés : scannez en PDF',false);}
-  fs=fs.filter(function(f){return f.type==='application/pdf';}); if(!fs.length)return;
+  var fs=(S._rappr.files||[]).slice(); if(!fs.length){toast('Ajoutez des PDF',false);return;}
   S._rappr.phase='review';
   S._rappr.rows=fs.map(function(f){return {file:f,fileName:f.name,etat:'pending'};});
   rapprRender();

@@ -1,0 +1,13 @@
+{
+  "name": "mp-neurones-web",
+  "version": "1.0.0",
+  "private": true,
+  "description": "MP Manager — gates écran rendu (playwright). Les gates métier restent node pur (test/*.test.js, sans dépendance).",
+  "scripts": {
+    "e2e": "playwright test",
+    "serve": "node e2e/serve.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.62.1"
+  }
+}

@@ -1,0 +1,36 @@
+name: Gate écran rendu — zone de dépôt rapprochement
+
+# Gate « écran rendu » (playwright) : pilote le DOM réel de l'app servie en local
+# (e2e/serve.js) — accumulation multi-fichiers, dédoublonnage nommé, plafond 20
+# (21e refusé nommé), non-PDF écarté, Analyser -> revue. Aucun accès prod, aucune
+# authentification. Chromium téléchargé en CI uniquement (jamais committé).
+
+on:
+  push:
+    paths:
+      - 'public/index.html'
+      - 'public/pv-mainlevee.js'
+      - 'e2e/**'
+      - 'playwright.config.js'
+      - 'package.json'
+      - '.github/workflows/rappr-dropzone-e2e.yml'
+  pull_request:
+    paths:
+      - 'public/index.html'
+      - 'public/pv-mainlevee.js'
+      - 'e2e/**'
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Installer les dépendances (playwright)
+        run: npm install
+      - name: Installer Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Gate écran rendu (playwright, chromium)
+        run: npx playwright test

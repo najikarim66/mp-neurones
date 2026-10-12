@@ -263,6 +263,29 @@
     var ms = Math.round(+app.cible.montant || 0), ml = Math.round(+montantLu || 0);
     return ml !== 0 && ms === ml;
   }
+  /* Construction du LOT de dépôt « Rapprochement des actes » : chaque dépôt (glisser
+   * ou dialogue) S'AJOUTE au lot en cours. Garde PDF-seul, dédoublonnage nom+taille
+   * (nommé), plafond dur (21e refusé, nommé « 20 au plus par dépôt »). Renvoie le
+   * nouveau lot + les noms écartés par motif. Pousse l'objet d'entrée tel quel (le
+   * navigateur y conserve le File ; node y met un descripteur {name,size,type}). */
+  function ajouterFichiersLot(liste, entrants, max) {
+    max = (max != null) ? max : 20;
+    var out = (liste || []).slice();
+    entrants = entrants || [];
+    var doublons = [], refuses = [], nonPdf = [], ajoutes = 0, i, j;
+    for (i = 0; i < entrants.length; i++) {
+      var f = entrants[i]; if (!f) continue;
+      var nom = f.name || '';
+      var estPdf = (f.type === 'application/pdf') || /\.pdf$/i.test(nom);
+      if (!estPdf) { nonPdf.push(nom); continue; }
+      var dup = false;
+      for (j = 0; j < out.length; j++) { if (out[j].name === nom && Number(out[j].size) === Number(f.size)) { dup = true; break; } }
+      if (dup) { doublons.push(nom); continue; }
+      if (out.length >= max) { refuses.push(nom); continue; }
+      out.push(f); ajoutes++;
+    }
+    return { liste: out, ajoutes: ajoutes, doublons: doublons, refuses: refuses, nonPdf: nonPdf };
+  }
   /* Premier match SUR gagne (step 4). candidats = liste unifiee {kind:'caution'|
    * 'provisoire', id, marcheId, num, banque, montant, type, acte}. Renvoie
    * {mode:'doublon_hash'|'deja_acte'|'a'|'b'|'c'|'a_choisir', cible, candidates, marchePropose}. */
@@ -600,6 +623,7 @@
     normaliserNumCaution: normaliserNumCaution,
     apparierActe: apparierActe,
     ligneSureRapprochement: ligneSureRapprochement,
+    ajouterFichiersLot: ajouterFichiersLot,
     marcheDoitTerminer: marcheDoitTerminer,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,

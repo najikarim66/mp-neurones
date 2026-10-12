@@ -1,0 +1,31 @@
+name: Gate lot dépôt rapprochement
+
+# Lot de dépôt « Rapprochement des actes » : chaque dépôt S'AJOUTE au lot.
+# Prouve la logique que l'écran reflète — dédoublonnage nom+taille (nommé),
+# plafond dur 20 (21e refusé nommé « 20 au plus par dépôt »), PDF-seul.
+# Node pur, sans dépendance. (La gate « écran rendu » playwright est à part.)
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/rappr-lot.test.js'
+      - '.github/workflows/rappr-lot-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'public/index.html'
+      - 'test/rappr-lot.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate lot dépôt (node, sans dependances)
+        run: node test/rappr-lot.test.js

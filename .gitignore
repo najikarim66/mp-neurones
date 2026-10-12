@@ -1,4 +1,9 @@
 node_modules/
+# Playwright (gates « écran rendu ») — artefacts éphémères, jamais committés
+test-results/
+playwright-report/
+playwright/.cache/
+storageState.json
 .vs/
 local.settings.json
 *.log
