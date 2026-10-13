@@ -1309,9 +1309,12 @@ function deposerPiece(cautionId, marcheId, pieceType){
 // LIENS DE LECTURE DES PIECES (proxy authentifie /api/piece)
 /* Lien humain vers une piece : « <libellé> du <date> ». Jamais le nom de fichier
    interne ni le chemin blob — la piece est servie par marché + type. */
-function lienPiece(type, marcheId, cautionId, dateISO){
+function lienPiece(type, marcheId, cautionId, dateISO, aoId){
   var base=(typeof MPMainlevee!=='undefined'&&MPMainlevee.libellePiece)?MPMainlevee.libellePiece(type):'Piece';
-  var url='/api/piece?type='+encodeURIComponent(type)+'&marcheId='+encodeURIComponent(marcheId||'')+(cautionId?('&cautionId='+encodeURIComponent(cautionId)):'');
+  // Provisoire : le blob vit sur l'AO, servi par aoId seul (pas de marcheId/cautionId).
+  var url=aoId
+    ?'/api/piece?type='+encodeURIComponent(type)+'&aoId='+encodeURIComponent(aoId)
+    :'/api/piece?type='+encodeURIComponent(type)+'&marcheId='+encodeURIComponent(marcheId||'')+(cautionId?('&cautionId='+encodeURIComponent(cautionId)):'');
   var txt=base+(dateISO?(' du '+fdat(dateISO)):'');
   return '<a href="'+url+'" target="_blank" rel="noopener" style="color:#1e40af;text-decoration:underline">'+esc(txt)+'</a>';
 }
@@ -1319,7 +1322,12 @@ function lienPiece(type, marcheId, cautionId, dateISO){
 function piecesLiens(c){
   if(!c)return '';
   var out='';
-  if(c.acte)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('acte',c.marche_id,c.id,c.date_emission)+'</div>';
+  // Acte : définitive -> cautionId ; provisoire (src 'ao') -> aoId (blob porté par l'AO).
+  if(c.acte){
+    var lienA=(c.src==='ao')?lienPiece('acte',null,null,c.date_emission,c._aoId):lienPiece('acte',c.marche_id,c.id,c.date_emission);
+    out+='<div style="font-size:12px;margin-top:2px">'+lienA+'</div>';
+  }
+  // Mainlevée client / accusé banque : définitives uniquement (pas de pièce blob sur la provisoire).
   if(c.mainlevee_client)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('mainlevee_client',c.marche_id,c.id,c.date_mainlevee_recue)+'</div>';
   if(c.accuse_banque)out+='<div style="font-size:12px;margin-top:2px">'+lienPiece('accuse_banque',c.marche_id,c.id,c.date_liberation)+'</div>';
   return out;
@@ -1532,7 +1540,7 @@ function pgCautions(){
       var actP=c.statut==='active'?'<button class="act" title="Marquer mainlevée demandée" onclick="provMainlevee(\''+esc(c._aoId)+'\')">Mainlevée</button>':(c.statut==='mainlevee_demandee'?'<button class="act" style="color:var(--green-soft);font-weight:600" title="Confirmer restitution" onclick="provRestituer(\''+esc(c._aoId)+'\')">Restituer</button>':'');
       var banqueP=c.banque?esc(c.banque):'<span style="color:var(--terra);font-style:italic">non renseignée</span>';
       var emP=c.date_emission?fdat(c.date_emission):'<span style="color:var(--terra);font-style:italic">non renseignée</span>';
-      return '<tr style="background:#FFFDF7"><td style="font-family:var(--FM);font-weight:600">'+esc(c.num||'—')+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-muted)">AO &middot; provisoire</div></td><td><span class="badge bw" style="font-size:12px">Provisoire</span></td><td>'+banqueP+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+emP+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span></td><td><div style="display:flex;gap:4px;flex-wrap:wrap">'+actP+'</div></td></tr>';
+      return '<tr style="background:#FFFDF7"><td style="font-family:var(--FM);font-weight:600">'+esc(c.num||'—')+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-muted)">AO &middot; provisoire</div></td><td><span class="badge bw" style="font-size:12px">Provisoire</span></td><td>'+banqueP+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+emP+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span>'+piecesLiens(c)+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">'+actP+'</div></td></tr>';
     }
     var payUse=c.type==='retenue_garantie'?S.paiements.filter(function(p){return p.caution_rg_id===c.id;}):[];
     var usedNote=payUse.length?'<div style="font-size:12px;color:var(--ink-muted)">Utilisée : '+payUse.map(function(p){return esc(p.numero);}).join(', ')+'</div>':'';

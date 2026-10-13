@@ -19,12 +19,12 @@ function check(name, cond, detail) {
 
 /* Fixture deterministe (pas de reseau). gm resout marche_id -> {ref,titre}. */
 var CAUTIONS = [
-  { id:'c1', num:'A', type:'bonne_execution', banque:'FINEA', montant:100000, statut:'active',             marche_id:'m1' },
-  { id:'c2', num:'B', type:'retenue_garantie', banque:'BMCE',  montant:50000,  statut:'mainlevee_demandee', marche_id:'m1' }, // definitive a restituer
+  { id:'c1', num:'A', type:'bonne_execution', banque:'FINEA', montant:100000, statut:'active',             marche_id:'m1', acte:{ blob:'actes/aaa.pdf' } },
+  { id:'c2', num:'B', type:'retenue_garantie', banque:'BMCE',  montant:50000,  statut:'mainlevee_demandee', marche_id:'m1', acte:{ blob:'actes/rg.pdf' } }, // RG (definitive) a restituer + acte joint
   { id:'c3', num:'C', type:'bonne_execution', banque:'FINEA', montant:30000,  statut:'liberee',            marche_id:'m2' }
 ];
 var AOS = [
-  { id:'ao1', ref:'AO-1', statut:'infructueux', caution_prov:{ num:'P1', banque:'FINEA', montant:220000, statut:'mainlevee_demandee' } }, // prov a restituer (AO decide)
+  { id:'ao1', ref:'AO-1', statut:'infructueux', caution_prov:{ num:'P1', banque:'FINEA', montant:220000, statut:'mainlevee_demandee', acte:{ blob:'actes/p1.pdf' } } }, // prov a restituer (AO decide) + acte joint
   { id:'ao2', ref:'AO-2', statut:'en_cours',    caution_prov:{ num:'P2', banque:'BMCE',  montant:40000,  statut:'active' } },             // active, AO non decide
   { id:'ao3', ref:'AO-3', statut:'en_cours',    caution_prov:{ num:'',   banque:'',      montant:8000,   statut:'en_attente' } }          // pas encore constituee
 ];
@@ -37,6 +37,11 @@ var p1 = rows.filter(function (r) { return r.src === 'ao' && r.num === 'P1'; })[
 check('une provisoire est normalisee (type provisoire, ref = ref AO)', !!p1 && p1.type === 'provisoire' && p1.ref === 'AO-1', JSON.stringify(p1));
 var a = rows.filter(function (r) { return r.num === 'A'; })[0];
 check('une definitive porte la ref ET le titre du marche (via gm)', a.ref === 'MRC-1' && a.titre === 'Titre m1', JSON.stringify(a));
+// Cause racine du lien « voir l'acte » mort : unify DOIT transporter l'acte.
+check('unify transporte l\'acte d\'une DEFINITIVE (lien par cautionId)', !!a.acte && a.acte.blob === 'actes/aaa.pdf', JSON.stringify(a.acte));
+check('unify transporte l\'acte d\'une PROVISOIRE + _aoId (lien par aoId)', !!p1.acte && p1.acte.blob === 'actes/p1.pdf' && p1._aoId === 'ao1', JSON.stringify({ acte: p1.acte, aoId: p1._aoId }));
+check('une provisoire SANS acte -> acte null (pas de lien)', (function(){ var p2=rows.filter(function(r){return r.num==='P2';})[0]; return p2 && p2.acte === null; })(), '');
+check('une RETENUE DE GARANTIE porte aussi son acte (lien, type-agnostique)', (function(){ var rg=rows.filter(function(r){return r.num==='B';})[0]; return rg && rg.type==='retenue_garantie' && !!rg.acte && rg.acte.blob==='actes/rg.pdf'; })(), '');
 
 console.log('\n=== 2. Encore bloquee = active OU mainlevee demandee (col et ao) ===');
 check('definitive active -> bloquee', MPC.isBlocked(a) === true, '');

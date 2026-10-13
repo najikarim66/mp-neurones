@@ -25,13 +25,18 @@
       var m = gm(c.marche_id) || {};
       return { src: 'col', id: c.id, num: c.num, type: c.type, banque: c.banque || '',
         montant: +c.montant || 0, date_emission: c.date_emission || null, statut: c.statut,
-        ref: m.ref || '', titre: m.titre || '', marche_id: c.marche_id };
+        ref: m.ref || '', titre: m.titre || '', marche_id: c.marche_id,
+        // Pièces jointes, pour que l'écran offre « voir la pièce » (jamais le blob nu).
+        acte: c.acte || null, mainlevee_client: c.mainlevee_client || null, accuse_banque: c.accuse_banque || null,
+        date_mainlevee_recue: c.date_mainlevee_recue || null, date_liberation: c.date_liberation || null };
     });
     var prov = (aos || []).filter(function (a) { return a.caution_prov; }).map(function (a) {
       var p = a.caution_prov;
       return { src: 'ao', _aoId: a.id, id: 'prov_' + a.id, num: p.num || '', type: 'provisoire',
         banque: p.banque || '', montant: +p.montant || 0, date_emission: p.date_emission || null,
-        statut: p.statut || '', ref: a.ref || '', aoStatut: a.statut || '' };
+        statut: p.statut || '', ref: a.ref || '', aoStatut: a.statut || '',
+        // L'acte d'une provisoire vit sur l'AO (a.caution_prov.acte) ; servi par aoId.
+        acte: p.acte || null };
     });
     return col.concat(prov);
   }
