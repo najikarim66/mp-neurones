@@ -20,8 +20,8 @@ function check(name, cond, detail) {
 /* Fixture deterministe (pas de reseau). gm resout marche_id -> {ref,titre}. */
 var CAUTIONS = [
   { id:'c1', num:'A', type:'bonne_execution', banque:'FINEA', montant:100000, statut:'active',             marche_id:'m1', acte:{ blob:'actes/aaa.pdf' } },
-  { id:'c2', num:'B', type:'retenue_garantie', banque:'BMCE',  montant:50000,  statut:'mainlevee_demandee', marche_id:'m1', acte:{ blob:'actes/rg.pdf' } }, // RG (definitive) a restituer + acte joint
-  { id:'c3', num:'C', type:'bonne_execution', banque:'FINEA', montant:30000,  statut:'liberee',            marche_id:'m2' }
+  { id:'c2', num:'B', type:'retenue_garantie', banque:'BMCE',  montant:50000,  statut:'mainlevee_demandee', marche_id:'m1', acte:{ blob:'actes/rg.pdf' }, mainlevee_client:{ blob:'preuves/ml.pdf' }, date_mainlevee_recue:'2025-04-15' }, // RG a restituer + acte + mainlevee client
+  { id:'c3', num:'C', type:'bonne_execution', banque:'FINEA', montant:30000,  statut:'liberee',            marche_id:'m2', accuse_banque:{ blob:'preuves/acc.pdf' }, date_liberation:'2025-05-01' } // liberee : porte l'accuse bancaire
 ];
 var AOS = [
   { id:'ao1', ref:'AO-1', statut:'infructueux', caution_prov:{ num:'P1', banque:'FINEA', montant:220000, statut:'mainlevee_demandee', acte:{ blob:'actes/p1.pdf' } } }, // prov a restituer (AO decide) + acte joint
@@ -42,6 +42,8 @@ check('unify transporte l\'acte d\'une DEFINITIVE (lien par cautionId)', !!a.act
 check('unify transporte l\'acte d\'une PROVISOIRE + _aoId (lien par aoId)', !!p1.acte && p1.acte.blob === 'actes/p1.pdf' && p1._aoId === 'ao1', JSON.stringify({ acte: p1.acte, aoId: p1._aoId }));
 check('une provisoire SANS acte -> acte null (pas de lien)', (function(){ var p2=rows.filter(function(r){return r.num==='P2';})[0]; return p2 && p2.acte === null; })(), '');
 check('une RETENUE DE GARANTIE porte aussi son acte (lien, type-agnostique)', (function(){ var rg=rows.filter(function(r){return r.num==='B';})[0]; return rg && rg.type==='retenue_garantie' && !!rg.acte && rg.acte.blob==='actes/rg.pdf'; })(), '');
+check('unify transporte l\'ACCUSÉ BANCAIRE d\'une libérée + date_liberation', (function(){ var cc=rows.filter(function(r){return r.num==='C';})[0]; return cc && cc.accuse_banque && cc.accuse_banque.blob==='preuves/acc.pdf' && cc.date_liberation==='2025-05-01'; })(), '');
+check('unify transporte la MAINLEVÉE CLIENT + date_mainlevee_recue', (function(){ var b=rows.filter(function(r){return r.num==='B';})[0]; return b && b.mainlevee_client && b.mainlevee_client.blob==='preuves/ml.pdf' && b.date_mainlevee_recue==='2025-04-15'; })(), '');
 
 console.log('\n=== 2. Encore bloquee = active OU mainlevee demandee (col et ao) ===');
 check('definitive active -> bloquee', MPC.isBlocked(a) === true, '');
