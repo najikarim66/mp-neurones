@@ -590,6 +590,7 @@ var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',c
 function nav(page){
   objVals(S._charts).forEach(function(c){try{c.destroy();}catch(e){}});
   S._charts={};S.page=page;S.search='';S.sf='';S.tf='';S.bf='';
+  if(page==='marches')S.sf='en_cours'; // liste marchés : affichage par défaut = marchés en cours (modifiable via le filtre)
   document.querySelectorAll('.ni').forEach(function(el){el.classList.toggle('on',el.dataset.page===page);});
   document.getElementById('ph-t').textContent=TITLES[page]||page;
   document.getElementById('ph-s').textContent=page==='dashboard'?new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'2-digit',month:'long',year:'numeric'}):'';
