@@ -362,6 +362,32 @@
     return out;
   }
 
+  var STATUTS_CLOS = ['liberee', 'restituee'];
+  /* Dépôt A POSTERIORI d'un justificatif (mainlevée client / accusé banque) sur une
+   * caution DÉJÀ close (libérée/restituée) — typiquement une régularisation rétroactive
+   * « sans accusé numérique ». Recevable si : pièce de mainlevée/accusé connue, caution
+   * def/RG, statut déjà clos, et la pièce PAS déjà présente (jamais d'écrasement muet). */
+  function pieceJustifRecevable(caution, pieceType) {
+    var t = transitionPiece(pieceType);
+    if (!t || !caution) return false;
+    if (TYPES_MAINLEVEE.indexOf(caution.type) < 0) return false;
+    if (STATUTS_CLOS.indexOf(caution.statut) < 0) return false;
+    if (caution[t.champ]) return false; // déjà jointe
+    return true;
+  }
+  /* Applique le justificatif SANS changer le statut (copie) : pose la pièce + sa date +
+   * une trace a posteriori {piece, le, par, date_piece}. null si non recevable. */
+  function appliquerPieceJustificative(caution, pieceType, pieceRef, dateISO, par) {
+    if (!pieceJustifRecevable(caution, pieceType)) return null;
+    var t = transitionPiece(pieceType);
+    var out = {};
+    Object.keys(caution).forEach(function (k) { out[k] = caution[k]; });
+    out[t.champ] = pieceRef; // statut INCHANGÉ
+    out[t.dateChamp] = dateISO;
+    out.pieces_justif_trace = (Array.isArray(out.pieces_justif_trace) ? out.pieces_justif_trace : []).concat([{ piece: pieceType, le: new Date().toISOString(), par: par || null, date_piece: dateISO }]);
+    return out;
+  }
+
   /* Lecture des pieces : ou vit chaque piece (marche ou caution), son conteneur
    * Blob, son libelle humain et le champ date associe. La resolution du blob se
    * fait UNIQUEMENT depuis le document stocke : aucun chemin fourni par l'appelant
@@ -642,6 +668,8 @@
     apparierActe: apparierActe,
     ligneSureRapprochement: ligneSureRapprochement,
     ajouterFichiersLot: ajouterFichiersLot,
+    pieceJustifRecevable: pieceJustifRecevable,
+    appliquerPieceJustificative: appliquerPieceJustificative,
     doitRearmerGarde: doitRearmerGarde,
     pastilleGardeInactive: pastilleGardeInactive,
     marcheDoitTerminer: marcheDoitTerminer,

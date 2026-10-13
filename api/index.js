@@ -569,7 +569,15 @@ module.exports = async function (context, req) {
       let caution = null;
       try { const r = await cautionsC.item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
       if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
-      if (!MPMainlevee.pieceRecevable(caution, pieceType)) {
+      // A POSTERIORI : justificatif (mainlevée/accusé) sur une caution DÉJÀ libérée/
+      // restituée (régularisation rétroactive), SANS changer le statut. Sinon : cycle normal.
+      const aPosteriori = !!(req.body && req.body.a_posteriori);
+      if (aPosteriori) {
+        if (!MPMainlevee.pieceJustifRecevable(caution, pieceType)) {
+          context.res = { status: 409, body: { error: "Justificatif a posteriori non recevable (statut « " + caution.statut + " », ou pièce déjà jointe)" } };
+          return;
+        }
+      } else if (!MPMainlevee.pieceRecevable(caution, pieceType)) {
         context.res = { status: 409, body: { error: "Transition non recevable pour le statut actuel (" + caution.statut + ")" } };
         return;
       }
@@ -590,14 +598,17 @@ module.exports = async function (context, req) {
         depose_le: new Date().toISOString(),
         depose_par: user.userDetails || null
       };
-      const maj = MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle);
+      const maj = aPosteriori
+        ? MPMainlevee.appliquerPieceJustificative(caution, pieceType, pieceRef, dateReelle, user.userDetails || null)
+        : MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle);
       await cautionsC.items.upsert(maj);
-      // L'accuse bancaire fait passer la caution a « liberee » -> peut terminer le marche (regle Karim).
-      const marcheStatutPiece = await recomputeMarcheStatut(marcheId, dateReelle);
+      // A posteriori : statut INCHANGÉ (pas de recalcul marché). Sinon l'accusé peut
+      // libérer la caution -> peut terminer le marché (règle Karim).
+      const marcheStatutPiece = aPosteriori ? null : await recomputeMarcheStatut(marcheId, dateReelle);
 
       context.res = {
         status: 200,
-        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle, marche_statut: marcheStatutPiece }
+        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle, marche_statut: marcheStatutPiece, a_posteriori: aPosteriori }
       };
       return;
     } catch (e) {

@@ -1249,22 +1249,23 @@ function deposerPV(marcheId){
 // DEPOT DES PIECES DE MAINLEVEE (cycle 3 etats : mainlevee client, accuse banque)
 /* Ouvre une petite modale de depot pour UNE caution. pieceType :
    'mainlevee_client' (demandee -> recue) ou 'accuse_banque' (recue -> liberee). */
-function openPieceDepot(cautionId, marcheId, pieceType){
+function openPieceDepot(cautionId, marcheId, pieceType, aPosteriori){
   var c=S.cautions.find(function(x){return String(x.id)===String(cautionId);});
   var lbls={
     mainlevee_client:{titre:'Depot mainlevee du maitre d\'ouvrage',dateLbl:'Date de la mainlevee (telle qu\'elle figure sur le document)',info:'La caution passe en « mainlevee recue » (remise a la banque, en attente de l\'accuse). La relance du lundi s\'arrete.'},
     accuse_banque:{titre:'Depot accuse de la banque',dateLbl:'Date de l\'accuse bancaire (telle qu\'elle figure sur le document)',info:'La caution passe en « liberee » (argent revenu de la banque).'}
   };
   var L=lbls[pieceType]||{titre:'Depot piece',dateLbl:'Date (telle qu\'elle figure sur le document)',info:''};
+  if(aPosteriori){ L={titre:(pieceType==='accuse_banque'?'Joindre l\'accusé bancaire (a posteriori)':'Joindre la mainlevée (a posteriori)'),dateLbl:L.dateLbl,info:'Justificatif joint à une caution DÉJÀ libérée (régularisation : ancien marché / accusé papier). La pièce est rattachée et consultable ; le statut ne change pas.'}; }
   var refTxt=c?((c.num||'—')+' — '+(TC[c.type]||c.type)+' — '+fmad(c.montant)):'';
   var html='<div class="info-box info-amber">'+L.info+'</div>'+
     (refTxt?'<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Caution : '+esc(refTxt)+'</div>':'')+
     '<div class="fr2"><div class="fg"><label>'+L.dateLbl+' *</label><input class="fc" id="pc_date" type="date" value="" required></div><div class="fg"><label>Fichier (PDF, JPG ou PNG) *</label><input class="fc" id="pc_file" type="file" accept="application/pdf,image/jpeg,image/png"></div></div>'+
     '<div id="pc_status" style="font-size:12px;color:#7A7369;margin:6px 0"></div>'+
-    '<button class="btn btn-sm btn-prim" id="pc_btn" onclick="deposerPiece(\''+esc(cautionId)+'\',\''+esc(marcheId)+'\',\''+pieceType+'\')">Deposer</button>';
+    '<button class="btn btn-sm btn-prim" id="pc_btn" onclick="deposerPiece(\''+esc(cautionId)+'\',\''+esc(marcheId)+'\',\''+pieceType+'\','+(aPosteriori?'true':'false')+')">Deposer</button>';
   openMod(L.titre,html,null);
 }
-function deposerPiece(cautionId, marcheId, pieceType){
+function deposerPiece(cautionId, marcheId, pieceType, aPosteriori){
   var fileEl=document.getElementById('pc_file');
   var dateEl=document.getElementById('pc_date');
   var statusEl=document.getElementById('pc_status');
@@ -1289,14 +1290,15 @@ function deposerPiece(cautionId, marcheId, pieceType){
       date:dateReelle,
       nom_original:file.name,
       content_type:file.type,
-      data_base64:b64
+      data_base64:b64,
+      a_posteriori:!!aPosteriori
     })}).then(function(r){
       r=r||{};
       /* Recharge AUSSI les marches : l'accuse peut avoir termine le marche cote serveur. */
       return Promise.all([apiList('cautions'),apiList('marches')]).then(function(rr){
         S.cautions=rr[0];S.marches=rr[1];sbStats();render();closeMod();
-        var st=(SMC[r.nouveau_statut]||{l:r.nouveau_statut}).l;
-        toast((r.marche_statut==='termine'?'Marche termine — ':'')+'Piece deposee — caution '+(r.caution||'')+' : '+st);
+        if(r.a_posteriori){ toast('Justificatif joint — caution '+(r.caution||'')+' (statut inchangé)'); }
+        else { var st=(SMC[r.nouveau_statut]||{l:r.nouveau_statut}).l; toast((r.marche_statut==='termine'?'Marche termine — ':'')+'Piece deposee — caution '+(r.caution||'')+' : '+st); }
       });
     }).catch(function(e){
       if(btn)btn.disabled=false;if(statusEl)statusEl.textContent='';
@@ -1549,6 +1551,10 @@ function pgCautions(){
     if(c.statut==='active'){libBtn='<button class="act" onclick="demanderMainleveeManuelle(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\')" title="Demander la mainlevée au maître d\'ouvrage (motif obligatoire, tracé)">Mainlevée</button><button class="act" onclick="deposerLiberationDirecte(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\')" title="Libérer directement (motif obligatoire, tracé)" style="color:var(--green-soft)">Libérer</button>';}
     else if(c.statut==='mainlevee_demandee'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'mainlevee_client\')" title="Déposer la mainlevée reçue du maître d\'ouvrage" style="color:var(--green-soft);font-weight:600">Mainlevée reçue</button>';}
     else if(c.statut==='mainlevee_recue'){libBtn='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'accuse_banque\')" title="Déposer l\'accusé de la banque (libère la caution)" style="color:var(--green-soft);font-weight:600">Accusé banque</button>';}
+    else if(c.statut==='liberee'||c.statut==='restituee'){ /* justificatif a posteriori : joindre les pièces manquantes sans changer le statut (régularisation) */
+      if(!c.mainlevee_client)libBtn+='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'mainlevee_client\',true)" title="Joindre la mainlevée du maître d\'ouvrage (justificatif, statut inchangé)">+ Mainlevée</button>';
+      if(!c.accuse_banque)libBtn+='<button class="act" onclick="openPieceDepot(\''+esc(c.id)+'\',\''+esc(c.marche_id)+'\',\'accuse_banque\',true)" title="Joindre l\'accusé bancaire (justificatif, statut inchangé)">+ Accusé</button>';
+    }
     return '<tr><td style="font-family:var(--FM);font-weight:600">'+esc(c.num)+'</td><td><div style="font-weight:500">'+esc(c.ref)+'</div><div style="font-size:12px;color:var(--ink-soft);line-height:1.35;max-width:52ch">'+esc(c.titre||'')+'</div>'+usedNote+'</td><td><span class="badge '+(c.type==='bonne_execution'?'bi':'bp')+'" style="font-size:12px">'+typeLabel(c.type)+'</span></td><td>'+esc(c.banque)+'</td><td style="font-family:var(--FM)">'+fmad(c.montant)+'</td><td>'+fdat(c.date_emission)+'</td><td><span style="font-size:12px">'+bdg(c.statut,SMC)+'</span>'+piecesLiens(c)+'</td><td><div style="display:flex;gap:4px;flex-wrap:wrap"><button class="act" onclick="editCaution(\''+c.id+'\')" title="Modifier">Modifier</button>'+libBtn+'<button class="act" onclick="openCompareActe(\''+c.id+'\',\''+esc(String(c.marche_id))+'\')" title="Comparer l\'acte scanne a la fiche (OCR, sans rien modifier)">Comparer l\'acte</button><button class="act red" onclick="delCaution(\''+c.id+'\')" title="Supprimer">Supprimer</button></div></td></tr>';
   }).join(''):'<tr><td colspan="8"><div class="empty">Aucune caution avec ce filtre</div></td></tr>';
   var table='<div class="card" style="padding:0"><div class="tw"><table><thead><tr><th>N°</th><th>Marché / AO</th><th>Type</th><th>Banque</th><th>Montant</th><th>Émission</th><th>État</th><th>Action</th></tr></thead><tbody>'+rows+'</tbody><tfoot><tr class="tfoot"><td colspan="4">Engagé ('+fctx+')</td><td style="font-family:var(--FM);font-weight:600">'+fmad(agg.engage)+'</td><td colspan="3"></td></tr></tfoot></table></div></div>';

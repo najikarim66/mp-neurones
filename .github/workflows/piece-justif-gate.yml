@@ -1,0 +1,32 @@
+name: Gate dépôt justificatif a posteriori
+
+# Dépôt a posteriori d'un justificatif (mainlevée/accusé) sur une caution déjà close,
+# SANS changer le statut (régularisation rétroactive). Pur : pieceJustifRecevable
+# (statut clos, def/RG, pièce absente) + appliquerPieceJustificative (pose pièce+date+
+# trace, statut inchangé, copie). Node pur, sans dépendance.
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'api/index.js'
+      - 'public/index.html'
+      - 'test/piece-justif.test.js'
+      - '.github/workflows/piece-justif-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/index.js'
+      - 'test/piece-justif.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate dépôt justificatif a posteriori (node, sans dependances)
+        run: node test/piece-justif.test.js
