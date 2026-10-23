@@ -1,0 +1,37 @@
+name: Gate relevés banque
+
+# Garde-fou des relevés banque : rejoue les lecteurs FINEA et BMCE sur des fixtures
+# synthétiques (références inventées, mise en page identique), les contrôles d'intégrité
+# (refus nommés : FORMAT_INCONNU, TOTAL_DIFFERENT, LECTEUR_ABSENT, RELEVE_DEJA_IMPORTE),
+# les corrections humaines tracées, le rapprochement (référence complète > alias >
+# bénéficiaire + montant) et l'écart d'encours expliqué au centime. Vérifie aussi que la
+# copie api/releves-banque.js est identique à public/releves-banque.js.
+# Déterministe, sans dépendances (node pur).
+
+on:
+  push:
+    paths:
+      - 'public/releves-banque.js'
+      - 'api/releves-banque.js'
+      - 'test/releves-banque.test.js'
+      - 'test/module-copy.test.js'
+      - '.github/workflows/releves-banque-gate.yml'
+  pull_request:
+    paths:
+      - 'public/releves-banque.js'
+      - 'api/releves-banque.js'
+      - 'test/releves-banque.test.js'
+      - 'test/module-copy.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate relevés banque (node, sans dépendances)
+        run: node test/releves-banque.test.js
+      - name: Copie unique du module (public == api)
+        run: node test/module-copy.test.js

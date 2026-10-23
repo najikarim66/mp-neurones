@@ -4,6 +4,11 @@ const { BlobServiceClient } = require("@azure/storage-blob");
 // (SWA deploie /api et /public separement). Identite garantie par
 // test/module-copy.test.js (gate). Une seule regle, testee telle qu'elle sert.
 const MPMainlevee = require("./pv-mainlevee.js");
+// Relevés banque (lecteurs, contrôles d'intégrité, rapprochement) : copie committée de
+// public/releves-banque.js, identité garantie par test/module-copy.test.js.
+const MPReleves = require("./releves-banque.js");
+// Blob des relevés de cautions des banques (PDF tel que reçu).
+const RELEVE_CONTAINER = "mp-releves";
 
 // Blob des PV de reception definitive (compte partage erpneuronesstorage du tenant).
 const PV_CONTAINER = "mp-pv-reception";
@@ -1146,6 +1151,120 @@ module.exports = async function (context, req) {
   }
 
   // Route data
+  // Route relevés banque : GET /api/releves-banque (historique, ou ?id= pour un relevé
+  // complet) ; POST /api/releves-banque { banque, periode?, nom_original, content_type,
+  // data_base64, pages, corrections? } = import d'un relevé.
+  // Le serveur RELIT les pages positionnées avec le MÊME module pur que l'aperçu du
+  // navigateur, applique les corrections humaines (tracées), rejoue les contrôles
+  // d'intégrité : un refus nommé = rien d'écrit (ni blob, ni document, ni fiche).
+  // Ordre strict : contrôles -> déjà importé -> blob -> document -> « vue en banque » sur
+  // chaque fiche appariée (patch du seul champ derniere_vue_banque).
+  if (fn === "relevesBanque") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!user) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      const db = getDb();
+      await db.containers.createIfNotExists({ id: "mp_releves_banque", partitionKey: { paths: ["/banque"] } });
+      const relC = db.container("mp_releves_banque");
+      const method = (req.method || "GET").toUpperCase();
+
+      if (method === "GET") {
+        const id = String((req.query && req.query.id) || "").trim();
+        if (id) {
+          const r = (await relC.items.query({ query: "SELECT * FROM c WHERE c.id = @id", parameters: [{ name: "@id", value: id }] }).fetchAll()).resources;
+          if (!r.length) { context.res = { status: 404, body: { error: "Relevé introuvable" } }; return; }
+          context.res = { status: 200, body: r[0] }; return;
+        }
+        const liste = (await relC.items.query("SELECT c.id, c.banque, c.periode, c.importe_le, c.importe_par, c.totaux, c.fichier, c.lecteur, c.rapprochement.compteurs AS compteurs, c.rapprochement.encours AS encours, ARRAY_LENGTH(c.corrections) AS nb_corrections FROM c").fetchAll()).resources;
+        liste.sort(function (a, b) { return (a.banque + a.periode) < (b.banque + b.periode) ? -1 : 1; });
+        context.res = { status: 200, body: liste }; return;
+      }
+      if (method !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (GET ou POST)" } }; return; }
+
+      const body = req.body || {};
+      const banque = String(body.banque || "").trim();
+      if (MPReleves.BANQUES.indexOf(banque) < 0) { context.res = { status: 400, body: { error: "Banque inconnue : « " + banque + " » (" + MPReleves.BANQUES.join(", ") + ")" } }; return; }
+      const pages = Array.isArray(body.pages) ? body.pages : null;
+      if (!pages || !pages.length) { context.res = { status: 400, body: { error: "pages (lignes positionnées extraites du PDF) manquantes" } }; return; }
+
+      // (1) Lecture + corrections humaines (tracées) + contrôles. Un refus = rien d'écrit.
+      const lecture = MPReleves.lire(banque, pages);
+      const corrections = Array.isArray(body.corrections) ? body.corrections : [];
+      const trace = MPReleves.appliquerCorrections(lecture, corrections, user.userDetails || null);
+      if (!lecture.controle.ok) {
+        context.res = { status: 409, body: { refus: lecture.controle.refus, code: lecture.controle.refus[0].code, lecture: { lignes: lecture.lignes, ecartes: lecture.ecartes, totaux: lecture.totaux, periode: lecture.periode } } };
+        return;
+      }
+      const periode = lecture.periode || String(body.periode || "").trim();
+      if (!MPReleves.periodeValide(periode)) { context.res = { status: 409, body: { refus: [{ code: "PERIODE_ABSENTE", detail: "période non lue dans le document : saisir le mois (AAAA-MM)" }], code: "PERIODE_ABSENTE", lecture: { lignes: lecture.lignes, ecartes: lecture.ecartes, totaux: lecture.totaux, periode: null } } }; return; }
+
+      // (2) Même banque + même période = refus.
+      const deja = (await relC.items.query({ query: "SELECT c.id, c.banque, c.periode FROM c WHERE c.banque = @b AND c.periode = @p", parameters: [{ name: "@b", value: banque }, { name: "@p", value: periode }] }).fetchAll()).resources;
+      if (MPReleves.dejaImporte(deja, banque, periode)) { context.res = { status: 409, body: { refus: [{ code: "RELEVE_DEJA_IMPORTE", detail: "un relevé " + banque + " pour " + periode + " est déjà importé" }], code: "RELEVE_DEJA_IMPORTE" } }; return; }
+
+      // (3) Rapprochement avec nos cautions de la banque + provisoires portées par les AO.
+      const cautions = (await db.container("mp_cautions").items.query({ query: "SELECT * FROM c WHERE c.banque = @b", parameters: [{ name: "@b", value: banque }] }).fetchAll()).resources;
+      const aos = (await db.container("mp_aos").items.query({ query: "SELECT * FROM c WHERE IS_DEFINED(c.caution_prov) AND c.caution_prov.banque = @b", parameters: [{ name: "@b", value: banque }] }).fetchAll()).resources;
+      const marches = (await db.container("mp_marches").items.query("SELECT c.id, c.ref, c.maitre_ouvrage FROM c").fetchAll()).resources;
+      const parId = {}; marches.forEach(function (m) { parId[m.id] = m; });
+      const rapp = MPReleves.rapprocher(lecture, cautions, aos.map(function (a) { return { ao: a }; }), function (id) { return parId[id]; }, periode);
+
+      // (4) Blob du PDF tel que reçu (facultatif si l'appelant n'a envoyé que les pages).
+      const releveId = "rel_" + Date.now().toString(36) + "_" + Math.random().toString(36).slice(2, 8);
+      let fichier = null;
+      const dataB64 = String(body.data_base64 || "");
+      if (dataB64) {
+        const contentType = String(body.content_type || "application/pdf");
+        if (contentType !== "application/pdf") { context.res = { status: 400, body: { error: "content_type non autorisé (PDF uniquement)" } }; return; }
+        let buf; try { buf = Buffer.from(dataB64, "base64"); } catch (e) { buf = null; }
+        if (!buf || !buf.length) { context.res = { status: 400, body: { error: "Fichier vide ou base64 invalide" } }; return; }
+        if (buf.length > PV_MAX_BYTES) { context.res = { status: 400, body: { error: "Fichier trop volumineux (max 20 Mo)" } }; return; }
+        const conn = process.env.STORAGE_CONNECTION_STRING;
+        if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+        const blobName = banque.toLowerCase().replace(/[^a-z0-9]+/g, "-") + "/" + periode + "/" + releveId + ".pdf";
+        const cont = BlobServiceClient.fromConnectionString(conn).getContainerClient(RELEVE_CONTAINER);
+        await cont.createIfNotExists();
+        await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
+        fichier = { blob: blobName, nom_original: String(body.nom_original || "releve.pdf"), taille: buf.length, content_type: contentType };
+      }
+
+      // (5) Document du relevé (lignes, totaux, rapprochement avec fiches réduites).
+      const fiche = function (f) { return f ? { kind: f.kind, id: f.id, aoId: f.aoId || null, marcheId: f.marcheId || null, num: f.num, referenceBanque: f.referenceBanque, type: f.type, montant: f.montant, statut: f.statut, marche_ref: f.marche_ref, beneficiaire: f.beneficiaire, date_emission: f.date_emission } : null; };
+      const reduire = function (x) { return { ligne: x.ligne, fiche: fiche(x.fiche), via: x.via, ecart_montant: x.ecart_montant, date_mainlevee: x.date_mainlevee || null, date_liberation: x.date_liberation || null, mois_depuis_mainlevee: (x.mois_depuis_mainlevee === undefined ? null : x.mois_depuis_mainlevee), commission_relevee: (x.commission_relevee === undefined ? null : x.commission_relevee), motif: x.motif || null }; };
+      const doc = {
+        id: releveId, banque: banque, periode: periode, lecteur: lecture.lecteur,
+        importe_le: new Date().toISOString(), importe_par: user.userDetails || null,
+        fichier: fichier, totaux: lecture.totaux, lignes: lecture.lignes, ecartes: lecture.ecartes, corrections: trace,
+        rapprochement: { periode: rapp.periode, compteurs: rapp.compteurs, encours: rapp.encours, a: rapp.a.map(reduire), b: rapp.b.map(reduire), c: rapp.c.map(reduire), inconnues: rapp.inconnues.map(reduire) }
+      };
+      await relC.items.upsert(doc);
+
+      // (6) « Vue en banque <période> » sur chaque fiche appariée (a et b).
+      let vues = 0;
+      const items = rapp.a.concat(rapp.b);
+      for (let i = 0; i < items.length; i++) {
+        const f = items[i].fiche;
+        try {
+          if (f.kind === "caution") {
+            const actuelle = (cautions.filter(function (c) { return c.id === f.id; })[0] || {}).derniere_vue_banque || null;
+            await db.container("mp_cautions").item(f.id, f.marcheId).patch([{ op: "add", path: "/derniere_vue_banque", value: MPReleves.vueEnBanque(actuelle, periode, releveId) }]);
+          } else {
+            const ao = aos.filter(function (a) { return a.id === f.aoId; })[0];
+            const actuelleP = (ao && ao.caution_prov && ao.caution_prov.derniere_vue_banque) || null;
+            await db.container("mp_aos").item(f.aoId, f.aoId).patch([{ op: "add", path: "/caution_prov/derniere_vue_banque", value: MPReleves.vueEnBanque(actuelleP, periode, releveId) }]);
+          }
+          vues++;
+        } catch (e) { context.log.warn("relevesBanque: vue en banque non posée sur " + f.id + " : " + e.message); }
+      }
+      context.res = { status: 201, body: { ok: true, releve: doc, vues_posees: vues } };
+      return;
+    } catch (e) {
+      context.log.error("relevesBanque error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
   if (fn === "data") {
     try {
       const container = context.bindingData.container;

@@ -28,7 +28,9 @@
         ref: m.ref || '', titre: m.titre || '', marche_id: c.marche_id,
         // Pièces jointes, pour que l'écran offre « voir la pièce » (jamais le blob nu).
         acte: c.acte || null, mainlevee_client: c.mainlevee_client || null, accuse_banque: c.accuse_banque || null,
-        date_mainlevee_recue: c.date_mainlevee_recue || null, date_liberation: c.date_liberation || null };
+        date_mainlevee_recue: c.date_mainlevee_recue || null, date_liberation: c.date_liberation || null,
+        // Dernier relevé banque où la caution a été vue (posé par l'import des relevés).
+        derniere_vue_banque: c.derniere_vue_banque || null };
     });
     var prov = (aos || []).filter(function (a) { return a.caution_prov; }).map(function (a) {
       var p = a.caution_prov;
@@ -36,7 +38,7 @@
         banque: p.banque || '', montant: +p.montant || 0, date_emission: p.date_emission || null,
         statut: p.statut || '', ref: a.ref || '', aoStatut: a.statut || '',
         // L'acte d'une provisoire vit sur l'AO (a.caution_prov.acte) ; servi par aoId.
-        acte: p.acte || null };
+        acte: p.acte || null, derniere_vue_banque: p.derniere_vue_banque || null };
     });
     return col.concat(prov);
   }

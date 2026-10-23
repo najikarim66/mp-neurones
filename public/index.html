@@ -251,6 +251,7 @@ input,select,textarea{font-family:inherit}
     <div class="ni" data-page="ao"><span class="ni-ic">&#128221;</span>Appels d'offres</div>
     <div class="ni" data-page="marches"><span class="ni-ic">&#128203;</span>Marchés</div>
     <div class="ni" data-page="cautions"><span class="ni-ic">&#127970;</span>Cautions bancaires</div>
+    <div class="ni" data-page="releves" style="padding-left:34px;font-size:12px"><span class="ni-ic">&#128196;</span>Relevés banque</div>
     <div class="ni" data-page="paiements"><span class="ni-ic">&#128176;</span>Paiements</div>
     <div class="ni" data-page="parametres"><span class="ni-ic">&#9881;</span>Paramètres</div>
     <div class="ni" data-page="rapports"><span class="ni-ic">&#128202;</span>Rapports</div>
@@ -294,6 +295,8 @@ input,select,textarea{font-family:inherit}
 <script src="echeances.js"></script>
 <script src="cautions-calc.js"></script>
 <script src="pv-mainlevee.js"></script>
+<script src="releves-banque.js"></script>
+<script src="releves-ui.js"></script>
 <script src="garde-version.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
@@ -446,9 +449,11 @@ function apiDelete(ckey, id, pkValue){
 /* === Load initial === */
 function apiLoadAll(){
   setStatus('Chargement...');
-  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices(), apiListSafe('bordereaux'), apiListSafe('banques'), apiListSafe('avenants')])
+  return Promise.all([apiList('aos'), apiList('marches'), apiList('cautions'), apiList('paiements'), apiListIndices(), apiListSafe('bordereaux'), apiListSafe('banques'), apiListSafe('avenants'),
+    /* relevés banque (historique léger) : route dédiée, tolérante si absente */
+    apiFetch('/api/releves-banque').then(function(r){return Array.isArray(r)?r:[];}).catch(function(e){console.warn('releves-banque non charges:', e.message);return [];})])
   .then(function(res){
-    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4]; S.bordereaux=res[5]; S.banques=res[6]; S.avenants=res[7]||[];
+    S.aos=res[0]; S.marches=res[1]; S.cautions=res[2]; S.paiements=res[3]; S.indices=res[4]; S.bordereaux=res[5]; S.banques=res[6]; S.avenants=res[7]||[]; S.releves=res[8]||[];
     S._loaded=true;
     setStatus('Synchronise '+new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit'}));
     sbStats();
@@ -586,7 +591,7 @@ function resetDemo(){
 }
 
 // NAVIGATION
-var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',paiements:'Paiements',rapports:'Rapports',indices:'Indices HCP',parametres:'Parametres'};
+var TITLES={dashboard:'Tableau de bord',ao:"Appels d'offres",marches:'Marches',cautions:'Cautions bancaires',releves:'Relevés banque',paiements:'Paiements',rapports:'Rapports',indices:'Indices HCP',parametres:'Parametres'};
 function nav(page){
   objVals(S._charts).forEach(function(c){try{c.destroy();}catch(e){}});
   S._charts={};S.page=page;S.search='';S.sf='';S.tf='';S.bf='';
@@ -609,7 +614,7 @@ function sbStats(){
   document.getElementById('sbf').innerHTML='<div class="sf-row"><span class="sf-lbl">AO en cours</span><span class="sf-val">'+aoc+'</span></div><div class="sf-row"><span class="sf-lbl">Marches actifs</span><span class="sf-val">'+ec+'</span></div><div class="sf-row"><span class="sf-lbl">Cautions actives</span><span class="sf-val">'+ca+'</span></div><div class="sf-row"><span class="sf-lbl">Paiements en attente</span><span class="sf-val">'+pa+'</span></div><div style="margin-top:10px"><div id="save-status" style="font-size:12px;color:#3a7d55;text-align:center;padding:4px">Pret</div></div>';
 }
 function render(){
-  var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,paiements:pgPaiements,rapports:pgRapports,parametres:pgParametres};
+  var pages={dashboard:pgDash,ao:pgAO,marches:pgMarches,cautions:pgCautions,releves:pgReleves,paiements:pgPaiements,rapports:pgRapports,parametres:pgParametres};
   var fn=pages[S.page]||pgDash;
   document.getElementById('pb').innerHTML=fn();
   if(S.page==='rapports')setTimeout(initCharts,80);
@@ -1325,6 +1330,8 @@ function lienPiece(type, marcheId, cautionId, dateISO, aoId){
 function piecesLiens(c){
   if(!c)return '';
   var out='';
+  // Dernier relevé banque où la caution a été vue / absente des deux derniers relevés.
+  if(typeof vueBanqueHTML==='function') out+=vueBanqueHTML(c);
   // Acte : définitive -> cautionId ; provisoire (src 'ao') -> aoId (blob porté par l'AO).
   if(c.acte){
     var lienA=(c.src==='ao')?lienPiece('acte',null,null,c.date_emission,c._aoId):lienPiece('acte',c.marche_id,c.id,c.date_emission);
