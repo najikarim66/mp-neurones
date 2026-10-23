@@ -236,6 +236,17 @@
     var za = na.replace(/^0+/, ''), zb = nb.replace(/^0+/, '');
     return !!za && za === zb;
   }
+  /* Référence banque COMPLÈTE (c.referenceBanque, telle qu'écrite par la banque sur
+   * ses relevés : ex. BMCE « 810012624000694066 ») et ALIAS abrégé (c.num, l'ancien
+   * numéro saisi : « 694066 »). Un numéro lu (acte OCR, ligne de relevé) s'apparie
+   * d'abord sur la référence complète, puis sur l'alias. Renvoie 'reference' | 'alias'
+   * | null — le mode est NOMMÉ, jamais implicite (décision Karim 23/10/2026). */
+  function apparierNumero(lu, c) {
+    if (!c) return null;
+    if (_numMatch(lu, c.referenceBanque)) return 'reference';
+    if (_numMatch(lu, c.num)) return 'alias';
+    return null;
+  }
   function _lc(s) { return String(s == null ? '' : s).trim().toLowerCase(); }
   function _blobHasHash(acte, hash) { return !!(acte && hash && String(acte.blob || acte.hash || '').indexOf(String(hash)) >= 0); }
   /* Marche LU sur l'acte -> marche en base : par reference (normalisee), sinon objet/
@@ -312,15 +323,17 @@
     var i;
     // 0. le hash est deja rattache -> doublon, rien a faire
     for (i = 0; i < candidats.length; i++) { if (_blobHasHash(candidats[i].acte, hash)) return { mode: 'doublon_hash', cible: candidats[i], candidates: [], marchePropose: null }; }
-    // a. N° normalise
-    var parNum = candidats.filter(function (c) { return _numMatch(lu.num, c.num); });
+    // a. N° normalise : reference banque COMPLETE d'abord, puis alias abrege
+    var parRef = candidats.filter(function (c) { return apparierNumero(lu.num, c) === 'reference'; });
+    var via = parRef.length ? 'reference' : 'alias';
+    var parNum = parRef.length ? parRef : candidats.filter(function (c) { return apparierNumero(lu.num, c) === 'alias'; });
     if (parNum.length === 1) {
-      if (parNum[0].acte) return { mode: 'deja_acte', cible: parNum[0], candidates: [], marchePropose: null };
-      return { mode: 'a', cible: parNum[0], candidates: [], marchePropose: null };
+      if (parNum[0].acte) return { mode: 'deja_acte', cible: parNum[0], candidates: [], marchePropose: null, via: via };
+      return { mode: 'a', cible: parNum[0], candidates: [], marchePropose: null, via: via };
     }
     if (parNum.length > 1) {
       var aff = parNum.filter(function (c) { return (!lu.type || c.type === lu.type) && (lu.montant == null || Math.round(+c.montant || 0) === Math.round(+lu.montant || 0)); });
-      if (aff.length === 1 && !aff[0].acte) return { mode: 'a', cible: aff[0], candidates: [], marchePropose: null };
+      if (aff.length === 1 && !aff[0].acte) return { mode: 'a', cible: aff[0], candidates: [], marchePropose: null, via: via };
       return { mode: 'a_choisir', cible: null, candidates: parNum, marchePropose: null };
     }
     // b. type + banque + montant parmi les cautions SANS acte
@@ -431,6 +444,8 @@
       if (vl === undefined || vl === null || vl === '') return; // OCR n'a rien lu -> pas d'ecart
       var vs = stockee[c.cle];
       var diff = c.num ? (Math.round(+vs || 0) !== Math.round(+vl || 0)) : (_normCmp(vs) !== _normCmp(vl));
+      // N° : la reference banque COMPLETE lue sur l'acte n'est pas un ecart avec l'alias stocke.
+      if (diff && c.cle === 'num' && _numMatch(vl, stockee.referenceBanque)) diff = false;
       if (diff) ecarts.push({ champ: c.cle, stocke: (vs === undefined ? null : vs), lu: vl });
     });
     return ecarts;
@@ -665,6 +680,7 @@
     construireCautionCasA: construireCautionCasA,
     peutBasculerGarde: peutBasculerGarde,
     normaliserNumCaution: normaliserNumCaution,
+    apparierNumero: apparierNumero,
     apparierActe: apparierActe,
     ligneSureRapprochement: ligneSureRapprochement,
     ajouterFichiersLot: ajouterFichiersLot,

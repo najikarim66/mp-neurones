@@ -79,6 +79,19 @@ check('engage inclut la mainlevee_recue', aggR.engage === 70000, 'engage=' + agg
 var restR = MPC.aRestituer([recu]);
 check('aRestituer inclut mainlevee_recue', restR.items.length === 1 && restR.total === 70000, JSON.stringify(restR));
 
+console.log('\n=== 6. Reference banque COMPLETE (referenceBanque) + alias (num) — 23/10/2026 ===');
+var CREF = [
+  { id:'r1', num:'694066', referenceBanque:'810012624000694066', type:'retenue_garantie', banque:'BMCE Bank', montant:13088, statut:'active', marche_id:'m1' },
+  { id:'r2', num:'133243', type:'bonne_execution', banque:'FINEA', montant:105740, statut:'active', marche_id:'m2' } // pas de reference complete (fiche non migree)
+];
+var rowsRef = MPC.unify(CREF, [{ id:'aoR', ref:'AO-R', statut:'en_cours', caution_prov:{ num:'790909', referenceBanque:'780002621000790909', banque:'BMCE Bank', montant:50000, statut:'active' } }], gm);
+check('unify transporte referenceBanque d\'une caution ET l\'alias num reste', rowsRef[0].referenceBanque === '810012624000694066' && rowsRef[0].num === '694066', JSON.stringify(rowsRef[0]));
+check('unify : fiche sans reference complete -> referenceBanque null (jamais inventee)', rowsRef[1].referenceBanque === null, JSON.stringify(rowsRef[1].referenceBanque));
+check('unify transporte referenceBanque d\'une PROVISOIRE portee par un AO', rowsRef[2].referenceBanque === '780002621000790909', JSON.stringify(rowsRef[2]));
+check('recherche par la reference complete trouve la caution', MPC.applyFilters(rowsRef, { search: '8100126240006' }).length === 1 && MPC.applyFilters(rowsRef, { search: '8100126240006' })[0].id === 'r1', '');
+check('recherche par l\'alias trouve toujours la caution', MPC.applyFilters(rowsRef, { search: '694066' }).length === 1, '');
+check('recherche d\'une reference inconnue -> 0 ligne (pas de faux positif)', MPC.applyFilters(rowsRef, { search: '999999999' }).length === 0, '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

@@ -67,6 +67,24 @@ check('(c) réf à un chiffre près + MO différent -> mode c, marché non propo
 // (d) acte déjà joint redéposé -> doublon nommé (existant intact : aucune écriture déclenchée côté module)
 check('(d) hash déjà rattaché -> doublon_hash (rien à faire)', (function () { var cc = [{ kind: 'caution', id: 'z', marcheId: 'm545', num: 'Z', banque: 'X', montant: 1, type: 'bonne_execution', acte: { blob: 'actes/deadbeef.pdf' } }]; var r = MPM.apparierActe({ num: 'Z' }, 'deadbeef', cc, marches); return r.mode === 'doublon_hash' && r.cible.id === 'z'; })(), '');
 
+console.log('\n=== Référence banque COMPLÈTE (referenceBanque) d\'abord, ALIAS (num) ensuite — 23/10/2026 ===');
+// cA : fiche migrée (alias 191999 + référence BMCE complète). cB : fiche dont l'ALIAS est, par
+// malchance, égal à la référence complète de cA (piège : la référence complète doit gagner).
+var cRef = [
+  { kind: 'caution', id: 'cA', marcheId: 'm1', num: '191999', referenceBanque: '810012022000191999', banque: 'BMCE Bank', montant: 168837, type: 'bonne_execution', acte: null },
+  { kind: 'caution', id: 'cB', marcheId: 'm2', num: '810012022000191999', banque: 'BMCE Bank', montant: 1, type: 'bonne_execution', acte: null },
+  { kind: 'caution', id: 'cC', marcheId: 'm2', num: '0519746F', banque: 'Attijariwafa Bank', montant: 12330, type: 'bonne_execution', acte: null }
+];
+check('apparierNumero : lu = référence complète -> \'reference\'', MPM.apparierNumero('810012022000191999', cRef[0]) === 'reference', MPM.apparierNumero('810012022000191999', cRef[0]));
+check('apparierNumero : lu = alias -> \'alias\'', MPM.apparierNumero('191999', cRef[0]) === 'alias', MPM.apparierNumero('191999', cRef[0]));
+check('apparierNumero : lu = « 519746F » sans zéro de tête -> alias (zéros de tête ignorés)', MPM.apparierNumero('519746F', cRef[2]) === 'alias', '');
+check('apparierNumero : lu inconnu -> null ; caution absente -> null', MPM.apparierNumero('ZZZ', cRef[0]) === null && MPM.apparierNumero('191999', null) === null, '');
+check('apparierActe : référence complète lue -> cA via \'reference\' (pas cB dont l\'alias coïncide)', (function () { var r = MPM.apparierActe({ num: '810012022000191999' }, 'H', cRef, marches); return r.mode === 'a' && r.cible.id === 'cA' && r.via === 'reference'; })(), '');
+check('apparierActe : alias lu -> cA via \'alias\'', (function () { var r = MPM.apparierActe({ num: '191 999' }, 'H', cRef, marches); return r.mode === 'a' && r.cible.id === 'cA' && r.via === 'alias'; })(), '');
+check('apparierActe : fiche SANS referenceBanque -> toujours appariée par l\'alias (rétro-compatible)', (function () { var r = MPM.apparierActe({ num: '694066' }, 'H', cands, marches); return r.mode === 'a' && r.cible.id === 'c1' && r.via === 'alias'; })(), '');
+check('comparerActe : référence complète lue sur l\'acte vs alias stocké -> AUCUN écart sur num', MPM.comparerActe({ num: '191999', referenceBanque: '810012022000191999' }, { reference: '810012022000191999' }).length === 0, JSON.stringify(MPM.comparerActe({ num: '191999', referenceBanque: '810012022000191999' }, { reference: '810012022000191999' })));
+check('comparerActe : numéro lu différent des deux -> écart num nommé', (function () { var e = MPM.comparerActe({ num: '191999', referenceBanque: '810012022000191999' }, { reference: '999' }); return e.length === 1 && e[0].champ === 'num'; })(), '');
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }

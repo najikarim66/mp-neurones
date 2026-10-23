@@ -23,7 +23,7 @@
     gm = gm || function () { return { ref: '', titre: '' }; };
     var col = (cautions || []).map(function (c) {
       var m = gm(c.marche_id) || {};
-      return { src: 'col', id: c.id, num: c.num, type: c.type, banque: c.banque || '',
+      return { src: 'col', id: c.id, num: c.num, referenceBanque: c.referenceBanque || null, type: c.type, banque: c.banque || '',
         montant: +c.montant || 0, date_emission: c.date_emission || null, statut: c.statut,
         ref: m.ref || '', titre: m.titre || '', marche_id: c.marche_id,
         // Pièces jointes, pour que l'écran offre « voir la pièce » (jamais le blob nu).
@@ -32,7 +32,7 @@
     });
     var prov = (aos || []).filter(function (a) { return a.caution_prov; }).map(function (a) {
       var p = a.caution_prov;
-      return { src: 'ao', _aoId: a.id, id: 'prov_' + a.id, num: p.num || '', type: 'provisoire',
+      return { src: 'ao', _aoId: a.id, id: 'prov_' + a.id, num: p.num || '', referenceBanque: p.referenceBanque || null, type: 'provisoire',
         banque: p.banque || '', montant: +p.montant || 0, date_emission: p.date_emission || null,
         statut: p.statut || '', ref: a.ref || '', aoStatut: a.statut || '',
         // L'acte d'une provisoire vit sur l'AO (a.caution_prov.acte) ; servi par aoId.
@@ -52,7 +52,8 @@
     if (f.search) {
       var q = String(f.search).toLowerCase();
       out = out.filter(function (c) {
-        return [c.num, c.banque, c.ref].some(function (x) { return (x || '').toLowerCase().indexOf(q) >= 0; });
+        // La recherche trouve la reference banque complete autant que l'alias abrege.
+        return [c.num, c.referenceBanque, c.banque, c.ref].some(function (x) { return (x || '').toLowerCase().indexOf(q) >= 0; });
       });
     }
     if (f.statut) out = out.filter(function (c) { return c.statut === f.statut; });
