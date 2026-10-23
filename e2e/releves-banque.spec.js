@@ -31,8 +31,8 @@ test('la page Relevés banque : banques, dépôt, historique une ligne par relev
   const sel = page.locator('[data-releves="banque"]');
   await expect(sel).toHaveCount(1);
   await expect(sel.locator('option')).toHaveCount(5); // 4 banques + « choisir »
-  await expect(sel.locator('option', { hasText: 'Attijariwafa Bank (lecteur à venir)' })).toHaveCount(1);
-  await expect(sel.locator('option', { hasText: 'Banque Populaire (lecteur à venir)' })).toHaveCount(1);
+  await expect(sel.locator('option', { hasText: 'Attijariwafa Bank (relevé scanné : lecteur OCR à venir)' })).toHaveCount(1);
+  await expect(sel.locator('option', { hasText: "Banque Populaire (en attente de l'état d'encours demandé à l'agence)" })).toHaveCount(1);
   await expect(page.locator('[data-releves="fichier"]')).toHaveAttribute('accept', /pdf/);
   await expect(page.locator('[data-releves="historique-ligne"]')).toHaveCount(2);
   await expect(page.locator('[data-releves="historique"]')).toContainText('octobre 2026');
@@ -68,6 +68,27 @@ test('un aperçu refusé montre le refus nommé et désactive Importer ; un aper
   await expect(page.locator('[data-releves="controle"]')).toHaveAttribute('data-etat', 'ok');
   await expect(page.locator('[data-releves="periode"]')).toHaveCount(1);
   await expect(page.locator('[data-releves="importer"]')).toBeEnabled();
+});
+
+test('résultat : une provisoire sans fiche propose « Créer l\'AO et sa caution provisoire » pré-rempli', async ({ page }) => {
+  await page.evaluate(() => {
+    nav('releves');
+    var st = relState();
+    st.resultat = { id: 'rX', banque: 'BMCE Bank', periode: '2026-10', importe_le: '2026-10-23T10:00:00Z', rapprochement: { compteurs: { lignes: 1, a: 0, b: 0, c: 0, inconnues: 1, fiches: 0 }, encours: { banque: 50000, mp: 0, ecart: 50000, reste: 0, explication: [] }, a: [], b: [], c: [],
+      inconnues: [{ ligne: { type: 'CP', reference: '780009999900000001', beneficiaire: 'AGENCE TEST DES EAUX', marche: '99/TEST/2026 lot 3', lot: '3', date_echeance: '2026-11-03', heure_echeance: '11:00', date_delivrance: '2026-10-06', montant: 50000 }, motif: 'aucune fiche chez nous' }] } };
+    render();
+  });
+  const btn = page.locator('[data-releves="creer-ao"]');
+  await expect(btn).toHaveCount(1);
+  await expect(page.locator('[data-releves="groupe-inconnues"]')).toContainText('remise le 03/11/2026 à 11:00');
+  await btn.click();
+  await expect(page.locator('#aref')).toHaveValue('99/TEST/2026');
+  await expect(page.locator('#amo')).toHaveValue('AGENCE TEST DES EAUX');
+  await expect(page.locator('#adlim')).toHaveValue('2026-11-03');
+  await expect(page.locator('#cp_num')).toHaveValue('780009999900000001');
+  await expect(page.locator('#cp_montant')).toHaveValue('50000');
+  await expect(page.locator('#cp_emission')).toHaveValue('2026-10-06');
+  await expect(page.locator('#aobjet')).toHaveValue(''); // l'objet n'est pas deviné
 });
 
 test('écran Cautions : « absente des deux derniers relevés » et « vue en banque »', async ({ page }) => {

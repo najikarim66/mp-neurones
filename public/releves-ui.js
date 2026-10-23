@@ -28,9 +28,10 @@ function relTxt(s, repli) { return (s === null || s === undefined || s === '') ?
 /* ---------- Page ---------- */
 function pgReleves() {
   var st = relState();
-  var opts = MPReleves.BANQUES.map(function (b) { var dispo = !!MPReleves.LECTEURS[b]; return '<option value="' + esc(b) + '"' + (st.banque === b ? ' selected' : '') + '>' + esc(b) + (dispo ? '' : ' (lecteur à venir)') + '</option>'; }).join('');
+  var ABSENTS = { 'Attijariwafa Bank': 'relevé scanné : lecteur OCR à venir', 'Banque Populaire': 'en attente de l\'état d\'encours demandé à l\'agence' };
+  var opts = MPReleves.BANQUES.map(function (b) { var dispo = !!MPReleves.LECTEURS[b]; return '<option value="' + esc(b) + '"' + (st.banque === b ? ' selected' : '') + '>' + esc(b) + (dispo ? '' : ' (' + esc(ABSENTS[b] || 'lecteur à venir') + ')') + '</option>'; }).join('');
   var importCard = '<div class="card" data-releves="import"><div class="sh"><div class="st">Importer un relevé de cautions</div></div>' +
-    '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Un lecteur par banque : FINEA (relevé de commissions, PDF texte) et BMCE (liste d\'encours de l\'agence) sont en ligne ; Attijariwafa (relevé scanné, OCR) et Banque Populaire (lecteur à écrire sur le premier relevé fourni) refusent pour l\'instant, nommément. Rien n\'est enregistré tant qu\'un contrôle d\'intégrité échoue.</div>' +
+    '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:10px">Un lecteur par banque : FINEA (relevé de commissions, PDF texte) et BMCE (liste d\'encours de l\'agence) sont en ligne ; Attijariwafa (relevé scanné, OCR à venir) et Banque Populaire (en attente de l\'état d\'encours des cautions demandé à l\'agence) refusent pour l\'instant, nommément. Rien n\'est enregistré tant qu\'un contrôle d\'intégrité échoue.</div>' +
     '<div class="fr2"><div class="fg"><label>Banque *</label><select class="fc" id="rel-banque" data-releves="banque" onchange="relState().banque=this.value;relevesRendreApercu()"><option value="">- Choisir la banque -</option>' + opts + '</select></div>' +
     '<div class="fg"><label>Relevé (PDF) *</label><input class="fc" type="file" id="rel-file" accept="application/pdf,.pdf" data-releves="fichier" onchange="relevesLire()"></div></div>' +
     '<div id="rel-etat" style="font-size:12px;color:var(--ink-muted)">' + (st.lecture_en_cours ? 'Lecture du PDF…' : (st.fichier ? 'Fichier lu : ' + esc(st.fichier.name) : 'Choisir la banque puis déposer le PDF du relevé.')) + '</div></div>';
@@ -65,7 +66,7 @@ function relevesLignesDepuisItems(items) {
     var l = null;
     for (var i = 0; i < lignes.length; i++) { if (Math.abs(lignes[i].y - y) <= 2) { l = lignes[i]; break; } }
     if (!l) { l = { y: y, items: [] }; lignes.push(l); }
-    l.items.push({ x: x, str: str });
+    l.items.push({ x: x, str: str, w: (typeof it.width === 'number' ? Math.round(it.width * 10) / 10 : null) });
   });
   lignes.forEach(function (l) { l.items.sort(function (a, b) { return a.x - b.x; }); });
   lignes.sort(function (a, b) { return b.y - a.y; });
@@ -202,10 +203,10 @@ function relevesResultatHTML(doc, titre) {
   function groupe(cle, lbl, items, rendu, vide) {
     return '<details ' + (items.length && cle !== 'a' ? 'open' : '') + ' style="border:1px solid var(--line);border-radius:5px;margin-bottom:10px;background:var(--cream)" data-releves="groupe-' + cle + '"><summary style="cursor:pointer;padding:10px 14px;font-weight:600;color:var(--forest)">' + lbl + ' — ' + items.length + '</summary><div style="padding:0 14px 12px">' + (items.length ? '<div class="tw"><table style="font-size:12px"><tbody>' + items.map(rendu).join('') + '</tbody></table></div>' : '<div style="font-size:12px;color:var(--ink-muted)">' + vide + '</div>') + '</div></details>';
   }
-  var ligneTxt = function (l) { return '<b>' + esc(l.type) + '</b> ' + esc(l.reference) + ' · ' + relTxt(l.beneficiaire, 'bénéficiaire non lu') + ' · ' + relTxt(l.marche, 'marché non lu') + ' · ' + (l.date_delivrance ? fdat(l.date_delivrance) : 'date non lue') + ' · <span style="font-family:var(--FM)">' + relMad(l.montant) + (l.montant_deduit ? ' (déduit)' : '') + '</span>' + (typeof l.commission === 'number' ? ' · commission ' + relMad(l.commission) : ''); };
+  var ligneTxt = function (l) { return '<b>' + esc(l.type) + '</b> ' + esc(l.reference) + ' · ' + relTxt(l.beneficiaire, 'bénéficiaire non lu') + ' · ' + relTxt(l.marche, 'marché non lu') + (l.avenant ? ' (avenant n° ' + esc(l.avenant) + ')' : '') + (l.date_echeance ? ' · remise le ' + fdat(l.date_echeance) + (l.heure_echeance ? ' à ' + esc(l.heure_echeance) : '') : '') + ' · ' + (l.date_delivrance ? fdat(l.date_delivrance) : 'date non lue') + ' · <span style="font-family:var(--FM)">' + relMad(l.montant) + (l.montant_deduit ? ' (déduit)' : '') + '</span>' + (typeof l.commission === 'number' ? ' · commission ' + relMad(l.commission) : ''); };
   var a = groupe('a', '(a) En banque et active chez nous', rp.a || [], function (x) { return '<tr><td>' + ligneTxt(x.ligne) + '</td><td>' + relevesFicheLbl(x.fiche) + '</td><td style="color:var(--ink-muted)">' + esc(RELEVES_VIA_LBL[x.via] || x.via) + (x.ecart_montant ? ' · <span style="color:var(--terra)">écart de montant ' + relMad(x.ecart_montant) + '</span>' : '') + '</td></tr>'; }, 'Aucune.');
   var b = groupe('b', '(b) ANOMALIE — en banque mais libérée, restituée ou en mainlevée chez nous', rp.b || [], function (x) { return '<tr style="background:var(--terra-pale)"><td>' + ligneTxt(x.ligne) + '</td><td>' + relevesFicheLbl(x.fiche) + ' · ' + esc((SMC[x.fiche.statut] || { l: x.fiche.statut }).l) + '</td><td>mainlevée demandée le ' + (x.date_mainlevee ? fdat(x.date_mainlevee) : 'date non renseignée') + (x.date_liberation ? ', libérée le ' + fdat(x.date_liberation) : '') + (x.mois_depuis_mainlevee !== null && x.mois_depuis_mainlevee !== undefined ? ' · ' + x.mois_depuis_mainlevee + ' mois avant la période' : '') + (typeof x.commission_relevee === 'number' ? ' · commission facturée ce relevé ' + relMad(x.commission_relevee) : ' · commission non portée par le document') + '</td></tr>'; }, 'Aucune : la banque ne facture plus rien de libéré chez nous.');
-  var inc = groupe('inconnues', 'En banque, sans fiche chez nous', rp.inconnues || [], function (x, i) { return '<tr><td>' + ligneTxt(x.ligne) + '</td><td style="color:var(--ink-muted)">' + esc(x.motif || '') + '</td><td>' + (x.ligne.type === 'CD' || x.ligne.type === 'RG' ? '<button class="btn btn-sm" onclick="relevesCreerFiche(\'' + esc(doc.id) + '\',' + i + ')">Créer la fiche</button>' : (x.ligne.type === 'CP' ? '<span style="font-size:12px">provisoire : créer d\'abord l\'appel d\'offres</span>' : '')) + '</td></tr>'; }, 'Aucune.');
+  var inc = groupe('inconnues', 'En banque, sans fiche chez nous', rp.inconnues || [], function (x, i) { return '<tr><td>' + ligneTxt(x.ligne) + '</td><td style="color:var(--ink-muted)">' + esc(x.motif || '') + '</td><td>' + (x.ligne.type === 'CD' || x.ligne.type === 'RG' ? '<button class="btn btn-sm" data-releves="creer-fiche" onclick="relevesCreerFiche(\'' + esc(doc.id) + '\',' + i + ')">Créer la fiche</button>' : (x.ligne.type === 'CP' ? '<button class="btn btn-sm" data-releves="creer-ao" onclick="relevesCreerAO(\'' + esc(doc.id) + '\',' + i + ')">Créer l\'AO et sa caution provisoire</button>' : '')) + '</td></tr>'; }, 'Aucune.');
   var c = groupe('c', '(c) Active chez nous, absente du relevé — à expliquer', rp.c || [], function (x) { return '<tr><td>' + relevesFicheLbl(x.fiche) + ' · <span style="font-family:var(--FM)">' + relMad(x.fiche.montant) + '</span></td><td style="color:var(--ink-muted)">' + esc(x.motif || '') + '</td></tr>'; }, 'Aucune : toutes nos actives ' + esc(doc.banque) + ' figurent sur le relevé.');
   var compteurs = '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">' + (cpt.lignes || 0) + ' ligne(s) du relevé · (a) ' + (cpt.a || 0) + ' · (b) ' + (cpt.b || 0) + ' · sans fiche ' + (cpt.inconnues || 0) + ' · (c) ' + (cpt.c || 0) + ' · ' + (cpt.fiches || 0) + ' fiche(s) ' + esc(doc.banque) + ' chez nous' + (doc.corrections && doc.corrections.length ? ' · ' + doc.corrections.length + ' correction(s) humaine(s) tracée(s)' : '') + '</div>';
   return '<div class="card" data-releves="resultat"><div class="sh"><div class="st">' + titre + '</div>' + (doc.importe_le ? '<div style="font-size:12px;color:var(--ink-muted)">importé le ' + fdat(doc.importe_le) + (doc.importe_par ? ' par ' + esc(doc.importe_par) : '') + '</div>' : '') + '</div>' + compteurs + tete + a + b + inc + c + '</div>';
@@ -228,6 +229,28 @@ function relevesCreerFiche(releveId, i) {
     set('cref', l.reference); set('cnum', l.reference); set('cmnt', l.montant); set('cdem', l.date_delivrance);
     set('ctype', l.type === 'RG' ? 'retenue_garantie' : 'bonne_execution');
     var sel = document.getElementById('c_banque'); if (sel) { sel.value = doc.banque; if (sel.value !== doc.banque) { sel.value = '__OTHER__'; set('c_banque_autre', doc.banque); } }
+  }, 0);
+}
+
+/* « Créer l'AO et sa caution provisoire » depuis une provisoire du relevé sans fiche : ouvre
+   le formulaire d'appel d'offres pré-rempli (référence AO lue dans la colonne marché, maître
+   d'ouvrage = bénéficiaire, date et heure de remise = échéance lue, caution provisoire : n°,
+   montant, date, banque). L'objet reste à saisir : la banque ne l'écrit pas. */
+function relevesCreerAO(releveId, i) {
+  var st = relState();
+  var doc = (st.resultat && st.resultat.id === releveId) ? st.resultat : ((st.voir && st.voir.id === releveId) ? st.voir : null);
+  var x = doc && doc.rapprochement && doc.rapprochement.inconnues && doc.rapprochement.inconnues[i]; if (!x) return;
+  var l = x.ligne;
+  newAO();
+  setTimeout(function () {
+    var set = function (id, val) { var el = document.getElementById(id); if (el && val !== null && val !== undefined && val !== '') el.value = val; };
+    var refAO = (l.marche || '').replace(/\s*lot\s*\d+\s*$/i, '').trim();
+    set('aref', refAO); set('amo', l.beneficiaire); set('adlim', l.date_echeance); set('adlimh', l.heure_echeance);
+    set('cp_num', l.reference); set('cp_montant', l.montant); set('cp_emission', l.date_delivrance); set('cp_statut', 'active');
+    if (l.lot) set('anotes', 'Lot ' + l.lot + ' (lu sur la liste ' + doc.banque + ')');
+    var sel = document.getElementById('cp_banque'); if (sel) { sel.value = doc.banque; if (sel.value !== doc.banque) { sel.value = '__OTHER__'; set('cp_banque_autre', doc.banque); } }
+    var obj = document.getElementById('aobjet'); if (obj) { obj.focus(); }
+    toast('Appel d\'offres pré-rempli depuis le relevé : saisir l\'objet, puis Enregistrer');
   }, 0);
 }
 

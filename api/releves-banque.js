@@ -28,6 +28,9 @@
   var BANQUES = ['FINEA', 'Attijariwafa Bank', 'BMCE Bank', 'Banque Populaire'];
   /* Lecteurs disponibles. Les absents refusent LECTEUR_ABSENT (nommé), jamais un import. */
   var LECTEURS = { 'FINEA': 'lireFINEA', 'BMCE Bank': 'lireBMCE' };
+  /* Version de chaque lecteur : un relevé déjà importé peut être RÉIMPORTÉ sur la même période
+   * quand le lecteur a changé depuis (tracé : l'ancien relevé est marqué remplacé). */
+  var LECTEUR_VERSION = { 'FINEA': 2, 'BMCE Bank': 2 };
   var TYPES = { CP: 'provisoire', CD: 'bonne_execution', RG: 'retenue_garantie', TRANSIT: 'transit', DIVERS: 'divers' };
   /* Barème FINEA (constaté sur le relevé de septembre 2026) : 2 % l'an HT, TVA 10 %,
    * plancher 220,00 TTC par mois. Le montant garanti se DÉDUIT de la commission quand
@@ -65,46 +68,84 @@
   /* Période lue dans un texte : « septembre 2026 », « 09/2026 », « au 30/09/2026 ». */
   function lirePeriode(texte) {
     var t = _sansAccents(texte).toLowerCase();
+    // « période du 01/09/2026 Au : 30/09/2026 » -> la fin de période fait foi
+    var mp = /periode du\s*:?\s*\d{2}\/\d{2}\/\d{4}\s*au\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/.exec(t);
+    if (mp) return mp[3] + '-' + mp[2];
     var m = /(janvier|fevrier|mars|avril|mai|juin|juillet|aout|septembre|octobre|novembre|decembre)\s+(\d{4})/.exec(t);
     if (m) return m[2] + '-' + ('0' + (MOIS_FR.indexOf(m[1]) + 1)).slice(-2);
     m = /\bau\s+(\d{2})\/(\d{2})\/(\d{4})/.exec(t);
     if (m) return m[3] + '-' + m[2];
     // « 09/2026 » seul, jamais le « 10/2026 » d'une date complète « 06/10/2026 »
-    var re = /(\d{2}\/)?\b(0[1-9]|1[0-2])\/(\d{4})\b/g, mm;
-    while ((mm = re.exec(t))) { if (!mm[1]) return mm[3] + '-' + mm[2]; }
+    // « 09/2026 » isolé : ni le « 10/2026 » d'une date complète, ni le « 02/2018 » d'une référence « ME/02/2018 »
+    var re = /(^|[^\w\/])(0[1-9]|1[0-2])\/(\d{4})(?![\w\/])/g, mm;
+    if ((mm = re.exec(t))) return mm[3] + '-' + mm[2];
     return null;
   }
 
   function _sortie(banque) { return { banque: banque, periode: null, lignes: [], totaux: {}, ecartes: [], refus: [], lecteur: LECTEURS[banque] || null }; }
 
-  /* ===== Lecteur FINEA — relevé de commissions (PDF texte) =====
-   * Une ligne par caution : type (CD/RG/CP), référence, date d'octroi, marché, TTC du mois.
-   * Les lignes FIADC et CAU FRAIS sont des frais, pas des cautions : écartées, nommées. */
+  /* ===== Lecteur FINEA — « Relevé de commissions » (PDF texte) =====
+   * Mise en page réelle (relevé client 624, 10/2026) : une ligne par opération
+   *   n° opération · date opération · date valeur · TYPE (CD/RG/CP/RAA, ou produit hors
+   *   cautionnement : FIADC…) · référence · date d'octroi · description (MENSUEL CAU COM,
+   *   CAU FRAIS, MENSUEL TIR COM…) · marché / appel d'offres · facturation TTC · -----
+   * Retenues comme COMMISSIONS DE CAUTION : type caution ET description « MENSUEL CAU COM »
+   * (ou absente, forme courte « type réf date marché TTC »). Écartées, NOMMÉES : les frais
+   * de délivrance (CAU FRAIS), les produits hors cautionnement (FIADC = avance sur droits
+   * constatés, etc.), toute autre description. Période : « période du JJ/MM/AAAA Au : JJ/MM/AAAA ».
+   * Le document n'a pas de total : totaux.facture = Σ de toutes les lignes (retenues + écartées). */
+  var FINEA_TYPES_CAUTION = ['CD', 'RG', 'CP', 'RAA'];
+  var FINEA_AUTRES_PRODUITS = { FIADC: 'avance sur droits constatés', FI_ADC: 'avance sur droits constatés', FI_FCT: 'avance facturation', FI_PFCT_S: 'avance pré-facturation sur situation', PFCT_F: 'avance pré-facturation forfaitaire', PFCT_S: 'avance pré-facturation sur situation', FCT: 'avance facturation', ADC: 'avance sur droits constatés' };
+  var FINEA_DESCRIPTIONS = ['MENSUEL CAU COM', 'CAU FRAIS', 'APU CAU COM', 'MENSUEL TIR COM', 'APU TIRAGE COM', 'RENO EFFET COM', 'APU RENO EFFET COM', 'MONTAGE', 'RENOUVELLEMENT', 'AMENAGEMENT', 'PROROGATION', 'DEROG COM', 'APU DEROG', 'DEP COM', 'MENSUEL DEP COM', 'APU DEP COM'];
+  function _estDate(s) { return /^\d{2}\/\d{2}\/\d{4}$/.test(_s(s).trim()); }
   function lireFINEA(pages) {
     var out = _sortie('FINEA');
     var texteTout = [];
     (pages || []).forEach(function (p) {
       (p.lignes || []).forEach(function (l) {
-        var t = _texteLigne(l); if (!t) return;
+        var items = (l.items || []).slice().sort(function (a, b) { return a.x - b.x; });
+        var tok = items.map(function (i) { return _s(i.str).trim(); }).filter(function (x) { return x; });
+        var t = tok.join(' ').replace(/\s+/g, ' ').trim();
+        if (!t) return;
         texteTout.push(t);
-        if (/\bFIADC\b/i.test(t) || /CAU\s*FRAIS/i.test(t)) { out.ecartes.push({ texte: t, motif: 'ligne de frais FINEA (FIADC / CAU FRAIS), pas une caution', montant: _dernierMontant(t), page: p.numero }); return; }
-        var m = /^(CD|RG|CP)\s+(\S+)\s+(\d{2}\/\d{2}\/\d{4})\s+(.*?)\s+(\d{1,3}(?:[ .]\d{3})*,\d{2}|\d+,\d{2})$/.exec(t);
-        if (m) {
-          var ttc = parserMontant(m[5]);
-          var marche = m[4].trim(); if (!marche || /^-+$/.test(marche)) marche = null;
-          var deduit = null;
-          if (ttc !== null && ttc > FINEA_PLANCHER_TTC + 0.005) deduit = Math.round(ttc / FINEA_TVA * 12 / FINEA_TAUX_ANNUEL);
-          out.lignes.push({ type: m[1], reference: m[2], beneficiaire: null, marche: marche, date_delivrance: dateISO(m[3]), montant: deduit, montant_deduit: deduit !== null, commission: ttc, page: p.numero });
+        // position du type : un token type suivi d'une référence puis d'une date d'octroi
+        var i, iType = -1;
+        for (i = 0; i + 2 < tok.length; i++) {
+          var up = tok[i].toUpperCase();
+          if ((FINEA_TYPES_CAUTION.indexOf(up) >= 0 || FINEA_AUTRES_PRODUITS[up]) && _estDate(tok[i + 2]) && !_estDate(tok[i + 1])) { iType = i; break; }
+        }
+        if (iType < 0) {
+          // ligne de frais sans structure complète : écartée seulement si elle porte un montant
+          // (un libellé seul, ex. en-tête « CAU FRAIS 19/2026 » répété, n'est pas une écriture)
+          if ((/\bFIADC\b/i.test(t) || /CAU\s*FRAIS/i.test(t)) && _dernierMontant(t) !== null) { out.ecartes.push({ texte: t, motif: /FIADC/i.test(t) ? 'produit hors cautionnement (FIADC : avance sur droits constatés), pas une caution' : 'frais de délivrance de cautionnement (CAU FRAIS), pas une commission mensuelle', montant: _dernierMontant(t), page: p.numero }); return; }
+          if (/\bTOTAL\b/i.test(t)) { var tot = _dernierMontant(t); if (tot !== null) out.totaux.commissions = tot; }
           return;
         }
-        if (/^TOTAL/i.test(t) || /\bTOTAL\b/i.test(t)) { var tot = _dernierMontant(t); if (tot !== null) out.totaux.commissions = tot; }
+        var type = tok[iType].toUpperCase(), reference = tok[iType + 1], dateOctroi = dateISO(tok[iType + 2]);
+        var reste = tok.slice(iType + 3).filter(function (x) { return !/^-{3,}$/.test(x); });
+        var iMoney = -1; for (i = reste.length - 1; i >= 0; i--) { if (_estMontant(reste[i])) { iMoney = i; break; } }
+        var ttc = iMoney >= 0 ? parserMontant(reste[iMoney]) : null;
+        var milieu = iMoney >= 0 ? reste.slice(0, iMoney) : reste;
+        var description = null;
+        if (milieu.length && FINEA_DESCRIPTIONS.indexOf(milieu[0].toUpperCase()) >= 0) { description = milieu[0].toUpperCase(); milieu = milieu.slice(1); }
+        var marche = milieu.join(' ').trim(); if (!marche || /^-+$/.test(marche)) marche = null;
+        if (FINEA_AUTRES_PRODUITS[type]) { out.ecartes.push({ texte: t, motif: 'produit hors cautionnement (' + type + ' : ' + FINEA_AUTRES_PRODUITS[type] + '), pas une caution', montant: ttc, page: p.numero, type: type, reference: reference }); return; }
+        if (description === 'CAU FRAIS') { out.ecartes.push({ texte: t, motif: 'frais de délivrance de cautionnement (CAU FRAIS) de la caution ' + reference + ', pas une commission mensuelle', montant: ttc, page: p.numero, type: type, reference: reference }); return; }
+        if (description && description !== 'MENSUEL CAU COM') { out.ecartes.push({ texte: t, motif: 'description « ' + description + ' » non traitée comme commission mensuelle de caution', montant: ttc, page: p.numero, type: type, reference: reference }); return; }
+        var deduit = null;
+        if (ttc !== null && ttc > FINEA_PLANCHER_TTC + 0.005) deduit = Math.round(ttc / FINEA_TVA * 12 / FINEA_TAUX_ANNUEL);
+        out.lignes.push({ type: type, reference: reference, beneficiaire: null, marche: marche, date_delivrance: dateOctroi, montant: deduit, montant_deduit: deduit !== null, commission: ttc, description: description || 'MENSUEL CAU COM', page: p.numero });
       });
     });
     out.periode = lirePeriode(texteTout.join('\n'));
-    if (!out.lignes.length) out.refus.push({ code: 'FORMAT_INCONNU', detail: 'aucune ligne « type référence date marché TTC » reconnue : ce fichier n\'a pas la structure du relevé de commissions FINEA' });
+    var mp = /p[ée]riode du\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})\s*au\s*:?\s*(\d{2})\/(\d{2})\/(\d{4})/i.exec(_sansAccents(texteTout.join('\n')));
+    if (mp) { out.periode_du = mp[3] + '-' + mp[2] + '-' + mp[1]; out.periode_au = mp[6] + '-' + mp[5] + '-' + mp[4]; }
+    if (!out.lignes.length) out.refus.push({ code: 'FORMAT_INCONNU', detail: 'aucune ligne « type référence date (description) marché TTC » reconnue : ce fichier n\'a pas la structure du relevé de commissions FINEA' });
     out.totaux.commissions_lignes = _somme(out.lignes, function (l) { return l.commission; });
     out.totaux.commissions_ecartees = _somme(out.ecartes, function (e) { return e.montant; });
+    out.totaux.facture = _arrondi2(out.totaux.commissions_lignes + out.totaux.commissions_ecartees);
     out.totaux.nombre = out.lignes.length;
+    out.totaux.references_distinctes = Object.keys(out.lignes.reduce(function (m, l) { m[normaliserRef(l.reference)] = 1; return m; }, {})).length;
     return out;
   }
   function _dernierMontant(t) { var ms = _s(t).match(/\d{1,3}(?:[\s.]\d{3})*,\d{2}|\d+,\d{2}/g); if (!ms) return null; return parserMontant(ms[ms.length - 1]); }
@@ -122,30 +163,43 @@
     var out = _sortie('BMCE Bank');
     var cols = null, nature = null, texteTout = [];
     var natures = {}; // code -> { total, nombre }
+    var colFin = null; // bord droit observé de la colonne destinataire (max x + largeur), pour le recollage
     (pages || []).forEach(function (p) {
       var lignesPage = (p.lignes || []).slice().sort(function (a, b) { return b.y - a.y; }); // haut de page d'abord (pdf.js : y croît vers le haut)
       var refsPage = [];        // { y, ligne }
       var fragments = [];       // { y, x, str, col }
-      lignesPage.forEach(function (l) {
+      // En-tête des colonnes : ses mots sont écrits sur DEUX OU TROIS hauteurs (« DESTINATAIRE »
+      // et « MONTANT » au-dessus de « REFERENCE … TYPE … NUMERO », « SOUMISSION ENGAGEMENT
+      // PROVISION » en dessous). On lit la fenêtre de lignes autour de « REFERENCE » (±12).
+      var enTete = {};
+      lignesPage.forEach(function (l, li) {
+        if (!(l.items || []).some(function (i) { return _s(i.str).trim().toUpperCase() === 'REFERENCE'; })) return;
+        var c = { ref: null, montants: [], dest: null, type: null, marche: null };
+        lignesPage.forEach(function (l2, lj) {
+          if (Math.abs(l2.y - l.y) > 12) return;
+          var t2 = (l2.items || []).map(function (i) { return _s(i.str); }).join(' ');
+          if (/NATURE CAUTION|TOTAL\s+(NATURE|CLIENT)|^\s*\d{12,20}\b/i.test(t2)) return; // jamais une ligne de section, de total ou de caution
+          enTete[lj] = true;
+          (l2.items || []).forEach(function (i) {
+            var s = _s(i.str).trim().toUpperCase();
+            if (s === 'REFERENCE') c.ref = i.x;
+            else if (s === 'MONTANT') c.montants.push(i.x);
+            else if (s === 'DESTINATAIRE') c.dest = i.x;
+            else if (s === 'TYPE') c.type = i.x;
+            else if (s.indexOf('NUMERO') === 0) c.marche = i.x;
+          });
+        });
+        c.montants.sort(function (a, b) { return a - b; });
+        if (c.dest != null || c.marche != null) cols = c;
+      });
+      lignesPage.forEach(function (l, li) {
+        if (enTete[li]) return;
         var items = (l.items || []).slice().sort(function (a, b) { return a.x - b.x; });
         var t = items.map(function (i) { return _s(i.str); }).join(' ').replace(/\s+/g, ' ').trim();
         if (!t) return;
         texteTout.push(t);
         var mn = /NATURE CAUTION\s*:\s*(\d+)\s+(.+)/i.exec(t);
         if (mn) { nature = BMCE_NATURE[mn[1]] || (/TRANSIT/i.test(mn[2]) ? 'TRANSIT' : /DIVERS/i.test(mn[2]) ? 'DIVERS' : mn[1]); return; }
-        if (/\bREFERENCE\b/i.test(t) && /DESTINATAIRE/i.test(t)) {
-          cols = { ref: null, montants: [], dest: null, type: null, marche: null };
-          items.forEach(function (i) {
-            var s = _s(i.str).toUpperCase();
-            if (s.indexOf('REFERENCE') >= 0) cols.ref = i.x;
-            else if (s.indexOf('MONTANT') >= 0) cols.montants.push(i.x);
-            else if (s.indexOf('DESTINATAIRE') >= 0) cols.dest = i.x;
-            else if (s === 'TYPE') cols.type = i.x;
-            else if (s.indexOf('NUMERO') >= 0) cols.marche = i.x;
-          });
-          cols.montants.sort(function (a, b) { return a - b; });
-          return;
-        }
         var mt = /TOTAL\s+(NATURE|CLIENT)\s*:\s*([\d\s.]*\d,\d{2})\s+NOMBRE\s+DOSSIER\s*:\s*(\d+)/i.exec(t);
         if (mt) { if (mt[1].toUpperCase() === 'NATURE' && nature) natures[nature] = { total: parserMontant(mt[2]), nombre: parseInt(mt[3], 10) }; return; }
         if (/^Page\s*\|/i.test(t) || /^TYPE\s*:/i.test(t) || /^\d\s*:\s*(HORS|CONSORTIUM)/i.test(t) || /LISTE DES CAUTIONS/i.test(t) || /^AGENCE\s*:/i.test(t) || /^NEURONES/i.test(t) || /^(SOUMISSION|ENGAGEMENT|PROVISION)(\s+(SOUMISSION|ENGAGEMENT|PROVISION))*$/i.test(t)) return;
@@ -170,22 +224,41 @@
           return;
         }
         // fragments (destinataire / marché / type consortium), à rattacher
-        items.forEach(function (i) { fragments.push({ y: l.y, x: i.x, str: _s(i.str).trim(), page: p.numero }); });
+        items.forEach(function (i) { fragments.push({ y: l.y, x: i.x, w: (typeof i.w === 'number' ? i.w : null), str: _s(i.str).trim(), page: p.numero }); });
       });
       // Rattachement des fragments : à la référence la plus proche verticalement sur la page ;
       // une page sans aucune référence (suite d'un destinataire long) continue la dernière
       // caution lue. Au changement de page, un libellé coupé peut se rattacher à la caution
       // suivante : visible dans l'aperçu, corrigeable ; les montants et comptes ne sont pas touchés.
-      fragments.forEach(function (f) {
-        var cible = null, d = Infinity;
-        refsPage.forEach(function (r) { var dd = Math.abs(r.y - f.y); if (dd < d) { d = dd; cible = r.ligne; } });
-        if (!cible && out.lignes.length) cible = out.lignes[out.lignes.length - 1];
-        if (cible) _classerFragment({ x: f.x, str: f.str }, cols, cible, { numero: f.page }, f.y);
+      // Les fragments d'une même cellule se suivent à interligne régulier ; un saut d'interligne
+      // nettement plus grand sépare deux cellules. On regroupe donc par BLOCS (colonne par
+      // colonne), puis chaque bloc va à la référence dont la ligne tombe dans sa hauteur ;
+      // un bloc sans référence, en haut de page, continue la dernière caution lue (saut de page).
+      var derniereAvantPage = (out.lignes.length > refsPage.length) ? out.lignes[out.lignes.length - refsPage.length - 1] : null;
+      var bf = _blocsFragments(fragments, cols), marge = bf.inter * 1.3;
+      bf.blocs.forEach(function (bloc) {
+        var yMax = bloc[0].y, yMin = bloc[bloc.length - 1].y, cible = null;
+        var dedans = refsPage.filter(function (r) { return r.y <= yMax + marge && r.y >= yMin - marge; });
+        var parFragment = null;
+        if (dedans.length === 1) cible = dedans[0].ligne;
+        else if (dedans.length > 1) parFragment = dedans; // plusieurs cautions dans le bloc : chaque fragment va à la référence la plus proche
+        else if (refsPage.length && yMin > refsPage[0].y && derniereAvantPage) cible = derniereAvantPage; // haut de page sans référence : suite de la page précédente
+        else if (!refsPage.length && out.lignes.length) cible = out.lignes[out.lignes.length - 1];
+        else if (refsPage.length) { var cc = (yMax + yMin) / 2, dm = Infinity; refsPage.forEach(function (r) { var dd = Math.abs(r.y - cc); if (dd < dm) { dm = dd; cible = r.ligne; } }); }
+        bloc.forEach(function (f) {
+          var c = cible;
+          if (parFragment) { var d = Infinity; parFragment.forEach(function (r) { var dd = Math.abs(r.y - f.y); if (dd < d) { d = dd; c = r.ligne; } }); }
+          if (!c) return;
+          _classerFragment({ x: f.x, str: f.str, w: f.w }, cols, c, { numero: f.page }, f.y);
+          if (cols && cols.dest != null && typeof f.w === 'number' && f.x >= cols.dest - 20 && (cols.type == null || f.x < cols.type - 10)) colFin = Math.max(colFin || 0, f.x + f.w);
+        });
       });
     });
     out.lignes.forEach(function (l) {
-      l.beneficiaire = _joindreFragments(l._frag) || null;
-      l.marche = _joindreFragments(l._marche).replace(/\bMARCHE\s*N[°º0o]?\b/ig, ' ').replace(/(^|\s)N[°º0o]?(?=\s|$)/g, ' ').replace(/\s+/g, ' ').trim() || null;
+      l.beneficiaire = _recollerBeneficiaire(l._frag, colFin) || null;
+      var mk = _lireMarche(l._marche);
+      l.marche_texte = mk.texte; l.marche = mk.ref ? (mk.ref + (mk.lot ? ' lot ' + mk.lot : '')) : null; l.lot = mk.lot; l.avenant = mk.avenant;
+      l.date_echeance = mk.echeance; l.heure_echeance = mk.heure;
       delete l._frag; delete l._marche;
     });
     out.periode = lirePeriode(texteTout.join('\n')); // la liste BMCE n'est en général pas datée -> null, période saisie par l'utilisateur
@@ -202,14 +275,99 @@
   function _classerFragment(i, cols, ligne, p, y) {
     var s = _s(i.str).trim(); if (!s) return;
     if (/^[012]$/.test(s)) return;
-    var frag = { page: p && p.numero != null ? p.numero : 0, y: (typeof y === 'number' ? y : 0), ordre: ligne._frag.length + ligne._marche.length, str: s };
+    var frag = { page: p && p.numero != null ? p.numero : 0, y: (typeof y === 'number' ? y : 0), ordre: ligne._frag.length + ligne._marche.length, str: s, x: i.x, w: (typeof i.w === 'number' ? i.w : null) };
     if (cols && cols.marche != null && i.x >= cols.marche - 40) { ligne._marche.push(frag); return; }
     if (cols && cols.type != null && i.x >= cols.type - 10 && (cols.marche == null || i.x < cols.marche - 40)) return;
     ligne._frag.push(frag);
   }
+  /* Regroupe les fragments d'une page en BLOCS par colonne (destinataire / marché / autres) :
+   * triés de haut en bas, un écart vertical supérieur à 1,35 fois l'interligne médian ouvre
+   * un nouveau bloc. Renvoie des blocs triés de haut en bas. */
+  function _blocsFragments(fragments, cols) {
+    var colonnes = {};
+    fragments.forEach(function (f) {
+      var k = 'autre';
+      if (cols && cols.marche != null && f.x >= cols.marche - 40) k = 'marche';
+      else if (cols && cols.dest != null && f.x >= cols.dest - 20 && (cols.type == null || f.x < cols.type - 10)) k = 'dest';
+      else if (!cols) k = 'dest';
+      (colonnes[k] = colonnes[k] || []).push(f);
+    });
+    // interligne de référence = écart médian de la colonne destinataire (la plus dense) ; 12 par défaut
+    var inter = _interligne(colonnes.dest || []) || _interligne(fragments) || 12;
+    var blocs = [];
+    Object.keys(colonnes).forEach(function (k) {
+      var fr = colonnes[k].slice().sort(function (a, b) { return b.y - a.y; });
+      var bloc = [], i;
+      for (i = 0; i < fr.length; i++) {
+        if (bloc.length && (bloc[bloc.length - 1].y - fr[i].y) > inter * 1.3) { blocs.push(bloc); bloc = []; }
+        bloc.push(fr[i]);
+      }
+      if (bloc.length) blocs.push(bloc);
+    });
+    return { blocs: blocs.sort(function (a, b) { return b[0].y - a[0].y; }), inter: inter };
+  }
+  function _interligne(frags) {
+    var ys = frags.map(function (f) { return f.y; }).sort(function (a, b) { return b - a; }), gaps = [], i;
+    for (i = 1; i < ys.length; i++) { var g = ys[i - 1] - ys[i]; if (g > 0.5) gaps.push(g); }
+    if (!gaps.length) return null;
+    gaps.sort(function (a, b) { return a - b; });
+    return gaps[Math.floor(gaps.length / 2)];
+  }
   /* Fragments remis dans l'ordre de lecture : page, puis de haut en bas (y décroissant). */
-  function _joindreFragments(frags) {
-    return frags.slice().sort(function (a, b) { return (a.page - b.page) || (b.y - a.y) || (a.ordre - b.ordre); }).map(function (f) { return f.str; }).join(' ').replace(/\s+/g, ' ').trim();
+  function _trierFragments(frags) { return frags.slice().sort(function (a, b) { return (a.page - b.page) || (b.y - a.y) || (a.ordre - b.ordre); }); }
+  /* RECOLLAGE des mots coupés par la colonne. BMCE coupe un mot trop long pour la colonne
+   * sans trait d'union (« NATIONAL » / « E DES » = NATIONALE DES). Décision par fragment :
+   *  1. le mot recollé est un mot connu du vocabulaire institutionnel -> recollé ;
+   *  2. le premier mot du fragment suivant est un mot-outil (DE, LA, ET, A…) -> séparé ;
+   *  3. le fragment précédent contient « / » (sigle) -> séparé ;
+   *  4. le fragment précédent touche le bord droit de la colonne (largeur pdf.js, sinon
+   *     longueur >= 7) et le début du suivant fait 1 à 3 lettres -> recollé ;
+   *  5. sinon séparé. */
+  var VOCAB_RECOLLAGE = ('NATIONALE NATIONAL NATIONAUX UNIVERSITE UNIVERSITAIRE MOHAMMED MOHAMED ONCOLOGIE GOUVERNEUR GOUVERNORAT DELEGATION DELEGUE GENERALE GENERAL ADMINISTRATION PENITENTIAIRE REINSERTION MINISTERE MINISTRE EQUIPEMENT EQUIPEMENTS TRANSPORT TRANSPORTS LOGISTIQUE DIRECTION DIRECTIONS PROVINCIALE PROVINCIAL REGIONALE REGIONAL BENABDELLAH ABDELLAH INSTITUT AGENCE HOSPITALIER HOSPITALIERE CENTRE PREFECTURE COMMUNE COMMUNAL CONSEIL OFFICE SOCIETE ETABLISSEMENT FORMATION PROFESSIONNELLE SANTE JUSTICE INTERIEUR FINANCES ECONOMIE INDUSTRIE COMMERCE AGRICULTURE MARITIME ENERGIE MINES ENVIRONNEMENT HABITAT URBANISME AMENAGEMENT TERRITOIRE CULTURE COMMUNICATION JEUNESSE SPORTS TOURISME ARTISANAT SOLIDARITE FAMILLE EMPLOI TRAVAIL DEFENSE SECURITE SURETE GENDARMERIE ROYALE PROVINCE WILAYA REGION PUBLICS PUBLIQUE PUBLIQUES TECHNOLOGIES TECHNOLOGIQUE RECHERCHE RECHERCHES ETUDES SCIENTIFIQUE SUPERIEUR SUPERIEURE ENSEIGNEMENT EDUCATION NUMERIQUE INFORMATIQUE DEVELOPPEMENT DURABLE ADMINISTRATIVE TRIBUNAL COUR APPEL INSTANCE PREMIERE').split(' ');
+  var MOTS_OUTILS = ['DE', 'LA', 'LE', 'LES', 'DU', 'DES', 'ET', 'A', 'AU', 'AUX', 'EN', 'D', 'L', 'SUR', 'POUR', 'PAR', 'DANS', 'OU', 'BEN', 'BENT', 'EL', 'AL', 'IBN', 'OULD', 'SIDI', 'MY', 'LALLA'];
+  function _motLettres(s) { return _sansAccents(s).toUpperCase().replace(/[^A-Z]/g, ''); }
+  function _recollerBeneficiaire(frags, colFin) {
+    var tri = _trierFragments(frags), out = '', i;
+    for (i = 0; i < tri.length; i++) {
+      var f = tri[i], s = f.str;
+      if (!out) { out = s; continue; }
+      var prevMot = out.split(' ').pop(), premier = s.split(' ')[0], reste = s.slice(premier.length);
+      var recolle = false, combine = _motLettres(prevMot + premier);
+      if (VOCAB_RECOLLAGE.indexOf(combine) >= 0 || VOCAB_RECOLLAGE.indexOf(combine.replace(/^(L|D)/, '')) >= 0 && /^[LD]'/i.test(prevMot)) recolle = true;
+      else if (MOTS_OUTILS.indexOf(_motLettres(premier)) >= 0) recolle = false;
+      else if (VOCAB_RECOLLAGE.indexOf(_motLettres(prevMot)) >= 0) recolle = false; // le mot précédent est déjà complet
+      else if (prevMot.indexOf('/') >= 0) recolle = false;
+      else {
+        var prev = tri[i - 1], plein = (prev && typeof prev.w === 'number' && typeof prev.x === 'number' && colFin) ? (prev.x + prev.w >= colFin - 10) : (prevMot.length >= 7);
+        if (plein && _motLettres(premier).length >= 1 && _motLettres(premier).length <= 3) recolle = true;
+      }
+      out += (recolle ? '' : ' ') + premier + reste;
+    }
+    return out.replace(/\s*\/\s*/g, ' / ').replace(/\s+/g, ' ').trim();
+  }
+  /* Colonne « numéro de marché » : fragments recollés sans espace quand le précédent finit par
+   * « / », « , » ou « - » (références et dates coupées), sinon avec espace. Puis : référence du
+   * marché, lot, échéance (« 21/ANEF/2026,03/11/2026H11:00Lot 3 ») et numéro d'avenant. */
+  function _lireMarche(frags) {
+    var tri = _trierFragments(frags), texte = '';
+    tri.forEach(function (f) { texte += (!texte || /[\/,\-]$/.test(texte) || /^[\/,]/.test(f.str)) ? f.str : ' ' + f.str; });
+    texte = texte.replace(/\s+/g, ' ').trim();
+    var res = { texte: texte || null, ref: null, lot: null, echeance: null, heure: null, avenant: null };
+    if (!texte) return res;
+    var mAv = /AVENANT\s*N?[°º0o]?\s*(\d+)/i.exec(texte); if (mAv) res.avenant = mAv[1];
+    var mLot = /LOT\s*(\d+)/i.exec(texte); if (mLot) res.lot = mLot[1]; // « H11:00Lot 3 » : pas de frontière de mot avant LOT
+    var mEch = /,\s*(\d{2}\/\d{2}\/\d{4})\s*H?\s*(\d{2}:\d{2})?/i.exec(texte); if (mEch) { res.echeance = dateISO(mEch[1]); res.heure = mEch[2] || null; }
+    var corps = texte.replace(/,\s*\d{2}\/\d{2}\/\d{4}\s*H?\s*(\d{2}:\d{2})?/i, ' ').replace(/LOT\s*\d+/ig, ' ').replace(/AVENANT\s*N?[°º0o]?\s*\d+/ig, ' ').replace(/\bAU\s+MARCHE\b/ig, ' ').replace(/\bMARCHE\s*N?[°º0o]?/ig, ' ').replace(/(^|\s)N?[°º0o]?(?=\s|$)/g, ' ').replace(/(^|\s)N[°º](?=\s|$|\d)/g, ' ');
+    corps = corps.replace(/\s+/g, ' ').replace(/\.$/, '').trim();
+    res.ref = corps || null;
+    return res;
+  }
+  /* Mots de l'en-tête des colonnes : aucun ne doit entrer dans une valeur lue. */
+  var MOTS_ENTETE_BMCE = ['DESTINATAIRE', 'MONTANT', 'REFERENCE', 'DATE DELIVRANCE', 'DATE ECHEANCE', 'TYPE', 'NUMERO DE MARCHE', 'SOUMISSION', 'ENGAGEMENT', 'PROVISION', 'NEURONES TECHNOLOGIES', 'NATURE CAUTION', 'LISTE DES CAUTIONS', 'NOMBRE DOSSIER', 'TOTAL CLIENT', 'TOTAL NATURE'];
+  function motEnteteDans(valeur) {
+    var v = ' ' + _sansAccents(valeur).toUpperCase().replace(/\s+/g, ' ') + ' ', i;
+    for (i = 0; i < MOTS_ENTETE_BMCE.length; i++) { if (v.indexOf(' ' + MOTS_ENTETE_BMCE[i] + ' ') >= 0) return MOTS_ENTETE_BMCE[i]; }
+    return null;
   }
 
   /* ===== Contrôles d'intégrité : un échec = relevé NON importé, refus nommé ===== */
@@ -241,6 +399,12 @@
       });
       Object.keys(parNature).forEach(function (k) { if (!nats[k]) refus.push({ code: 'TOTAL_DIFFERENT', detail: 'nature ' + k + ' : ' + parNature[k].n + ' ligne(s) lue(s) sans total de nature dans le document' }); });
       lecture.lignes.forEach(function (l) { if (l.montant === null) refus.push({ code: 'FORMAT_INCONNU', detail: 'référence ' + l.reference + ' sans montant d\'engagement lisible' }); if (!l.date_delivrance) refus.push({ code: 'FORMAT_INCONNU', detail: 'référence ' + l.reference + ' sans date de délivrance lisible' }); });
+      // Aucun mot de l'en-tête des colonnes dans une valeur lue : sinon la lecture est incertaine.
+      lecture.lignes.forEach(function (l) {
+        var mb = motEnteteDans(l.beneficiaire || ''), mm = motEnteteDans(l.marche_texte || '');
+        if (mb) refus.push({ code: 'LECTURE_INCERTAINE', detail: 'référence ' + l.reference + ' : mot d\'en-tête « ' + mb + ' » dans le bénéficiaire lu' });
+        if (mm) refus.push({ code: 'LECTURE_INCERTAINE', detail: 'référence ' + l.reference + ' : mot d\'en-tête « ' + mm + ' » dans le marché lu' });
+      });
     }
     // dédoublonnage des refus identiques
     var vus = {}, uniq = [];
@@ -283,8 +447,9 @@
   /* Point d'entrée : lit selon la banque, contrôle, renvoie la lecture + le verdict. */
   function lire(banque, pages) {
     var nom = LECTEURS[banque];
-    if (!nom) { var o = _sortie(banque); o.refus.push({ code: 'LECTEUR_ABSENT', detail: 'aucun lecteur pour « ' + banque + ' » (' + (banque === 'Attijariwafa Bank' ? 'relevé scanné : lecteur OCR à venir' : banque === 'Banque Populaire' ? 'lecteur à écrire sur le premier relevé fourni' : 'banque inconnue') + ')' }); o.controle = { ok: false, refus: o.refus }; return o; }
+    if (!nom) { var o = _sortie(banque); o.refus.push({ code: 'LECTEUR_ABSENT', detail: 'aucun lecteur pour « ' + banque + ' » (' + (banque === 'Attijariwafa Bank' ? 'relevé scanné : lecteur OCR à venir' : banque === 'Banque Populaire' ? 'lecteur en attente de l\'état d\'encours des cautions demandé à l\'agence' : 'banque inconnue') + ')' }); o.controle = { ok: false, refus: o.refus }; return o; }
     var lecture = (nom === 'lireFINEA' ? lireFINEA : lireBMCE)(pages);
+    lecture.lecteur_version = LECTEUR_VERSION[banque] || 1;
     lecture.controle = controler(lecture);
     return lecture;
   }
@@ -294,6 +459,14 @@
     return (releves || []).some(function (r) { return r && r.banque === banque && r.periode === periode; });
   }
   function periodeValide(p) { return /^\d{4}-(0[1-9]|1[0-2])$/.test(_s(p)); }
+  /* Ré-import sur une période déjà importée : autorisé seulement si le lecteur a changé de
+   * version depuis l'import existant (le relevé existant sera marqué remplacé, tracé). */
+  function peutReimporter(existant, versionLecteur) {
+    if (!existant) return { ok: true, motif: 'aucun relevé pour cette période' };
+    var vOld = existant.lecteur_version || 1, vNew = versionLecteur || 1;
+    if (vNew !== vOld) return { ok: true, motif: 'lecteur ' + existant.banque + ' v' + vOld + ' -> v' + vNew + ' : relecture du relevé ' + existant.periode + ', l\'import précédent est marqué remplacé' };
+    return { ok: false, motif: 'un relevé ' + existant.banque + ' pour ' + existant.periode + ' est déjà importé avec ce même lecteur (v' + vOld + ')' };
+  }
 
   /* ===== Rapprochement d'un relevé avec nos cautions =====
    * cautions = fiches mp_cautions de la banque ; provisoires = [{ ao, caution_prov }] de la
@@ -397,6 +570,7 @@
   return {
     BANQUES: BANQUES, LECTEURS: LECTEURS, TYPES: TYPES,
     FINEA_TAUX_ANNUEL: FINEA_TAUX_ANNUEL, FINEA_TVA: FINEA_TVA, FINEA_PLANCHER_TTC: FINEA_PLANCHER_TTC,
+    LECTEUR_VERSION: LECTEUR_VERSION, peutReimporter: peutReimporter, motEnteteDans: motEnteteDans,
     normaliserRef: normaliserRef, parserMontant: parserMontant, dateISO: dateISO, lirePeriode: lirePeriode, periodeValide: periodeValide,
     lireFINEA: lireFINEA, lireBMCE: lireBMCE, lire: lire, controler: controler, dejaImporte: dejaImporte,
     CHAMPS_CORRIGEABLES: CHAMPS_CORRIGEABLES, appliquerCorrections: appliquerCorrections,

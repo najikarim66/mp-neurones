@@ -1175,7 +1175,8 @@ module.exports = async function (context, req) {
           if (!r.length) { context.res = { status: 404, body: { error: "Relevé introuvable" } }; return; }
           context.res = { status: 200, body: r[0] }; return;
         }
-        const liste = (await relC.items.query("SELECT c.id, c.banque, c.periode, c.importe_le, c.importe_par, c.totaux, c.fichier, c.lecteur, c.rapprochement.compteurs AS compteurs, c.rapprochement.encours AS encours, ARRAY_LENGTH(c.corrections) AS nb_corrections FROM c").fetchAll()).resources;
+        // Historique : les relevés remplacés par une relecture (lecteur plus récent) n'y figurent plus ; ils restent lisibles par ?id=.
+        const liste = (await relC.items.query("SELECT c.id, c.banque, c.periode, c.importe_le, c.importe_par, c.totaux, c.fichier, c.lecteur, c.lecteur_version, c.remplace, c.rapprochement.compteurs AS compteurs, c.rapprochement.encours AS encours, ARRAY_LENGTH(c.corrections) AS nb_corrections FROM c WHERE NOT IS_DEFINED(c.remplace_par)").fetchAll()).resources;
         liste.sort(function (a, b) { return (a.banque + a.periode) < (b.banque + b.periode) ? -1 : 1; });
         context.res = { status: 200, body: liste }; return;
       }
@@ -1198,9 +1199,12 @@ module.exports = async function (context, req) {
       const periode = lecture.periode || String(body.periode || "").trim();
       if (!MPReleves.periodeValide(periode)) { context.res = { status: 409, body: { refus: [{ code: "PERIODE_ABSENTE", detail: "période non lue dans le document : saisir le mois (AAAA-MM)" }], code: "PERIODE_ABSENTE", lecture: { lignes: lecture.lignes, ecartes: lecture.ecartes, totaux: lecture.totaux, periode: null } } }; return; }
 
-      // (2) Même banque + même période = refus.
-      const deja = (await relC.items.query({ query: "SELECT c.id, c.banque, c.periode FROM c WHERE c.banque = @b AND c.periode = @p", parameters: [{ name: "@b", value: banque }, { name: "@p", value: periode }] }).fetchAll()).resources;
-      if (MPReleves.dejaImporte(deja, banque, periode)) { context.res = { status: 409, body: { refus: [{ code: "RELEVE_DEJA_IMPORTE", detail: "un relevé " + banque + " pour " + periode + " est déjà importé" }], code: "RELEVE_DEJA_IMPORTE" } }; return; }
+      // (2) Même banque + même période = refus, SAUF si le lecteur a changé de version depuis
+      //     l'import existant : relecture autorisée, l'ancien relevé est marqué remplacé (tracé).
+      const deja = (await relC.items.query({ query: "SELECT c.id, c.banque, c.periode, c.lecteur_version, c.importe_le FROM c WHERE c.banque = @b AND c.periode = @p AND NOT IS_DEFINED(c.remplace_par)", parameters: [{ name: "@b", value: banque }, { name: "@p", value: periode }] }).fetchAll()).resources;
+      const existant = deja.length ? deja[0] : null;
+      const reimport = MPReleves.peutReimporter(existant, lecture.lecteur_version);
+      if (!reimport.ok) { context.res = { status: 409, body: { refus: [{ code: "RELEVE_DEJA_IMPORTE", detail: reimport.motif }], code: "RELEVE_DEJA_IMPORTE" } }; return; }
 
       // (3) Rapprochement avec nos cautions de la banque + provisoires portées par les AO.
       const cautions = (await db.container("mp_cautions").items.query({ query: "SELECT * FROM c WHERE c.banque = @b", parameters: [{ name: "@b", value: banque }] }).fetchAll()).resources;
@@ -1232,12 +1236,18 @@ module.exports = async function (context, req) {
       const fiche = function (f) { return f ? { kind: f.kind, id: f.id, aoId: f.aoId || null, marcheId: f.marcheId || null, num: f.num, referenceBanque: f.referenceBanque, type: f.type, montant: f.montant, statut: f.statut, marche_ref: f.marche_ref, beneficiaire: f.beneficiaire, date_emission: f.date_emission } : null; };
       const reduire = function (x) { return { ligne: x.ligne, fiche: fiche(x.fiche), via: x.via, ecart_montant: x.ecart_montant, date_mainlevee: x.date_mainlevee || null, date_liberation: x.date_liberation || null, mois_depuis_mainlevee: (x.mois_depuis_mainlevee === undefined ? null : x.mois_depuis_mainlevee), commission_relevee: (x.commission_relevee === undefined ? null : x.commission_relevee), motif: x.motif || null }; };
       const doc = {
-        id: releveId, banque: banque, periode: periode, lecteur: lecture.lecteur,
+        id: releveId, banque: banque, periode: periode, lecteur: lecture.lecteur, lecteur_version: lecture.lecteur_version,
+        periode_du: lecture.periode_du || null, periode_au: lecture.periode_au || null,
         importe_le: new Date().toISOString(), importe_par: user.userDetails || null,
         fichier: fichier, totaux: lecture.totaux, lignes: lecture.lignes, ecartes: lecture.ecartes, corrections: trace,
+        remplace: existant ? { id: existant.id, lecteur_version: existant.lecteur_version || 1, importe_le: existant.importe_le || null, motif: reimport.motif } : null,
         rapprochement: { periode: rapp.periode, compteurs: rapp.compteurs, encours: rapp.encours, a: rapp.a.map(reduire), b: rapp.b.map(reduire), c: rapp.c.map(reduire), inconnues: rapp.inconnues.map(reduire) }
       };
       await relC.items.upsert(doc);
+      if (existant) {
+        try { await relC.item(existant.id, banque).patch([{ op: "add", path: "/remplace_par", value: { id: releveId, le: doc.importe_le, par: user.userDetails || null, motif: reimport.motif } }]); }
+        catch (e) { context.log.warn("relevesBanque: ancien relevé " + existant.id + " non marqué remplacé : " + e.message); }
+      }
 
       // (6) « Vue en banque <période> » sur chaque fiche appariée (a et b).
       let vues = 0;
