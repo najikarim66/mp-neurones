@@ -247,6 +247,7 @@ function relevesCreerAO(releveId, i) {
     var refAO = (l.marche || '').replace(/\s*lot\s*\d+\s*$/i, '').trim();
     set('aref', refAO); set('amo', l.beneficiaire); set('adlim', l.date_echeance); set('adlimh', l.heure_echeance);
     set('cp_num', l.reference); set('cp_montant', l.montant); set('cp_emission', l.date_delivrance); set('cp_statut', 'active');
+    if (typeof showCPForm === 'function' && document.getElementById('cp-form')) showCPForm(); /* la provisoire pré-remplie se montre, elle ne reste pas repliée */
     if (l.lot) set('anotes', 'Lot ' + l.lot + ' (lu sur la liste ' + doc.banque + ')');
     var sel = document.getElementById('cp_banque'); if (sel) { sel.value = doc.banque; if (sel.value !== doc.banque) { sel.value = '__OTHER__'; set('cp_banque_autre', doc.banque); } }
     var obj = document.getElementById('aobjet'); if (obj) { obj.focus(); }

@@ -85,6 +85,8 @@ test('résultat : une provisoire sans fiche propose « Créer l\'AO et sa cautio
   await expect(page.locator('#aref')).toHaveValue('99/TEST/2026');
   await expect(page.locator('#amo')).toHaveValue('AGENCE TEST DES EAUX');
   await expect(page.locator('#adlim')).toHaveValue('2026-11-03');
+  await expect(page.locator('#cp_num')).toBeVisible(); // zone provisoire dépliée, pas « Aucune caution provisoire »
+  await expect(page.locator('#no-cp')).toBeHidden();
   await expect(page.locator('#cp_num')).toHaveValue('780009999900000001');
   await expect(page.locator('#cp_montant')).toHaveValue('50000');
   await expect(page.locator('#cp_emission')).toHaveValue('2026-10-06');
