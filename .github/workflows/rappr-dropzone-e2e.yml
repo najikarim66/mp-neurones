@@ -10,6 +10,7 @@ on:
     paths:
       - 'public/index.html'
       - 'public/pv-mainlevee.js'
+      - 'public/dce-statut.js'
       - 'e2e/**'
       - 'playwright.config.js'
       - 'package.json'

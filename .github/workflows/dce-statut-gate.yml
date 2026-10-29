@@ -1,0 +1,28 @@
+name: Gate état DCE
+
+# Filet du 29/10/2026 : une demande de DCE sans réponse au-delà du délai s'affiche
+# « interrompue », datée et relançable (99/2026/CM bloqué en « downloading » du 28/09 au
+# 29/10) ; une demande récente reste « en cours », sans relance possible.
+# Déterministe, sans dépendances (node pur).
+
+on:
+  push:
+    paths:
+      - 'public/dce-statut.js'
+      - 'test/dce-statut.test.js'
+      - '.github/workflows/dce-statut-gate.yml'
+  pull_request:
+    paths:
+      - 'public/dce-statut.js'
+      - 'test/dce-statut.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Gate état DCE (node, sans dépendances)
+        run: node test/dce-statut.test.js

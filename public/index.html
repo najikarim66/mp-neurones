@@ -297,6 +297,7 @@ input,select,textarea{font-family:inherit}
 <script src="pv-mainlevee.js"></script>
 <script src="releves-banque.js"></script>
 <script src="releves-ui.js"></script>
+<script src="dce-statut.js"></script>
 <script src="garde-version.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
@@ -4246,22 +4247,23 @@ function veilleRenderDceButton(r){
   if(!r.ref_consultation || !r.org_acronyme){
     return ''; /* Pas de ref, on ne peut rien faire */
   }
-  var status=r.dce_status||'';
-  if(status==='ready' && r.dce_url){
+  var e=MPDce.etat(r, Date.now());
+  if(e.etat==='pret'){
     /* Lien direct vers Azure Blob (SAS valide 35j) */
-    return '<a href="'+esc(r.dce_url)+'" target="_blank" rel="noopener" class="act" title="Telecharger ZIP DCE" style="color:#107C41;font-weight:bold">&#11015;</a>';
+    return '<a href="'+esc(r.dce_url)+'" target="_blank" rel="noopener" class="act" data-dce="pret" title="'+esc(e.titre)+'" style="color:#107C41;font-weight:bold">&#11015;</a>';
   }
-  if(status==='downloading' || status==='queued'){
-    /* En cours - indicator visuel */
-    return '<span class="act" title="DCE en cours de telechargement..." style="color:#d97706;cursor:wait">&#9203;</span>';
+  if(e.etat==='en_cours'){
+    return '<span class="act" data-dce="en_cours" title="'+esc(e.titre)+'" style="color:#d97706;cursor:wait">&#9203;</span>';
   }
-  if(status==='failed'){
-    /* Echec - afficher l'erreur en tooltip + bouton reessayer */
-    var err=r.dce_error?esc(r.dce_error.substring(0,200)):'Echec inconnu';
-    return '<button class="act" title="Echec : '+err+' - Cliquer pour reessayer" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#dc2626">&#10060;</button>';
+  if(e.etat==='interrompu'){
+    /* Filet : demande sans reponse au-dela du delai (run jamais demarre ou coupe) -> relancable */
+    return '<button class="act" data-dce="interrompu" title="'+esc(e.titre)+'" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#dc2626">&#8635;</button>';
+  }
+  if(e.etat==='echec'){
+    return '<button class="act" data-dce="echec" title="'+esc(e.titre)+'" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#dc2626">&#10060;</button>';
   }
   /* Pas encore demande - bouton 'Demander DCE' */
-  return '<button class="act" title="Telecharger DCE (via cloud, ~2 min)" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#1F4E78">&#128229;</button>';
+  return '<button class="act" data-dce="a_demander" title="'+esc(e.titre)+'" onclick="veilleRequestDce(\''+esc(r.id)+'\')" style="color:#1F4E78">&#128229;</button>';
 }
 
 /* === Action : declencher le DL DCE via API SWA -> GitHub Actions === */
@@ -4271,9 +4273,8 @@ function _veilleDoRequestDce(r){
   if(!r.ref_consultation || !r.org_acronyme){
     return Promise.reject(new Error('Ref ou org manquant'));
   }
-  var st=r.dce_status;
-  if(st==='queued' || st==='downloading' || st==='ready'){
-    return Promise.resolve({skipped:true, status:st});
+  if(!MPDce.etat(r, Date.now()).relancable){
+    return Promise.resolve({skipped:true, status:r.dce_status});
   }
   /* Mise a jour optimiste de l'UI : on marque queued tout de suite */
   r.dce_status='queued';
@@ -4315,7 +4316,7 @@ function veilleRequestDce(id){
     toast('Ref ou org manquant pour cet AO');
     return;
   }
-  if(r.dce_status==='queued' || r.dce_status==='downloading' || r.dce_status==='ready'){
+  if(!MPDce.etat(r, Date.now()).relancable){
     toast('DCE deja en cours ou pret', false);
     return;
   }
@@ -4533,9 +4534,8 @@ function veilleChainerGo(r){
     transferErr=e;
   }).then(function(){
     /* DCE : independant du resultat du transfert */
-    var st=r.dce_status;
-    if(st==='queued' || st==='downloading' || st==='ready'){
-      return {dce:'skipped', status:st};
+    if(!MPDce.etat(r, Date.now()).relancable){
+      return {dce:'skipped', status:r.dce_status};
     }
     return _veilleDoRequestDce(r).then(function(res){
       return (res && res.skipped) ? {dce:'skipped', status:res.status} : {dce:'launched'};
