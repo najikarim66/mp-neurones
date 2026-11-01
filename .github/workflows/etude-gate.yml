@@ -1,0 +1,58 @@
+name: Gate étude d'AO
+
+# Étude d'AO automatisée et dossier de réponse (01/11/2026). Gates qui EXÉCUTENT le code :
+# sources ou « à vérifier » sur l'écran rendu, écart date limite fiche ↔ dossier, pièce du
+# coffre expirée, formules de marge vivantes et écart à droite du TTC dans l'Excel, aucun
+# document du coffre envoyé à l'API, pièces générées valides, front ES5, copie du module.
+
+on:
+  push:
+    paths:
+      - 'public/etude-calc.js'
+      - 'public/etude-ui.js'
+      - 'public/index.html'
+      - 'public/*.js'
+      - 'api/etude-calc.js'
+      - 'api/etude/**'
+      - 'api/package.json'
+      - 'api/package-lock.json'
+      - 'test/etude-*.test.js'
+      - 'test/front-es5.test.js'
+      - 'test/module-copy.test.js'
+      - 'test/fixtures/**'
+      - 'package.json'
+      - '.github/workflows/etude-gate.yml'
+  pull_request:
+    paths:
+      - 'public/**'
+      - 'api/**'
+      - 'test/**'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dépendances (acorn à la racine, générateurs de l'API)
+        run: |
+          npm ci
+          cd api && npm ci
+      - name: Toute donnée affichée a une source ou « à vérifier »
+        run: node test/etude-sources.test.js
+      - name: Écart date limite fiche ↔ dossier signalé
+        run: node test/etude-ecarts.test.js
+      - name: Pièce du coffre expirée détectée
+        run: node test/etude-coffre.test.js
+      - name: Aucun document du coffre envoyé à l'API
+        run: node test/etude-coffre-hors-api.test.js
+      - name: Formules de marge vivantes, écart à droite du TTC
+        run: node test/etude-bordereau-xlsx.test.js
+      - name: Pièces générées valides
+        run: node test/etude-pieces.test.js
+      - name: Front ES5 (contrôle syntaxique)
+        run: node test/front-es5.test.js
+      - name: Copie unique des modules
+        run: node test/module-copy.test.js

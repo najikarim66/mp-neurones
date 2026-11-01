@@ -39,6 +39,9 @@ const PK_PATH = {
   "mp_veille_ao":   "source"
 };
 
+// Routes de l'étude d'AO (dossier api/etude/).
+const ETUDE_FNS = new Set(["etudes", "etudeLancer", "etudesTick", "etudeFichier", "etudeValider", "etudeParams", "coffre", "coffreLien"]);
+
 // Config GitHub workflow_dispatch pour DL DCE on demand
 const GH_OWNER = "najikarim66";
 const GH_REPO = "neurones-veille-ao";
@@ -101,6 +104,12 @@ async function getRoleFromDb(email) {
 
 module.exports = async function (context, req) {
   const fn = context.executionContext.functionName;
+
+  // Étude d'AO automatisée et dossier de réponse (lot du 01/11/2026) : routes dans etude/routes.js.
+  if (ETUDE_FNS.has(fn)) {
+    await require("./etude/routes.js")(fn, context, req, { getDb, getAuthenticatedUser, getRoleFromDb });
+    return;
+  }
 
   // Route version : GET /api/version — identite + CONTRAT de l'API (garde de version,
   // modele ERP/RH 878acef). Sert { apiContract (contrat-api.json du meme commit),

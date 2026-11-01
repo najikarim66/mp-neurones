@@ -298,6 +298,7 @@ input,select,textarea{font-family:inherit}
 <script src="releves-banque.js"></script>
 <script src="releves-ui.js"></script>
 <script src="dce-statut.js"></script>
+<script src="etude-calc.js"></script>
 <script src="garde-version.js"></script>
 <script>
 var BANQUES=['Attijariwafa Bank','CIH Bank','BMCE Bank','Banque Populaire','SGMB','BMCI','CFG Bank','Al Barid Bank'];
@@ -775,7 +776,7 @@ function pgAO(){
     var cpCell=a.caution_prov?'<div style="font-size:12px;font-weight:600">'+a.caution_prov.num+'</div><div style="font-size:12px;color:#7A7369">'+a.caution_prov.banque+'</div><div>'+fmad(a.caution_prov.montant)+' <span class="badge '+cpS.c+'" style="font-size:12px">'+cpS.l+'</span></div>':'<span style="color:#7A7369;font-size:12px">-</span>';
     var marcheCell=m?'<span class="badge bi" style="font-size:12px;cursor:pointer" onclick="nav(\'marches\')">'+m.ref+'</span>':'<span style="color:#7A7369;font-size:12px">-</span>';
     var attribBtn=(a.statut!=='attribue')?'<button class="act" onclick="attribuerAO(\''+a.id+'\')" title="Attribuer" style="color:#059669">&#10003;</button>':'';
-    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:12px;color:#7A7369">'+a.notes+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td>'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
+    return '<tr><td><span style="font-family:monospace;font-size:12px;font-weight:600">'+a.ref+'</span></td><td><div style="font-weight:500;font-size:12px">'+a.objet+'</div>'+(a.notes?'<div style="font-size:12px;color:#7A7369">'+a.notes+'</div>':'')+'</td><td style="font-size:12px;color:#7A7369">'+a.maitre_ouvrage+'</td><td><span class="badge bn" style="text-transform:capitalize">'+a.type+'</span></td><td style="font-family:monospace;font-size:12px">'+fmad(a.budget_estime)+'</td><td style="font-size:12px">'+fdat(a.date_lancement)+'</td><td>'+dlCell+'</td><td>'+cpCell+'</td><td>'+marcheCell+'</td><td>'+bdg(a.statut,SMAO)+'</td><td><div style="display:flex;gap:4px"><button class="act" onclick="editAO(\''+a.id+'\')">&#9998;</button>'+(typeof etudeBoutonAO==='function'?etudeBoutonAO(a):'')+attribBtn+'<button class="act red" onclick="delAO(\''+a.id+'\')">&#128465;</button></div></td></tr>';
   }).join(''):'<tr><td colspan="11"><div class="empty">Aucun appel d\'offres</div></td></tr>';
   return (alerts?'<div style="margin-bottom:12px">'+alerts+'</div>':'')+
   '<div class="krow" style="grid-template-columns:repeat(4,1fr)"><div class="kpi k3"><div class="kl">En cours</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='en_cours';}).length+'</div></div><div class="kpi k2"><div class="kl">Attribues</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='attribue';}).length+'</div></div><div class="kpi k4"><div class="kl">Infructueux/Annules</div><div class="kv">'+S.aos.filter(function(a){return a.statut==='infructueux'||a.statut==='annule';}).length+'</div></div><div class="kpi k1"><div class="kl">Budget total</div><div class="kv sm">'+fmad(S.aos.reduce(function(a,o){return a+(o.budget_estime||0);},0))+'</div></div></div>'+
@@ -4222,7 +4223,7 @@ function pgVeille(){
         '<td style="font-size:12px;max-width:160px">'+esc(r.lieu_execution||'')+'</td>'+
         '<td>'+dlCell+heure+'</td>'+
         '<td>'+statutCell+'</td>'+
-        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+actStatut+actNotes+actLink+actTransfer+'</div></td>'+
+        '<td><div style="display:flex;gap:3px;flex-wrap:wrap">'+fiche+dceBtn+(typeof etudeBoutonVeille==='function'?etudeBoutonVeille(r):'')+actStatut+actNotes+actLink+actTransfer+'</div></td>'+
       '</tr>';
     }).join('');
   }
@@ -4643,5 +4644,7 @@ apiLoadAll = function(){
 
 window.onload=function(){sbStats();nav('dashboard');loadUser();addIndicesNavLink();addImportNavLink();demarrerGardeVersion();chargerRole();apiLoadAll().then(function(){render();updateSyncIndicator();}).catch(function(){/* erreur deja toastee */});};
 </script>
+<!-- Étude d'AO + Documents de la société : APRÈS le script principal (surcharge render / pgDash). -->
+<script src="etude-ui.js"></script>
 </body>
 </html>

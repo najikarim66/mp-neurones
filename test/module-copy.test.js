@@ -46,6 +46,20 @@ if (okSrc2 && okCpy2) {
     'tailles ' + a2.length + ' vs ' + b2.length + ' — resynchroniser : cp public/releves-banque.js api/releves-banque.js');
 }
 
+// Même règle pour le module de l'étude d'AO (sources, écarts, coffre, bordereau) : l'écran et
+// l'API (préparation, finalisation, pièces générées) appliquent la MÊME implémentation.
+var SRC3 = path.join(__dirname, '..', 'public', 'etude-calc.js');
+var CPY3 = path.join(__dirname, '..', 'api', 'etude-calc.js');
+console.log('\n=== Copie api/etude-calc.js == public/etude-calc.js ===');
+var okSrc3 = fs.existsSync(SRC3), okCpy3 = fs.existsSync(CPY3);
+check('public/etude-calc.js existe', okSrc3, SRC3);
+check('api/etude-calc.js existe', okCpy3, CPY3);
+if (okSrc3 && okCpy3) {
+  var a3 = fs.readFileSync(SRC3), b3 = fs.readFileSync(CPY3);
+  check('les deux fichiers sont identiques octet a octet', a3.equals(b3),
+    'tailles ' + a3.length + ' vs ' + b3.length + ' — resynchroniser : cp public/etude-calc.js api/etude-calc.js');
+}
+
 console.log('\n---------------------------------------------------------------');
 if (fails.length) { console.log('ROUGE : ' + fails.length + ' / ' + count + ' echecs -> ' + fails.join(' | ')); process.exit(1); }
 else { console.log('VERT : ' + count + ' / ' + count + ' assertions OK'); process.exit(0); }
