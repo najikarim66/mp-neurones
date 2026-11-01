@@ -57,7 +57,7 @@ check('aucun bouton « source » sans extrait exact derrière', faux.length === 
 var btnQ = blocs('data-fait').filter(function (b) { return b.indexOf('data-fait="qualification"') >= 0; })[0] || '';
 check('qualification affichée avec « à vérifier » (bouton warn)', /class="et-src warn"[^>]*data-averifier="1">à vérifier/.test(btnQ), btnQ.slice(0, 300));
 var btnCp = blocs('data-fait').filter(function (b) { return b.indexOf('data-fait="caution_provisoire"') >= 0; })[0] || '';
-check('caution affichée avec sa référence « RC art. 5, p. 1 »', btnCp.indexOf('RC art. 5, p. 1') >= 0, btnCp.slice(0, 300));
+check('caution : document cité et page d\'abord, puis l\'article (« RC, p. 1 · RC art. 5 »)', btnCp.indexOf('RC, p. 1 · RC art. 5') >= 0, btnCp.slice(0, 300));
 var ecl = blocs('data-fait').filter(function (b) { return b.indexOf('data-fait="eclaircissements"') >= 0; })[0] || '';
 check('éclaircissements : date calculée affichée', /data-calcule="1">Jusqu'au 05\/11\/2026/.test(ecl), ecl.slice(0, 400));
 check('éclaircissements : date calculée « à vérifier »', /à vérifier : date calculée/.test(ecl));

@@ -269,7 +269,9 @@
     if (aSource(item)) {
       var s = item.sources[0];
       var ou = s.feuille ? ('feuille ' + s.feuille + ', ligne ' + s.ligne) : (s.page ? 'p. ' + s.page : '');
-      var lib = (item.article ? item.article : (LIBELLES_CLASSES[s.classe] || s.fichier)) + (ou ? ', ' + ou : '');
+      /* D'abord le document où l'extrait a VRAIMENT été cité (et sa page), puis l'article annoncé par l'analyse :
+         « Avis, p. 1 · RC art. 10 » (recette du 01/11/2026 : « RC art. 10, p. 1 » pointait la page 1 de l'avis). */
+      var lib = (LIBELLES_CLASSES[s.classe] || s.fichier) + (ou ? ', ' + ou : '') + (item.article ? ' · ' + item.article : '');
       return { etat: 'source', libelle: lib };
     }
     if (item && item.absent) return { etat: 'a_verifier', libelle: 'Absent du dossier : ' + A_VERIFIER, motif: 'aucun article trouvé dans le dossier' };
