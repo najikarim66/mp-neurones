@@ -52,6 +52,8 @@ jobs:
         run: node test/etude-bordereau-xlsx.test.js
       - name: Pièces générées valides
         run: node test/etude-pieces.test.js
+      - name: Plafonds de coût bloquent l'envoi
+        run: node test/etude-plafonds.test.js
       - name: Front ES5 (contrôle syntaxique)
         run: node test/front-es5.test.js
       - name: Copie unique des modules

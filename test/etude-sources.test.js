@@ -68,4 +68,11 @@ check('bordereau : 3 articles rendus, tous avec leur source (feuille, ligne)', n
 check('bordereau : source tableur nommée « feuille BPDE, ligne N »', /feuille BPDE, ligne 5/.test(art));
 var sel = U.htmlEtude(d, { onglet: 'etude', sel: 1 }).html;
 check('panneau source : extrait exact surligné (<mark>)', /<mark>[^<]*cautionnement provisoire est fixé[^<]*<\/mark>/.test(sel) || /<mark>[^<]*pénalité journalière[^<]*<\/mark>/.test(sel), (sel.match(/<mark>[^<]*<\/mark>/) || [''])[0]);
+console.log('\n=== Paramètres : consommation de MP seule, en jetons ===');
+var hp = U.htmlParams({ params: { seuil_pre_etude: 50, plafond_etude_usd: 3, plafond_mois_usd: 40, modele: 'claude-opus-5-5' }, mois: '2026-11', conso_mois_usd: 2.63, cle_configuree: true, scores: [],
+  etudes_mois: [{ ref: '42/2026', type: 'complete', version: 1, statut: 'prete', cout_usd: 1.95, duree_s: 222, usage: { input_tokens: 512340, output_tokens: 61200 } }, { ref: '07/2026/UMP', type: 'complete', version: 1, statut: 'prete', cout_usd: 0.68, duree_s: 218, usage: { input_tokens: 180000, output_tokens: 32000 } }] }, true);
+check('paramètres : consommation dite « de MP seule »', /Consommation de MP seule/.test(hp), hp.slice(0, 300));
+check('paramètres : jetons du mois totalisés (entrée, sortie)', hp.indexOf('692 340 jetons en entrée') >= 0 && hp.indexOf('93 200 en sortie') >= 0, (hp.match(/Consommation[^<]*<\/b>[^<]*/) || [''])[0]);
+check('paramètres : jetons par étude dans la liste', hp.indexOf('<td class="n">512 340</td><td class="n">61 200</td>') >= 0);
+check('paramètres : étude sans relevé de jetons dite « non relevé », pas un tiret', U.htmlParams({ params: {}, etudes_mois: [{ ref: 'X', version: 1, statut: 'prete' }] }, false).indexOf('<td class="n">non relevé</td>') >= 0);
 fin();

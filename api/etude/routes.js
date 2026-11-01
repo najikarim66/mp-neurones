@@ -501,7 +501,7 @@ module.exports = async function routesEtude(fn, context, req, outils) {
         return true;
       }
       const mois = moisCourant();
-      const liste = (await db.container(C_ETUDES).items.query({ query: "SELECT c.ref, c.type, c.version, c.cout_usd, c.statut, c.soumise_le, c.duree_s FROM c WHERE c.type_doc = 'etude' AND STARTSWITH(c.soumise_le, @m)", parameters: [{ name: "@m", value: mois }] }).fetchAll()).resources;
+      const liste = (await db.container(C_ETUDES).items.query({ query: "SELECT c.ref, c.type, c.version, c.cout_usd, c.usage, c.statut, c.soumise_le, c.duree_s FROM c WHERE c.type_doc = 'etude' AND STARTSWITH(c.soumise_le, @m)", parameters: [{ name: "@m", value: mois }] }).fetchAll()).resources;
       const sc = (await db.container("mp_veille_ao").items.query("SELECT VALUE c.score FROM c WHERE IS_DEFINED(c.score)").fetchAll()).resources;
       json(200, { params, conso_mois_usd: liste.reduce((a, x) => a + (x.cout_usd || 0), 0), etudes_mois: liste, mois, cle_configuree: !!CL.client(), scores: sc });
       return true;

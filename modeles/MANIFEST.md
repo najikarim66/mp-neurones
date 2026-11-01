@@ -33,3 +33,11 @@ Le dépôt mp-neurones est **public** sur GitHub : le kit de réponse aux AO (m�
 | modeles-administratifs-AO-FMI-2022/Offre Technique/Annexe 8 Matrice de Conformité.docx | 26892 | 8ef37f9a669a6c5d | 2022-11-25 |
 | divers/Moyens humains et techniques version sept 2020.docx | 80578 | b43e96e557167a59 | 2020-09-02 |
 | divers/Sous detail des prix avenant MARCHE N 02-2018- TPI MEKNES-09-12-2021.xls | 269312 | 1cc8c34ea60d8f99 | 2021-12-09 |
+
+## Rapprochement avec Neurones_AO_Kit_Complet.zip (Téléchargements du DG, 01/11/2026)
+
+Zip de 305 768 octets, 14 fichiers, tous dans `neurones-ao-kit/` (aucun modèle administratif, aucun mémoire en 7 chapitres).
+
+- **13 fichiers identiques** octet pour octet (même SHA-256) à la copie `kit-ao/2026-11-01/` ci-dessus.
+- **1 fichier différent** : `neurones-ao-kit/5_Reference_Kenitra/Memoire_Technique_Kenitra_v4.docx`, 149 792 octets, SHA-256 `fbb392d03770edde`, daté du 29/04/2026. La copie OneDrive (256 306 octets, 30/04/2026) est plus récente : elle reste la référence. La variante du zip est gardée à part, préfixe `kit-ao/2026-11-01-zip-telechargements/`.
+- Le bordereau paramétrique du kit est `5_Reference_Kenitra/Bordereau_100_Conforme_Kenitra_v4.xlsx` (identique dans les deux sources).
