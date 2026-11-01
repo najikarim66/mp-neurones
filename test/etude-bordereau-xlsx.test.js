@@ -52,7 +52,7 @@ SO.bordereauXlsx({ ref: '00/TEST/2026', objet: 'Objet fictif', moa: 'MO fictif',
   check('à DROITE du TTC (même ligne) : libellé de l\'écart', /Écart avec l'estimation/.test(ws.getCell('J' + L.ttc).value));
   check('cellule d\'écart = formule (TTC − estimation) / estimation', k && k.formula === 'IF(N($B$5)>0,(I' + L.ttc + '-$B$5)/$B$5,"estimation absente")', JSON.stringify(k));
   check('estimation du maître d\'ouvrage en B5', ws.getCell('B5').value === 3480000);
-  check('nombre de PA à confirmer en formule', /COUNTIF\(F\d+:F\d+,"à consulter"\)/.test((ws.getCell('K' + (L.ttc + 1)).value || {}).formula || ''));
+  check('nombre de PA à confirmer = PA encore vides (formule qui suit la saisie)', /^SUMPRODUCT\(\(A\d+:A\d+<>""\)\*\(E\d+:E\d+=""\)\)$/.test((ws.getCell('K' + (L.ttc + 1)).value || {}).formula || ''));
   var sy = o.wb.getWorksheet('Synthèse');
   check('synthèse : notre prix lu sur le TTC du bordereau', sy.getCell('B4').value.formula === 'Bordereau!I' + L.ttc);
   check("synthèse : écart lu sur la cellule d'écart", sy.getCell('B5').value.formula === 'Bordereau!K' + L.ttc);

@@ -77,7 +77,8 @@ async function bordereauXlsx(ctx) {
   ws.getCell("K" + ttc).value = { formula: 'IF(N($B$5)>0,(I' + ttc + '-$B$5)/$B$5,"estimation absente")' };
   ws.getCell("K" + ttc).numFmt = "+0.00%;-0.00%;0.00%";
   ws.getCell("J" + (ttc + 1)).value = "PA à confirmer (à consulter)";
-  ws.getCell("K" + (ttc + 1)).value = { formula: 'COUNTIF(F' + premiere + ':F' + derniere + ',"à consulter")' };
+  // PA encore vides parmi les lignes d'articles (se met à jour quand un PA est saisi).
+  ws.getCell("K" + (ttc + 1)).value = { formula: 'SUMPRODUCT((A' + premiere + ':A' + derniere + '<>"")*(E' + premiere + ':E' + derniere + '=""))' };
   [ht, tva, ttc].forEach((x) => { ws.getCell("I" + x).numFmt = "#,##0.00"; ws.getCell("H" + x).font = { bold: true }; ws.getCell("I" + x).font = { bold: true }; });
   ws.getCell("J" + ttc).font = { bold: true }; ws.getCell("K" + ttc).font = { bold: true };
 
