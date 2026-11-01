@@ -12,8 +12,10 @@
 "use strict";
 
 const MODELE_DEFAUT = "claude-opus-5-5";
-// Clé dédiée à l'étude d'AO, paramètre d'application de l'API seulement (jamais le front).
-const NOM_CLE = "ANTHROPIC_API_KEY_ETUDE";
+// Clé de l'API Claude déjà posée sur mp-neurones-web (décision du DG, 01/11/2026 : on réutilise
+// la clé existante, partagée avec l'OCR des actes). Paramètre d'application de l'API seulement,
+// jamais le front, un journal ou un commit.
+const NOM_CLE = "ANTHROPIC_API_KEY";
 
 function client() {
   const cle = process.env[NOM_CLE];
