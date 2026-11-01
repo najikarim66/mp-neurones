@@ -245,6 +245,7 @@
       '<div><b data-c="exigees">' + c.exigees + '</b><span>pièces exigées par le RC</span></div><div class="g"><b data-c="pretes">' + c.pretes + '</b><span>prêtes (rédigées ou jointes)</span></div>' +
       '<div class="a"><b data-c="a_completer">' + c.a_completer + '</b><span>à compléter, signer ou envoyer</span></div><div class="r"><b data-c="manquantes">' + c.manquantes + '</b><span>manquantes ou expirées</span></div></div>' +
       '<div class="et-tbl"><table><thead><tr><th>Pièce exigée</th><th>Ce que MP prépare</th><th>État</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      (c.sans_objet ? '<p class="et-note" data-sans-objet="' + c.sans_objet + '">' + c.sans_objet + ' ligne(s) hors compteurs : cas particuliers sans objet pour Neurones (groupement, concurrent étranger…) ou pièce que le RC n\'exige pas. Elles restent affichées.</p>' : '') +
       '<p class="et-note">Trois origines : MP rédige (modèles, mémoire, planning, financier), MP joint depuis le coffre des documents de la société en vérifiant la validité à la date de dépôt, ou MP signale ce que seul quelqu\'un peut produire (qualification, signatures, banque). Rien n\'est déposé sans relecture.</p>' +
       '<div class="et-btns" style="margin-top:10px"><button class="et-btn pri" data-fichier="dossier">Télécharger le dossier complet (zip)</button></div></section>';
   }

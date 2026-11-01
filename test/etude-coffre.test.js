@@ -35,6 +35,19 @@ check('qualification absente du coffre : « à obtenir »', lq.etat === 'a_obten
 var cpt = M.compteursDossier([l, lf, lq]);
 check('compteurs : 3 exigées, 1 prête, 2 manquantes ou expirées', cpt.exigees === 3 && cpt.pretes === 1 && cpt.manquantes === 2, JSON.stringify(cpt));
 
+console.log('\n=== Libellés réels des RC (recette du 01/11/2026) ===');
+var ctxR = { coffre: [], dateDepot: '2026-11-11', aujourdhui: '2026-11-01' };
+var dh = M.ligneDossier({ dossier: 'ADMINISTRATIF', piece: "Une déclaration sur l'honneur, en un exemplaire unique, qui doit comporter les mentions prévues à l'article 29 du décret précité." }, ctxR);
+check("« déclaration sur l'honneur » (libellé réel) : rédigée par MP", dh.origine === 'redige' && dh.type === 'declaration_honneur', JSON.stringify(dh));
+var grp = M.ligneDossier({ dossier: 'ADMINISTRATIF', piece: "En cas de groupement : la convention constitutive du groupement prévue à l'article 150 du décret précité." }, ctxR);
+var etr = M.ligneDossier({ dossier: 'ADMINISTRATIF', piece: "l'équivalent des attestations visées aux paragraphes a), b) et c) ci-dessus" }, ctxR);
+check('groupement : « sans objet pour Neurones »', grp.etat === 'sans_objet', JSON.stringify(grp));
+check('équivalent étranger : « sans objet pour Neurones »', etr.etat === 'sans_objet');
+var abs = M.ligneDossier({ dossier: 'ADDITIF', piece: "ABSENT : le RC n'exige aucun dossier additif" }, ctxR);
+check('« ABSENT » rendu par l\'analyse : « non exigé par le RC », pas une pièce manquante', abs.etat === 'non_exige', JSON.stringify(abs));
+var c2 = M.compteursDossier([dh, grp, etr, abs]);
+check('compteurs : 1 exigée, 3 hors compteurs nommées (sans objet)', c2.exigees === 1 && c2.manquantes === 0 && c2.sans_objet === 3, JSON.stringify(c2));
+
 console.log('\n=== Alerte 15 jours ===');
 var docs = [doc('2026-11-10'), { id: 'c2', type: 'rib', versions: [{ v: 1, date_validite: '2026-12-31' }] }, { id: 'c3', type: 'statuts', versions: [{ v: 1 }] }];
 var al = M.alertesCoffre(docs, '2026-11-01', 15);

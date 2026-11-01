@@ -149,7 +149,8 @@ function blocDocument(d, i, dernier) {
     context: "Pièce du DCE n° " + (i + 1) + " — classe : " + d.classe + (d.lecture === "ocr" ? " — texte lu par OCR" : "") + (d.lecture === "tableur" ? " — tableur, une ligne par ligne de feuille" : ""),
     citations: { enabled: true }
   };
-  if (dernier) b.cache_control = { type: "ephemeral", ttl: "1h" };
+  // Pas de cache : les requêtes d'un lot tournent en parallèle, le cache s'écrit (au double du prix)
+  // sans jamais être relu (recette du 01/11/2026 : 703 419 jetons écrits, 0 relu).
   return b;
 }
 

@@ -424,8 +424,10 @@
   /* ---------- Dossier de réponse : origine de chaque pièce du RC ---------- */
   /* origine : redige (MP rédige un brouillon) | coffre (MP joint) | propose (un humain valide) | signale (MP ne peut pas). */
   var REGLES_PIECES = [
+    /* Cas particuliers (groupement, concurrent étranger, coopérative…) : sans objet pour Neurones, montrés, jamais comptés manquants. */
+    { re: /convention constitutive|en cas de groupement|lorsque le concurrent est un groupement|non installes? au maroc|equivalent des attestations|cooperative|auto.?entrepreneur|etablissement public/, origine: 'signale', type: 'cas_particulier', motif: 'Cas particulier (groupement, concurrent étranger, coopérative, établissement public) : sans objet pour Neurones, à confirmer.' },
     { re: /recepisse|caution(nement)? provisoire|cautionnement/, origine: 'signale', type: 'caution_provisoire', motif: 'Récépissé délivré par la banque : la lettre de demande est rédigée, la caution est suivie dans Cautions.' },
-    { re: /declaration.{0,6}honneur/, origine: 'redige', type: 'declaration_honneur' },
+    { re: /declaration.{0,14}honneur/, origine: 'redige', type: 'declaration_honneur' },
     { re: /acte.{0,4}engagement/, origine: 'redige', type: 'acte_engagement' },
     { re: /sous.?detail/, origine: 'redige', type: 'sous_detail' },
     { re: /bordereau.{0,12}(prix|detail)|detail estimatif|bpde|bpu|dqe/, origine: 'redige', type: 'bordereau_prix' },
@@ -462,12 +464,15 @@
     a_signer: { l: 'À signer', c: 'neg', groupe: 'a_completer' },
     demande_prete: { l: 'Demande prête', c: 'neg', groupe: 'a_completer' },
     expiree: { l: 'Expirée', c: 'bad', groupe: 'manquantes' },
-    a_obtenir: { l: 'À obtenir', c: 'bad', groupe: 'manquantes' }
+    a_obtenir: { l: 'À obtenir', c: 'bad', groupe: 'manquantes' },
+    sans_objet: { l: 'Sans objet pour Neurones', c: 'ok', groupe: 'sans_objet' },
+    non_exige: { l: 'Non exigé par le RC', c: 'ok', groupe: 'sans_objet' }
   };
   /* Une ligne du dossier : pièce du RC → origine + état. ctx.coffre = docs du coffre ; ctx.validations = choix humains. */
   function ligneDossier(piece, ctx) {
     ctx = ctx || {};
     var o = originePiece(piece.piece);
+    if (/^\s*absent/i.test(String(piece.piece || ''))) o = { origine: 'signale', type: 'non_exige', motif: "L'analyse note que le RC n'exige pas cette pièce." };
     var L = { dossier: piece.dossier, piece: piece.piece, article: piece.article, precision: piece.precision || '', sources: piece.sources || [], origine: o.origine, type: o.type };
     if (o.origine === 'coffre') {
       var doc = null, cs = ctx.coffre || [];
@@ -485,17 +490,18 @@
       L.etat = (o.type === 'conformite') ? 'a_completer' : 'redige';
       L.detail = o.type === 'conformite' ? 'Une ligne par article, « Conforme » partout ; fiches techniques à rattacher' : 'Brouillon généré par MP, à relire';
     } else {
-      L.etat = o.type === 'caution_provisoire' ? 'demande_prete' : (o.type === 'signature' ? 'a_signer' : 'a_obtenir');
+      L.etat = o.type === 'caution_provisoire' ? 'demande_prete' : (o.type === 'signature' ? 'a_signer' : (o.type === 'cas_particulier' ? 'sans_objet' : (o.type === 'non_exige' ? 'non_exige' : 'a_obtenir')));
       L.detail = o.motif;
     }
     return L;
   }
   function compteursDossier(lignes) {
-    var c = { exigees: 0, pretes: 0, a_completer: 0, manquantes: 0 };
+    /* « Sans objet » (cas particuliers, pièces non exigées) : hors des 4 compteurs, mais comptés et nommés. */
+    var c = { exigees: 0, pretes: 0, a_completer: 0, manquantes: 0, sans_objet: 0 };
     for (var i = 0; i < (lignes || []).length; i++) {
-      c.exigees++;
       var g = (ETATS_LIGNE[lignes[i].etat] || {}).groupe || 'manquantes';
       c[g]++;
+      if (g !== 'sans_objet') c.exigees++;
     }
     return c;
   }
@@ -611,9 +617,9 @@
     if (lot) c = c / 2;
     return Math.round(c * 10000) / 10000;
   }
-  /* Estimation avant envoi : environ 3 caractères par jeton en français, sortie au plafond. */
+  /* Estimation avant envoi : 1,7 caractère par jeton mesuré sur les DCE réels (recette du 01/11/2026), sortie au plafond. */
   function estimerCout(caracteres, sortieMax, modele, lot) {
-    return coutUsd({ input_tokens: Math.ceil(caracteres / 3), output_tokens: sortieMax || 0 }, modele, lot);
+    return coutUsd({ input_tokens: Math.ceil(caracteres / 1.7), output_tokens: sortieMax || 0 }, modele, lot);
   }
   function controlePlafonds(estimation, consoMois, params) {
     params = params || {};
