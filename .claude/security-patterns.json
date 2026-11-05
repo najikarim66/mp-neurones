@@ -1,0 +1,43 @@
+{
+  "patterns": [
+    {
+      "rule_name": "chaine-connexion-cosmos",
+      "regex": "AccountEndpoint=|AccountKey=",
+      "reminder": "Chaîne de connexion Cosmos détectée (AccountEndpoint= / AccountKey=). Elle ne s'écrit JAMAIS dans le code, un log, un commit, une sortie de test ou un message d'erreur : lisez-la depuis la variable d'environnement au moment de l'appel. Seule la chaîne factice des gates (compte « test-local », clé factice) est admise."
+    },
+    {
+      "rule_name": "set-cookie-dans-un-log",
+      "regex": "(console\\.\\w+|context\\.log\\w*|\\blog\\w*|debug\\w*)\\s*\\([^)\\n]*Set-Cookie",
+      "reminder": "« Set-Cookie » dans du code de journalisation. Un cookie ne s'imprime jamais (log, sortie de test, erreur) : c'est une session volée. Journalisez le statut et la référence de corrélation, jamais les en-têtes."
+    },
+    {
+      "rule_name": "authorization-dans-un-log",
+      "regex": "(console\\.\\w+|context\\.log\\w*|\\blog\\w*|debug\\w*)\\s*\\([^)\\n]*[Aa]uthorization",
+      "reminder": "« Authorization » dans du code de journalisation. Un en-tête d'authentification ou un jeton ne s'imprime jamais (log, sortie de test, erreur). Journalisez le rôle résolu et la référence de corrélation, jamais l'en-tête."
+    },
+    {
+      "rule_name": "en-tetes-imprimes",
+      "regex": "(console\\.\\w+|context\\.log\\w*)\\s*\\([^)\\n]*\\.headers\\b",
+      "reminder": "Des en-têtes de requête ou de réponse partent dans un log. Ils portent cookies et jetons : n'imprimez jamais les en-têtes, seulement le statut et la référence de corrélation."
+    },
+    {
+      "rule_name": "montant-de-salaire-hors-paie-api",
+      "regex": "\\b(netConvenu|tauxJournalier|tauxHoraire|salaireBase|salaireDeBase|salaireNet|salaireMensuel|netAPayer|totalAPayer|montantHeuresSup|retenueHeures)\\b",
+      "paths": ["api/**"],
+      "exclude_paths": ["**/heures-mois*.js", "**/cumul*.js", "**/paie*.js", "**/bulletin*.js", "**/stc*.js", "**/net-convenu*.js", "**/montants*.js", "**/test-*.js", "**/fixtures/**"],
+      "reminder": "Montant de salaire dans une route qui n'est pas une route de paie. Ces champs ne sont servis qu'aux rôles DG et comptable : le handler contrôle le rôle AVANT de lire la donnée et RETIRE le champ de la réponse pour RH, chef de projet, chef de chantier et ouvrier. Un masquage à l'écran ne suffit pas."
+    },
+    {
+      "rule_name": "montant-de-salaire-masque-a-l-ecran",
+      "regex": "\\b(netConvenu|tauxJournalier|tauxHoraire|salaireBase|salaireDeBase|salaireNet|salaireMensuel|netAPayer|totalAPayer)\\b",
+      "paths": ["src/**", "app/**"],
+      "exclude_paths": ["**/*Cumul*", "**/*Paie*", "**/*Bulletin*", "**/*Stc*", "**/*STC*"],
+      "reminder": "Montant de salaire lu par un écran qui n'est pas un écran de paie. Le filtrage se fait côté API : si l'écran cache ce champ selon le rôle, il est déjà parti dans la réponse réseau. L'API ne doit pas le servir hors DG et comptable."
+    },
+    {
+      "rule_name": "pin-ou-matricule-journalise",
+      "regex": "(console\\.\\w+|context\\.log\\w*|\\blog\\w*)\\s*\\([^)\\n]*\\b(pin|codePin|matricule)\\b",
+      "reminder": "PIN ou matricule dans un log. Ni PIN ni matricule ne s'impriment (logs, sorties de test, commits) : le nominatif reste dans le dossier de recette hors dépôt. Journalisez un identifiant technique ou un compte."
+    }
+  ]
+}
