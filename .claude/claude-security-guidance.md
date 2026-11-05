@@ -49,3 +49,10 @@ Ces règles s'AJOUTENT aux contrôles intégrés ; elles n'en retirent aucun.
 - Côté client : un message générique, une référence de corrélation, et l'action à faire. Jamais de pile d'appels, de requête
   Cosmos, de nom de conteneur, de chemin serveur ni de valeur de secret dans la réponse.
 - Côté serveur : le détail complet dans le journal, sans secret, sans PIN ni matricule.
+
+## 8. Normes payantes : jamais lues par une IA (directeur, 05/11/2026)
+- Une norme achetée (AFNOR : NF C 15-100, NF C 15-100-1, FD C 15-500, toute norme ou guide sous licence) n'est jamais lue, ouverte,
+  analysée, résumée ni citée par une IA, même présente sur le disque, même en partie. Signaler tout code, script ou test qui lit un
+  PDF de norme, en extrait du texte ou en recopie un passage.
+- Aucun PDF de norme dans le dépôt ni dans le dossier de recette. Le directeur lit la norme et saisit la valeur ; le champ de référence
+  ne porte que le numéro de paragraphe, de tableau ou d'annexe, jamais de texte recopié.
