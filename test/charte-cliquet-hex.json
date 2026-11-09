@@ -1,0 +1,15 @@
+{
+  "$commentaire": "CLIQUET des couleurs en dur (charte NEURONES, 05/11/2026) : plafond par fichier, mesuré par public/charte/outils/scan-hex.cjs. En-tête, menu, tableau de bord et garde de version : 0. Les écrans non migrés (étude, cautions, marchés, impression) gardent leur compte du jour ; il ne remonte jamais, il descend à chaque écran migré (--maj).",
+  "fichiers": {
+    "public/index.html": 308,
+    "public/cautions-calc.js": 0,
+    "public/dce-statut.js": 0,
+    "public/echeances.js": 0,
+    "public/etude-calc.js": 0,
+    "public/etude-ui.js": 81,
+    "public/garde-version.js": 0,
+    "public/pv-mainlevee.js": 0,
+    "public/releves-banque.js": 0,
+    "public/releves-ui.js": 0
+  }
+}

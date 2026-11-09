@@ -42,6 +42,22 @@ jobs:
             console.log("public/version.json ->", fs.readFileSync("public/version.json", "utf8"));
             console.log("api/version.json ->", fs.readFileSync("api/version.json", "utf8"));
           '
+      # CHARTE NEURONES (décision DG, 05/11/2026) — deux gates de dérive, node pur, avant tout déploiement :
+      #  · la copie public/charte/ est EXACTEMENT la version de référence qu'elle déclare (MANIFESTE.json : empreintes, version, commit
+      #    du dépôt neurones-charte) — une retouche locale de la charte est refusée, on recopie depuis la référence ;
+      #  · aucun hex de couleur hors des variables dans l'en-tête, le menu et les écrans migrés, cliquet par fichier
+      #    (test/charte-cliquet-hex.json) : un hex de plus se décide, il ne glisse pas.
+      - name: Gate charte — la copie public/charte = sa version de référence
+        run: node public/charte/outils/verifier-copie.cjs
+      - name: Gate charte — hex hors variables (cliquet par fichier)
+        run: node public/charte/outils/scan-hex.cjs --cliquet test/charte-cliquet-hex.json
+      # Les deux gates du front touchées par la charte, jouées ici aussi : index.html ne déclenche aucun *-gate.yml.
+      - name: Deps racine (acorn pour la gate ES5)
+        run: npm ci --no-audit --no-fund
+      - name: Gate front ES5 (public/*.js et scripts en ligne de index.html)
+        run: node test/front-es5.test.js
+      - name: Gate garde de version (verdict, bandeaux marqués, badge)
+        run: node test/garde-version.test.js
       - name: Install OIDC Client from Core Package
         run: npm install @actions/core@1.6.0 @actions/http-client
       - name: Get Id Token
