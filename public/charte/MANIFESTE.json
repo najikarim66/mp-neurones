@@ -1,0 +1,32 @@
+{
+  "charte": "NEURONES",
+  "version": "1.0.0",
+  "reference": {
+    "depot": "btp-pointage (web RH, rh.neurones.ma)",
+    "commit": "a4092e59",
+    "date": "2026-11-05",
+    "fichiers": [
+      "tailwind.config.js",
+      "src/index.css",
+      "src/styles/reste-theme.css",
+      "public/logo-neurones.png"
+    ],
+    "note": "Valeurs relues dans le dépôt, pas de mémoire. Les jetons de statut portent les MÊMES hex que le mobile (rh-pointage-mobile/src/theme/tokens.ts)."
+  },
+  "source": {
+    "depot": "neurones-charte",
+    "commit": "61392bc359fb2a5b8d5957539bb89907f4b5851e",
+    "date": "2026-11-09"
+  },
+  "fichiers": {
+    "tokens.json": "265e621852106827282ac39654d029ddf8d9839b3f28fbf96c8a2be32b33fad8",
+    "tokens.css": "8935d5a697d7ccc4b4c2edb2d8a8ef0b44afb2006e2da89b8b5a1594d3d078b1",
+    "logo-neurones.png": "8edfb94a30edc2829ae094e7b0546df8167a05b217123cc25d0372da22991f18",
+    "README.md": "2dc8f2fe01d5d2c5d94ed967c3e8bf9037cbe5d474b5cbf09c2423bf83527734",
+    "entete/entete.css": "a95d8d39bde33fe13825adb596f70fb185e8d442ac0b18359db70c5f92923423",
+    "entete/entete.html": "78d5d396904e8fbcadb1e0d93dc031dc2128f901e884e1654e526e575013dddb",
+    "entete/entete.js": "4403c5b53bb4dc96a4b51f3ea00fbf0d1c70340807dfca646d402cd58605ec34",
+    "outils/verifier-copie.cjs": "8e1059896e5123340485fb53b08cc44d08e5210508372dfd458f08c4f0b21f79",
+    "outils/scan-hex.cjs": "1a0322273ce527dad208b964907c408aee8b76894fbfdfae87aada7d2fb261d0"
+  }
+}

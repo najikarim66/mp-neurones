@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Charte NEURONES — en-tête, garde de version et menu communs</title>
+<!-- HTML et CSS purs : aucune dépendance. Les deux feuilles ci-dessous sont les seules à charger ; entete.js est facultatif (ES5). -->
+<link rel="stylesheet" href="../tokens.css">
+<link rel="stylesheet" href="entete.css">
+</head>
+<body class="charte-corps">
+<div class="charte-page">
+
+  <!-- ===== BARRE LATÉRALE COMMUNE (à copier telle quelle ; les textes entre crochets sont les emplacements) ===== -->
+  <aside class="charte-barre" data-charte-barre>
+    <div class="charte-entete">
+      <a class="charte-logo" href="/" aria-label="NEURONES — tableau de bord"><img src="../logo-neurones.png" alt="NEURONES Technologies" width="87" height="80"></a>
+      <div class="charte-identite">NEURONES · <span class="charte-identite__appli" data-charte-appli>Nom de l'appli</span></div>
+      <div class="charte-build" data-charte-build-ligne title="Front build · commit · date (survol : API)">build <span data-charte-build>local</span> · <span data-charte-commit>—</span> · <span data-charte-date>—</span></div>
+      <button type="button" class="charte-fermer" aria-label="Fermer le menu" data-charte-fermer>×</button>
+    </div>
+
+    <!-- GARDE DE VERSION — jaune : mise en service en cours ou nouvelle version (lectures et écritures continuent) -->
+    <div class="charte-garde charte-garde--jaune" role="status" data-charte-garde="jaune" hidden>
+      <div class="charte-garde__titre">Nouvelle version de l'écran disponible</div>
+      <div class="charte-garde__message">Cliquer pour recharger ; vos modifications non enregistrées seraient perdues.</div>
+      <button type="button" class="charte-garde__bouton" onclick="location.reload()">Recharger</button>
+    </div>
+    <!-- GARDE DE VERSION — rouge : écritures suspendues -->
+    <div class="charte-garde charte-garde--rouge" role="alert" data-charte-garde="rouge" hidden>
+      <div class="charte-garde__titre">Mise en service en cours — enregistrements suspendus</div>
+      <div class="charte-garde__message">Le serveur sert une version plus ancienne que cet écran. Les lectures continuent ; réessayez dans quelques minutes.</div>
+    </div>
+
+    <nav class="charte-menu" aria-label="Menu principal">
+      <div class="charte-menu__rubrique">Rubrique</div>
+      <a class="charte-menu__lien charte-menu__lien--actif" href="/" aria-current="page"><span class="charte-menu__icone">▦</span>Tableau de bord</a>
+      <a class="charte-menu__lien" href="#"><span class="charte-menu__icone">▤</span>Entrée du menu<span class="charte-menu__compteur">3</span></a>
+      <a class="charte-menu__lien charte-menu__lien--enfant" href="#">Entrée enfant</a>
+      <div class="charte-menu__separateur">
+        <div class="charte-menu__rubrique">Liens externes</div>
+        <a class="charte-menu__lien" href="https://rh.neurones.ma" target="_blank" rel="noreferrer">↗ RH</a>
+        <a class="charte-menu__lien" href="https://erp.neurones.ma" target="_blank" rel="noreferrer">↗ ERP</a>
+        <a class="charte-menu__lien" href="https://mp.neurones.ma" target="_blank" rel="noreferrer">↗ MP Manager</a>
+      </div>
+    </nav>
+
+    <div class="charte-pied">
+      <div><div class="charte-pied__nom" data-charte-utilisateur>prenom.nom@neurones.ma</div><div class="charte-pied__role" data-charte-role>rôle</div></div>
+      <a class="charte-pied__lien" href="/.auth/logout" aria-label="Déconnexion">Déconnexion</a>
+    </div>
+  </aside>
+
+  <!-- ===== CONTENU ===== -->
+  <main class="charte-contenu">
+    <div class="charte-barre-mobile" data-charte-barre-mobile>
+      <button type="button" class="charte-barre-mobile__bouton" aria-label="Ouvrir le menu" data-charte-ouvrir>☰ Menu</button>
+      <a class="charte-barre-mobile__logo" href="/" aria-label="NEURONES — tableau de bord"><img src="../logo-neurones.png" alt="NEURONES Technologies" width="35" height="32"></a>
+    </div>
+    <div class="charte-contenu__int">
+      <h1 style="font-size:var(--charte-taille-xl);margin:0 0 var(--charte-espace-3)">Tableau de bord</h1>
+      <p>Les statuts, et seulement les statuts :
+        <span class="charte-statut charte-statut--succes">✓ Validé</span>
+        <span class="charte-statut charte-statut--alerte">! À vérifier</span>
+        <span class="charte-statut charte-statut--refus">✕ Refusé</span>
+        <span class="charte-statut charte-statut--equipe">Par le chef</span>
+        <span class="charte-statut charte-statut--deplacement">En déplacement</span>
+        <span class="charte-statut charte-statut--marque">Information</span>
+        <span class="charte-statut charte-statut--desactive">Désactivé</span>
+        <span class="charte-statut">Neutre</span>
+      </p>
+    </div>
+  </main>
+</div>
+<script src="entete.js"></script>
+<script>
+  // Démonstration : l'identité depuis /version.json (ici absente -> « build local »), les gardes repliées.
+  ChartNeurones.remplirIdentite(document, { appli: "Nom de l'appli" });
+  ChartNeurones.lireVersion("version.json", function (v) { ChartNeurones.remplirIdentite(document, { version: v }); });
+  ChartNeurones.brancherMenuMobile(document);
+</script>
+</body>
+</html>

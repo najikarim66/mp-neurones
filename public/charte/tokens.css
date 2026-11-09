@@ -1,0 +1,101 @@
+/* tokens.css — GÉNÉRÉ depuis tokens.json (node outils/generer-tokens-css.js --ecrire). NE PAS ÉDITER À LA MAIN. */
+/* Charte NEURONES v1.0.0 — référence : btp-pointage (web RH, rh.neurones.ma), commit a4092e59 (2026-11-05). */
+:root {
+  /* fond, encre, marque, neutres */
+  --charte-fond: #FAFAF7;
+  --charte-carte: #FFFFFF;
+  --charte-encre: #14213D;
+  --charte-encre2: #3F4A5F;
+  --charte-bord: #D8DDE3;
+  --charte-marque: #1F4E78;
+  --charte-marque-fond: #E8F0F8;
+  --charte-marque-bord: #C4D6E8;
+  /* statuts — réservés aux STATUTS, jamais à la décoration */
+  --charte-statut-succes-texte: #1B7A3D;
+  --charte-statut-succes-fond: #F2FAF4;
+  --charte-statut-succes-bord: #B7DFC5;
+  --charte-statut-alerte-texte: #8A5A00;
+  --charte-statut-alerte-fond: #FFF4E0;
+  --charte-statut-alerte-bord: #F2D9A0;
+  --charte-statut-refus-texte: #B3261E;
+  --charte-statut-refus-fond: #FDECEA;
+  --charte-statut-refus-bord: #F5C6C0;
+  --charte-statut-equipe-texte: #5B21B6;
+  --charte-statut-equipe-fond: #F1EBFB;
+  --charte-statut-equipe-bord: #CBB8F0;
+  --charte-statut-deplacement-texte: #0F6E56;
+  --charte-statut-deplacement-fond: #E7F3EF;
+  --charte-statut-deplacement-bord: #BFDFD4;
+  --charte-statut-desactive-texte: #5B6472;
+  --charte-statut-desactive-fond: #E7EAEE;
+  --charte-statut-desactive-bord: #E7EAEE;
+  /* bandeau et menu — couleurs du logo (clair) */
+  --nav-fond: #004186;
+  --nav-fond-2: #0D4F96;
+  --nav-ligne: #2F64A3;
+  --nav-texte: #FFFFFF;
+  --nav-texte-dim: #C9D9EE;
+  --nav-texte-enfant: #E4EDF8;
+  --nav-clair: #D6E5F7;
+  --nav-encre-clair: #003266;
+  --nav-logo-fond: #FFFFFF;
+  --nav-voile: rgba(0, 33, 68, 0.55);
+  /* signalétique chantier — jaune et noir (clair) */
+  --charte-signal-jaune: #FFD400;
+  --charte-signal-jaune-encre: #3B3100;
+  --charte-signal-noir: #0B1F33;
+  --charte-signal-noir-texte: #FFFFFF;
+  /* typographie — plancher 12 px */
+  --charte-typo-famille: Calibri, "Segoe UI", system-ui, sans-serif;
+  --charte-taille-plancher: 12px;
+  --charte-taille-xs: 12px;
+  --charte-taille-sm: 14px;
+  --charte-taille-base: 16px;
+  --charte-taille-lg: 18px;
+  --charte-taille-xl: 20px;
+  --charte-taille-2xl: 24px;
+  --charte-taille-3xl: 30px;
+  --charte-graisse-normal: 400;
+  --charte-graisse-medium: 500;
+  --charte-graisse-semibold: 600;
+  --charte-graisse-bold: 700;
+  --charte-graisse-extrabold: 800;
+  --charte-interligne-serre: 1.25;
+  --charte-interligne-normal: 1.5;
+  /* espacements et rayons */
+  --charte-espace-1: 4px;
+  --charte-espace-2: 8px;
+  --charte-espace-3: 12px;
+  --charte-espace-4: 16px;
+  --charte-espace-6: 24px;
+  --charte-espace-8: 32px;
+  --charte-rayon-sm: 4px;
+  --charte-rayon-md: 6px;
+  --charte-rayon-lg: 8px;
+  --charte-rayon-carte: 8px;
+  --charte-rayon-pastille: 9999px;
+  /* gabarits */
+  --charte-barre-laterale: 288px;
+  --charte-barre-mobile: 52px;
+  --charte-logo-hauteur: 80px;
+  --charte-logo-largeur: 87px;
+  --charte-point-mobile: 768px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --nav-fond: #0B2442;
+    --nav-fond-2: #14345E;
+    --nav-ligne: #24477A;
+    --nav-texte: #EEF3FA;
+    --nav-texte-dim: #A8BEDC;
+    --nav-texte-enfant: #D5E1F0;
+    --nav-clair: #A9CBF0;
+    --nav-encre-clair: #0B2442;
+    --nav-logo-fond: #FFFFFF;
+    --nav-voile: rgba(3, 12, 24, 0.65);
+    --charte-signal-jaune: #E6C200;
+    --charte-signal-jaune-encre: #1A1500;
+    --charte-signal-noir: #0B1F33;
+    --charte-signal-noir-texte: #FFFFFF;
+  }
+}
