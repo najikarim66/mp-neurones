@@ -47,7 +47,8 @@ check('toggle estampille doc.gardeBuild depuis version.json', /doc\.gardeBuild =
 console.log('\n=== ② en-tête : pastille via la fonction pure, DG seul ===');
 var rb = bloc(html, 'function renderBadgeVersion', 'function renderBandeauVersion');
 check('renderBadgeVersion appelle pastilleGardeInactive(S._isDg, …)', /pastilleGardeInactive\(S\._isDg,/.test(rb), '');
-check('pastille ambre (#f59e0b) + texte « Garde inactive »', /#f59e0b/.test(rb) && /Garde inactive/.test(rb), '');
+// Charte NEURONES (05/11/2026) : la pastille est une CLASSE (garde-inactive, jeton alerte, 12 px), plus un hex en dur.
+check('pastille alerte (classe garde-inactive, jeton de la charte) + texte « Garde inactive »', /class="garde-inactive"/.test(rb) && /Garde inactive/.test(rb), '');
 check('chargerRole rafraîchit le badge une fois le rôle connu', /S\._isDg=!!r\.isDg;[^}]*renderBadgeVersion\(\)/.test(bloc(html, 'function chargerRole', 'function pgParametres')), '');
 
 console.log('\n---------------------------------------------------------------');
