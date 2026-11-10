@@ -3431,7 +3431,7 @@ sbStats = function(){
   if(el && count>0){
     // Ajouter une ligne compteur si pas deja presente
     if(el.innerHTML.indexOf('sf-row-mainlevee')<0){
-      var warningRow = '<div class="sf-row sf-row-mainlevee" style="color:#8B2A1C"><span class="sf-lbl" style="color:#8B2A1C">&#9888; A recuperer</span><span class="sf-val" style="color:#8B2A1C;font-weight:700">'+count+'</span></div>';
+      var warningRow = '<div class="sf-row sf-row-mainlevee" style="color:var(--nav-clair)"><span class="sf-lbl" style="color:var(--nav-clair)">&#9888; A recuperer</span><span class="sf-val" style="color:var(--nav-clair);font-weight:700">'+count+'</span></div>';
       // Inserer avant "Paiements en attente"
       el.innerHTML = el.innerHTML.replace('<div class="sf-row"><span class="sf-lbl">Paiements en attente</span>', warningRow+'<div class="sf-row"><span class="sf-lbl">Paiements en attente</span>');
     }
