@@ -15,8 +15,8 @@
   },
   "source": {
     "depot": "neurones-charte",
-    "commit": "61392bc359fb2a5b8d5957539bb89907f4b5851e",
-    "date": "2026-11-09"
+    "commit": "57262ba52a7363f131cd598b76183e9961e112ed",
+    "date": "2026-11-10"
   },
   "fichiers": {
     "tokens.json": "265e621852106827282ac39654d029ddf8d9839b3f28fbf96c8a2be32b33fad8",
@@ -27,6 +27,6 @@
     "entete/entete.html": "78d5d396904e8fbcadb1e0d93dc031dc2128f901e884e1654e526e575013dddb",
     "entete/entete.js": "4403c5b53bb4dc96a4b51f3ea00fbf0d1c70340807dfca646d402cd58605ec34",
     "outils/verifier-copie.cjs": "8e1059896e5123340485fb53b08cc44d08e5210508372dfd458f08c4f0b21f79",
-    "outils/scan-hex.cjs": "1a0322273ce527dad208b964907c408aee8b76894fbfdfae87aada7d2fb261d0"
+    "outils/scan-hex.cjs": "56512b75303a11c96dd0f6233c85f8a6b77e1a89c5fb5d2b8648e6e7a98c12b2"
   }
 }

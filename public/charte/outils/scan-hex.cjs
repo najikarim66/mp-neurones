@@ -25,7 +25,7 @@ function sansCommentaires(texte) {
   return String(texte)
     .replace(/\/\*[\s\S]*?\*\//g, (m) => m.replace(/[^\n]/g, " "))
     .replace(/<!--[\s\S]*?-->/g, (m) => m.replace(/[^\n]/g, " "))
-    .replace(/(^|[^:"'\\])\/\/(?![^\n]*["'`][^\n]*\))[^\n]*/g, "$1");
+    .replace(/(^|[^:"'\\])\/\/(?![^\n]*["'`][^\n]*\))[^\n]*/gm, "$1"); // drapeau m : « ^ » vaut en début de CHAQUE ligne (contre-épreuve rouge en CI MP et ERP le 09/11 sans lui)
 }
 /** Compte les couleurs en dur d'un texte ; rend { total, lignes: [{ligne, occurrence}] }. jetons=true : les lignes de déclaration de jetons sont admises. */
 function compter(texte, jetons) {
@@ -42,7 +42,8 @@ module.exports = { compter, sansCommentaires };
 if (require.main === module) {
   let ko = 0; const dire = (ok, l) => { console.log((ok ? "ok  - " : "KO  - ") + l); if (!ok) ko++; };
   // Contre-épreuve (#20 ter) : le scanner mord, et il ignore ce qu'il doit ignorer.
-  const c1 = compter('<div style="color:#1F4E78;background:rgba(0,0,0,.5)">x</div>\n:root{--a:#FFF}\n// #abc en commentaire\n/* #abcdef */\n');
+  // La déclaration d'un jeton tient sur SA ligne (comme dans tokens.css) : c'est cette forme que le scanner admet.
+  const c1 = compter('<div style="color:#1F4E78;background:rgba(0,0,0,.5)">x</div>\n:root {\n  --a: #FFF;\n}\n// #abc en commentaire\n/* #abcdef */\n');
   dire(c1.total === 2, "contre-épreuve : 2 couleurs en dur vues (hex et rgba), déclaration et commentaires ignorés" + (c1.total === 2 ? "" : " — vu " + c1.total));
   const c2 = compter("  --nav-fond: #004186;\n  color: var(--nav-fond);\n");
   dire(c2.total === 0, "contre-épreuve : une déclaration de variable n'est pas une couleur en dur");
