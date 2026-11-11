@@ -3951,7 +3951,7 @@ function veilleKwSave(){
   if(btn){ btn.disabled=true; btn.textContent='Enregistrement...'; }
   veilleApiSave(cfg).then(function(saved){
     if(saved && typeof saved==='object') S.veilleConfig=saved;
-    toast('Mots-cles enregistres - pris en compte au prochain scrape (7h / 15h)', true);
+    toast('Mots-cles enregistres - pris en compte au prochain scrape (8h / 15h)', true);
     S._vkwOpen=true;
     render();
   }).catch(function(e){
@@ -3976,7 +3976,7 @@ function veilleKeywordsCard(){
         '<button class="btn" onclick="veilleKwAdd()">+ Ajouter</button>'+
         '<button id="vkw-save" class="btn btn-prim" onclick="veilleKwSave()">Enregistrer</button>'+
       '</div>'+
-      '<div style="font-size:12px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (7h / 15h).</div>'+
+      '<div style="font-size:12px;color:#7A7369;margin-top:8px">Ces mots-cles pilotent ce que le pipeline scrape sur marchespublics.gov.ma. Modifie la liste puis <strong>Enregistrer</strong> : pris en compte au prochain run planifie (8h / 15h).</div>'+
     '</div>'+
   '</details>';
 }
@@ -4175,7 +4175,7 @@ function pgVeille(){
 
   /* Aide */
   var aide='<div class="info-box info-blue" style="margin-bottom:10px;font-size:12px">'+
-    '<strong>Veille automatique</strong> - Pipeline GitHub Actions (cron 7h + 15h) qui scrape marchespublics.gov.ma. '+
+    '<strong>Veille automatique</strong> - Pipeline GitHub Actions (cron 8h + 15h) qui scrape marchespublics.gov.ma. '+
     'Score &ge;60 = VERT. Bouton <strong>DCE</strong> : telecharge le ZIP via le cloud (~2 min, marche partout).'+
   '</div>';
 
