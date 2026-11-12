@@ -15,14 +15,14 @@
   },
   "source": {
     "depot": "neurones-charte",
-    "commit": "57262ba52a7363f131cd598b76183e9961e112ed",
-    "date": "2026-11-10"
+    "commit": "04755167f37c504ecd26db01c6b117cf015b2941",
+    "date": "2026-11-12"
   },
   "fichiers": {
     "tokens.json": "265e621852106827282ac39654d029ddf8d9839b3f28fbf96c8a2be32b33fad8",
     "tokens.css": "8935d5a697d7ccc4b4c2edb2d8a8ef0b44afb2006e2da89b8b5a1594d3d078b1",
     "logo-neurones.png": "8edfb94a30edc2829ae094e7b0546df8167a05b217123cc25d0372da22991f18",
-    "README.md": "2dc8f2fe01d5d2c5d94ed967c3e8bf9037cbe5d474b5cbf09c2423bf83527734",
+    "README.md": "c5e56675ba626c8faa4da05f0fe19abbf97070a7639d0f994a8e19bc7073ec55",
     "entete/entete.css": "a95d8d39bde33fe13825adb596f70fb185e8d442ac0b18359db70c5f92923423",
     "entete/entete.html": "78d5d396904e8fbcadb1e0d93dc031dc2128f901e884e1654e526e575013dddb",
     "entete/entete.js": "4403c5b53bb4dc96a4b51f3ea00fbf0d1c70340807dfca646d402cd58605ec34",

@@ -31,6 +31,14 @@ MP (mp.neurones.ma). Le mobile RH porte déjà les mêmes hex de statut.
    la gate ; une paire nouvelle se vérifie avant d'être posée.
 5. **Rien ne se devine.** Aucun identifiant technique sous les yeux d'un humain ; repli toujours explicite
    (« Site inconnu (clé) »), jamais un tiret nu ni un id.
+6. **Deux bleus, deux rôles nommés (décision DG du 10/11/2026) — ils restent distincts.**
+   - `nav-fond` = `#004186` (jeton `couleur.nav.clair.fond`, variable `--nav-fond`) : **bandeau et menu** uniquement — le fond
+     de la barre du haut et du menu latéral, aux couleurs du logo. En thème sombre : `couleur.nav.sombre.fond`.
+   - `marque` = `#1F4E78` (jeton `couleur.marque`, variable `--charte-marque`) : **boutons, liens et accents** dans les écrans —
+     bouton principal, lien, onglet actif, filet d'accent, focus.
+   - Jamais l'un à la place de l'autre : un bouton ne prend pas `nav-fond`, le bandeau ne prend pas `marque`. MP, l'ERP et le
+     RH appliquent cette répartition de la même façon.
+
 Et : aucune couleur en hex hors des variables dans l'en-tête, le menu et les écrans migrés (gate `scan-hex.cjs`,
 cliquet : un hex de plus se décide, il ne glisse pas) ; la copie de la charte dans une appli ne diverge jamais
 de sa version de référence (`verifier-copie.cjs`).
