@@ -70,14 +70,33 @@ var refs = r.items.map(function (x) { return x.num; }).sort().join(',');
 check('reunit P1 (prov, AO infructueux) ET B (def mainlevee) ; pas P2 (AO en cours)', refs === 'B,P1', 'items=' + refs);
 check('total a restituer = 270 000 (220k + 50k)', r.total === 270000, 'total=' + r.total);
 
-console.log('\n=== 5. Cycle 3 etats : mainlevee_recue (entre demandee et liberee) ===');
-var recu = { id: 'x1', num: 'X', type: 'retenue_garantie', banque: 'FINEA', montant: 70000, statut: 'mainlevee_recue', marche_id: 'm9' };
-check('mainlevee_recue -> encore bloquee (argent pas revenu de la banque)', MPC.isBlocked(recu) === true, '');
-var aggR = MPC.aggregate([recu]);
-check('kpi.recue = 1', aggR.kpi.recue === 1, JSON.stringify(aggR.kpi));
-check('engage inclut la mainlevee_recue', aggR.engage === 70000, 'engage=' + aggR.engage);
-var restR = MPC.aRestituer([recu]);
-check('aRestituer inclut mainlevee_recue', restR.items.length === 1 && restR.total === 70000, JSON.stringify(restR));
+console.log('\n=== 5. Cycle DG 20/11 : piece_recue et demande_deposee (entre demandee au client et liberee) ===');
+var recu = { id: 'x1', num: 'X', type: 'retenue_garantie', banque: 'FINEA', montant: 70000, statut: 'piece_recue', marche_id: 'm9', piece_liberation: { type: 'original_caution', date: '2026-11-02', scan: { blob: 'p/orig.pdf' } } };
+var ancienRecu = { id: 'x0', num: 'X0', type: 'retenue_garantie', banque: 'FINEA', montant: 5000, statut: 'mainlevee_recue', marche_id: 'm9', mainlevee_client: { blob: 'p/ml.pdf' }, date_mainlevee_recue: '2026-10-01' };
+var depose = { id: 'x2', num: 'Y', type: 'bonne_execution', banque: 'BMCE', montant: 20000, statut: 'demande_deposee', marche_id: 'm9', demande_banque: { date_depot: '2026-11-01' } };
+var deposeRecent = { id: 'x3', num: 'Z', type: 'bonne_execution', banque: 'BMCE', montant: 1000, statut: 'demande_deposee', marche_id: 'm9', demande_banque: { date_depot: '2026-11-18' } };
+check('piece_recue -> encore bloquee (argent pas revenu de la banque)', MPC.isBlocked(recu) === true, '');
+check('demande_deposee -> encore bloquee (accuse absent)', MPC.isBlocked(depose) === true, '');
+check('ancien mainlevee_recue -> lu piece_recue, bloquee', MPC.etatCycle(ancienRecu) === 'piece_recue' && MPC.isBlocked(ancienRecu) === true, '');
+var aggR = MPC.aggregate([recu, ancienRecu, depose, deposeRecent]);
+check('kpi.recue = 2 (piece recue, dont l\'ancien etat), kpi.banque = 2', aggR.kpi.recue === 2 && aggR.kpi.banque === 2, JSON.stringify(aggR.kpi));
+check('engage inclut piece_recue et demande_deposee (96 000)', aggR.engage === 96000, 'engage=' + aggR.engage);
+check('engage par banque : les cautions en attente de la banque y restent (BMCE 21 000)', aggR.byBank['BMCE'].eng === 21000, JSON.stringify(aggR.byBank));
+var restR = MPC.aRestituer([recu, depose]);
+check('aRestituer N\'inclut PLUS piece_recue / demande_deposee (blocs dedies)', restR.items.length === 0, JSON.stringify(restR));
+var adb = MPC.aDemanderBanque([recu, ancienRecu, depose, a]);
+check('aDemanderBanque = pieces recues (2), groupees par banque (FINEA), total 75 000', adb.items.length === 2 && adb.parBanque.length === 1 && adb.parBanque[0].banque === 'FINEA' && adb.total === 75000, JSON.stringify(adb.parBanque.map(function (g) { return [g.banque, g.items.length, g.total]; })));
+var NOW = new Date('2026-11-20T12:00:00Z').getTime();
+var eab = MPC.enAttenteBanque([recu, depose, deposeRecent], NOW, null);
+check('enAttenteBanque = demandes deposees (2), plus ancienne d\'abord, jours ecoules 19 et 2', eab.items.length === 2 && eab.items[0].num === 'Y' && eab.items[0].jours === 19 && eab.items[1].jours === 2, JSON.stringify(eab.items.map(function (c) { return [c.num, c.jours]; })));
+check('alerte au-dela du delai par defaut (15 j) : Y en alerte, Z non, nbAlerte 1', eab.items[0].alerte === true && eab.items[1].alerte === false && eab.nbAlerte === 1 && eab.delai === 15, '');
+var eab30 = MPC.enAttenteBanque([depose], NOW, 30);
+check('delai parametrable (30 j) : plus d\'alerte a 19 j', eab30.items[0].alerte === false && eab30.delai === 30, '');
+check('depot sans date -> jours null, alerte false, date_depot_absente nomme', (function () { var e = MPC.enAttenteBanque([{ statut: 'demande_deposee', montant: 1, banque: 'B' }], NOW).items[0]; return e.jours === null && e.alerte === false && e.date_depot_absente === true; })(), '');
+check('unify transporte piece_liberation / demande_banque (definitive ET provisoire)', (function () {
+  var r = MPC.unify([recu], [{ id: 'aoP', ref: 'AO-P', objet: 'Objet AO', maitre_ouvrage: 'MO', statut: 'infructueux', caution_prov: { num: 'PP', banque: 'CIH', montant: 3000, statut: 'demande_deposee', demande_banque: { date_depot: '2026-11-10' } } }], gm);
+  return r[0].piece_liberation.type === 'original_caution' && r[1].demande_banque.date_depot === '2026-11-10' && r[1].objet === 'Objet AO' && r[1].maitre_ouvrage === 'MO';
+})(), '');
 
 console.log('\n=== 6. Reference banque COMPLETE (referenceBanque) + alias (num) — 23/10/2026 ===');
 var CREF = [

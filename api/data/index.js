@@ -26,6 +26,31 @@ const ALLOWED_CONTAINERS = new Set([
   // "gc_chantiers",
 ]);
 
+// GARDE du cycle de mainlevee (regle DG 20/11/2026) sur l'enregistrement GENERIQUE d'une caution
+// (mp_cautions) ou d'un AO portant une provisoire (mp_aos.caution_prov) : un formulaire ne pose jamais
+// piece_recue / demande_deposee / liberee / restituee (ces etats viennent des depots de pieces), et il
+// n'efface jamais les pieces et dates posees par le serveur (anti-clobber, meme liste que le front).
+// Renvoie le motif du refus, ou null (et complete alors `body` avec les champs serveur preserves).
+async function garderCycleMainlevee(container, body) {
+  if (!body || !body.id) return null;
+  if (container === "mp_cautions") {
+    const avant = await readOne(container, body.id, body.marcheId);
+    const refus = MPMainlevee.refusChangementStatutGenerique(avant, body);
+    if (refus) return refus;
+    if (avant) MPMainlevee.preserverChampsServeur(body, avant, MPMainlevee.CHAMPS_PIECES_CAUTION);
+    return null;
+  }
+  if (container === "mp_aos" && body.caution_prov && typeof body.caution_prov === "object") {
+    const avant = await readOne(container, body.id, body.id);
+    const cpAvant = avant && avant.caution_prov ? avant.caution_prov : null;
+    const refus = MPMainlevee.refusChangementStatutGenerique(cpAvant, body.caution_prov);
+    if (refus) return refus;
+    if (cpAvant) MPMainlevee.preserverChampsServeur(body.caution_prov, cpAvant, MPMainlevee.CHAMPS_PIECES_CAUTION);
+    return null;
+  }
+  return null;
+}
+
 module.exports = async function (context, req) {
   if (cors(context, req)) return;
 
@@ -64,6 +89,8 @@ module.exports = async function (context, req) {
         if (container === "mp_cautions" && !MPMainlevee.cautionMarcheIdValide(body)) {
           return respond(context, 400, { error: "Caution refusee : marcheId obligatoire (une caution sans marche ne peut pas etre enregistree)." });
         }
+        const refusCycle = await garderCycleMainlevee(container, body);
+        if (refusCycle) return respond(context, 409, { error: refusCycle });
         if (!body.id) body.id = generateId(container.split("_")[1] || "doc");
         body.createdAt = body.createdAt || new Date().toISOString();
         body.updatedAt = new Date().toISOString();
@@ -81,6 +108,8 @@ module.exports = async function (context, req) {
           return respond(context, 400, { error: "Caution refusee : marcheId obligatoire (une caution sans marche ne peut pas etre enregistree)." });
         }
         body.id = id;
+        const refusCyclePut = await garderCycleMainlevee(container, body);
+        if (refusCyclePut) return respond(context, 409, { error: refusCyclePut });
         body.updatedAt = new Date().toISOString();
         const updated = await upsert(container, body);
         return respond(context, 200, updated);

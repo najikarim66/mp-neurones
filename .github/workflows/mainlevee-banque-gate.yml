@@ -1,0 +1,47 @@
+name: Gate mainlevee banque
+
+# Demande de mainlevee a la banque (regle DG 20/11/2026). Gates qui EXECUTENT la logique pure et le
+# generateur de lettre : cycle (piece recue -> demande deposee -> accuse), gardes (pas de demande sans
+# piece au type enregistre, scan obligatoire, pas de « liberee » sans accuse, formulaire refuse),
+# lettre PDF (une banque, intitules entiers, aucun id), blocs de l'ecran, copie unique du module.
+
+on:
+  push:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/cautions-calc.js'
+      - 'api/lettre-mainlevee.js'
+      - 'api/assets/**'
+      - 'api/package.json'
+      - 'api/package-lock.json'
+      - 'test/mainlevee-banque.test.js'
+      - 'test/cautions.test.js'
+      - 'test/module-copy.test.js'
+      - '.github/workflows/mainlevee-banque-gate.yml'
+  pull_request:
+    paths:
+      - 'public/pv-mainlevee.js'
+      - 'api/pv-mainlevee.js'
+      - 'public/cautions-calc.js'
+      - 'api/lettre-mainlevee.js'
+      - 'api/assets/**'
+      - 'test/mainlevee-banque.test.js'
+      - 'test/cautions.test.js'
+
+jobs:
+  gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Dépendances de l'API (pdf-lib pour la lettre)
+        run: cd api && npm ci
+      - name: Gate mainlevee banque (cycle, gardes, lettre, blocs)
+        run: node test/mainlevee-banque.test.js
+      - name: Gate cautions (registre, blocs a demander / en attente)
+        run: node test/cautions.test.js
+      - name: Gate copie unique du module (api == public, octet a octet)
+        run: node test/module-copy.test.js

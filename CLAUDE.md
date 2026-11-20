@@ -8,18 +8,34 @@
   `mp_config`, `mp_banques`, `mp_releves_banque`, `mp_paiements`, `mp_avenants`, `mp_avancements`, `mp_bordereau`, `mp_indices`,
   `mp_etudes_ao`, `mp_coffre_docs`, `mp_ocr_cache`, `mp_ocr_comparaisons`, `mp_mail_to`. Inventaire par `grep -rhoE "\bmp_[a-z_]+\b" api`.
 
-## Gates (25 fichiers dans `test/`, node pur, sans réseau ni base — `node test/<fichier>`)
+## Gates (26 fichiers dans `test/`, node pur, sans réseau ni base — `node test/<fichier>`)
 - Calculs métier (exécutent la logique pure, doctrine §3) : `echeances`, `cautions`, `avenant-date`, `rappr-lot`, `rapprochement-20-marches`,
-  `releves-banque`, `piece-justif`, `pv-mainlevee`, `dce-statut`, `acte-invariant-patch`, `apparier-acte`, `ocr-acte`, `ocr-mesure`.
+  `releves-banque`, `piece-justif`, `pv-mainlevee`, `mainlevee-banque` (cycle DG 20/11, lettre PDF : `cd api && npm ci` d'abord), `dce-statut`, `acte-invariant-patch`, `apparier-acte`, `ocr-acte`, `ocr-mesure`.
 - Étude d'AO : `etude-sources`, `etude-ecarts`, `etude-coffre`, `etude-coffre-hors-api`, `etude-bordereau-xlsx`, `etude-pieces`, `etude-plafonds`.
 - Front et livraison : `front-es5` (ES5 strict), `garde-version`, `garde-toggle`, `garde-rearm`, `module-copy`, `no-autolink-bundle.js`,
   `no-truncated-write.js`.
-- CI : 20 workflows « Gate … » (un par fichier, sur `pull_request` et `main`, filtrés par chemins) + le workflow Azure Static Web Apps, qui
+- CI : 21 workflows « Gate … » (un par fichier, sur `pull_request` et `main`, filtrés par chemins) + le workflow Azure Static Web Apps, qui
   enchaîne AVANT le build : `node public/charte/outils/verifier-copie.cjs`, `node public/charte/outils/scan-hex.cjs --cliquet
   test/charte-cliquet-hex.json`, `node test/front-es5.test.js`, `node test/garde-version.test.js`. Son job « Close Pull Request » est rouge
   sur l'événement pull_request : sans effet, connu.
 - Tout calcul nouveau extrait sa logique pure dans un module chargé par le navigateur ET par node (`public/echeances.js`,
   `public/cautions-calc.js`) et gagne son fichier de gate + son workflow.
+
+## Cycle de vie d'une caution (décision DG 20/11/2026 — définitives, RG et provisoires)
+- États : `active` → (facultatif) `mainlevee_demandee` = demandée AU MAÎTRE D'OUVRAGE, rien reçu → `piece_recue` (mainlevée délivrée par le client
+  OU original de la caution restitué, **date + scan obligatoires**, `piece_liberation {type, date, scan}`) → `demande_deposee` (demande déposée à la
+  banque, `demande_banque.date_depot`) → `liberee` (accusé de la banque joint). L'ancien `mainlevee_recue` se lit `piece_recue` (`etatCycle`).
+  Aucune libération sans accusé : `caution-liberation-directe` répond 409 ; un accusé papier se scanne et se dépose comme accusé.
+- Routes : `POST /api/caution-piece` (`piece_type` mainlevee_client | original_caution | accuse_banque | decharge_banque, cible `cautionId+marcheId`
+  ou `aoId` pour une provisoire) ; `POST /api/caution-demande-banque` (`action: "lettre"` → PDF papier à en-tête, une banque, plusieurs cautions,
+  conservé dans le Blob `mp-preuves/lettres-mainlevee/`, statut inchangé — **jamais envoyé par courriel** ; `action: "depot"` → date de dépôt, lot
+  entier ou rien) ; `POST /api/parametres-mp` (DG : `delai_alerte_banque_jours`, défaut 15, servi par `GET /api/version`).
+- Gardes (module pur `pv-mainlevee.js`, gate `mainlevee-banque`) : `depotBanqueRecevable` (pièce au type enregistré, scan, date),
+  `refusChangementStatutGenerique` (`/api/data` refuse un formulaire qui poserait un état du cycle, et préserve les champs serveur
+  `CHAMPS_PIECES_CAUTION`). Règle du 08/10 inchangée : dernière caution libérée + PV → marché terminé.
+- Écran Cautions : blocs `[data-bloc="a-demander-banque"]` (groupé par banque, cases, « Lettre de demande (PDF) », « Enregistrer le dépôt ») et
+  `[data-bloc="en-attente-banque"]` (jours écoulés, alerte au-delà du délai, ces cautions restent dans l'engagé par banque) ; gate écran
+  `e2e/cautions-banque.spec.js`. Identité de la lettre : `erp-db/gc_config/societe_emettrice` (lecture seule) ; logo `api/assets/logo-neurones.png`.
 
 ## Charte commune (décision DG 05/11/2026)
 - `public/charte/` est une COPIE CONTRÔLÉE de https://github.com/najikarim66/neurones-charte (`MANIFESTE.json` → `source.commit`) :

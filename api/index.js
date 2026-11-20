@@ -77,6 +77,51 @@ async function recomputeMarcheStatut(marcheId, dateISO) {
   } catch (e) { return null; }
 }
 
+// Cible d'une operation du cycle de mainlevee : une caution (mp_cautions, partition marcheId) OU la provisoire
+// portee par un AO (mp_aos.caution_prov). Renvoie { caution, cautionsC } ou { caution, ao, aosC, avaitType }, ou null.
+// La provisoire est presentee au module pur avec type 'provisoire' et le contexte de l'AO (ref, objet, maitre
+// d'ouvrage) pour la lettre ; ces cles ajoutees sont retirees a l'ecriture (ecrireCibleCaution).
+const CLES_PROV_AJOUTEES = ["type", "_provisoire", "ref", "objet", "maitre_ouvrage"];
+async function lireCibleCaution(c) {
+  if (c.aoId) {
+    const aosC = getDb().container("mp_aos");
+    let ao = null;
+    try { ao = (await aosC.item(c.aoId, c.aoId).read()).resource || null; } catch (e) { ao = null; }
+    if (!ao || !ao.caution_prov) return null;
+    const avait = {}; CLES_PROV_AJOUTEES.forEach((k) => { avait[k] = Object.prototype.hasOwnProperty.call(ao.caution_prov, k); });
+    const caution = Object.assign({}, ao.caution_prov, { type: "provisoire", _provisoire: true, ref: ao.ref || "", objet: ao.objet || "", maitre_ouvrage: ao.maitre_ouvrage || "" });
+    return { caution, ao, aosC, avait };
+  }
+  if (!c.cautionId || !c.marcheId) return null;
+  const cautionsC = getDb().container("mp_cautions");
+  let caution = null;
+  try { caution = (await cautionsC.item(c.cautionId, c.marcheId).read()).resource || null; } catch (e) { caution = null; }
+  return caution ? { caution, cautionsC } : null;
+}
+async function ecrireCibleCaution(cible, maj) {
+  if (cible.ao) {
+    const cp = {}; Object.keys(maj).forEach((k) => { cp[k] = maj[k]; });
+    CLES_PROV_AJOUTEES.forEach((k) => { if (!cible.avait[k]) delete cp[k]; });
+    cible.ao.caution_prov = cp;
+    cible.ao.updatedAt = new Date().toISOString();
+    await cible.aosC.items.upsert(cible.ao);
+    return cible.ao;
+  }
+  maj.updatedAt = new Date().toISOString();
+  await cible.cautionsC.items.upsert(maj);
+  return maj;
+}
+// Identite de la societe emettrice (meme source que l'etude d'AO : erp-db/gc_config/societe_emettrice, lecture seule).
+async function lireSocieteEmettrice() {
+  try {
+    const r = (await getDb().client.database("erp-db").container("gc_config").items.query("SELECT * FROM c WHERE c.id = 'societe_emettrice'").fetchAll()).resources;
+    const x = r.find((d) => d.type === "societe_emettrice") || r[0] || {};
+    const o = {}; ["raison_sociale", "forme_juridique", "capital_social", "ice", "if", "rc", "ville_rc", "patente", "cnss", "adresse", "cp", "ville", "tel", "email"].forEach((k) => { o[k] = x[k]; });
+    return o;
+  } catch (e) { return {}; }
+}
+const TYPE_LABELS_LETTRE = { bonne_execution: "Caution définitive", retenue_garantie: "Caution de retenue de garantie", soumission: "Caution de soumission", avance_demarrage: "Caution d'avance de démarrage", provisoire: "Caution provisoire" };
+
 // Verifie qu'un user est authentifie via Entra ID (en-tete x-ms-client-principal injecte par SWA)
 function getAuthenticatedUser(req) {
   const header = req.headers && req.headers["x-ms-client-principal"];
@@ -121,11 +166,13 @@ module.exports = async function (context, req) {
     try { contrat = require("./contrat-api.json"); } catch (e) { contrat = {}; }
     try { vj = require("./version.json"); } catch (e) { vj = {}; }
     var apiContract = (contrat && Number.isInteger(contrat.version) && contrat.version > 0) ? contrat.version : null;
+    var delaiAlerteBanqueJours = MPMainlevee.DELAI_ALERTE_BANQUE_DEFAUT;
     var gardeVersionActive = true;
     try {
       const cont = getDb().container("mp_config");
       let doc = null;
       try { doc = (await cont.item("parametres", "parametres").read()).resource; } catch (e) { doc = null; }
+      if (doc && Number.isInteger(doc.delai_alerte_banque_jours) && doc.delai_alerte_banque_jours > 0) delaiAlerteBanqueJours = doc.delai_alerte_banque_jours;
       if (doc && typeof doc.gardeVersionActive === "boolean") gardeVersionActive = doc.gardeVersionActive;
       // Réarmement au déploiement : un build strictement plus récent que celui en vigueur
       // réactive la garde (tracé « réarmée par déploiement »), même si le DG l'avait éteinte
@@ -142,7 +189,7 @@ module.exports = async function (context, req) {
     context.res = {
       status: 200,
       headers: { "Content-Type": "application/json", "Cache-Control": "no-store" },
-      body: { app: "mp-neurones-api", apiContract: apiContract, build: vj.build || null, commit: vj.commit || null, buildDate: vj.buildDate || null, gardeVersionActive: gardeVersionActive }
+      body: { app: "mp-neurones-api", apiContract: apiContract, build: vj.build || null, commit: vj.commit || null, buildDate: vj.buildDate || null, gardeVersionActive: gardeVersionActive, delaiAlerteBanqueJours: delaiAlerteBanqueJours }
     };
     return;
   }
@@ -534,14 +581,15 @@ module.exports = async function (context, req) {
   }
 
   // Route caution-piece : POST /api/caution-piece
-  // Cycle a 3 etats (def/RG) : depot d'UNE piece qui fait avancer UNE caution.
-  //   piece_type "mainlevee_client" : mainlevee_demandee -> mainlevee_recue
-  //   piece_type "accuse_banque"    : mainlevee_recue    -> liberee
-  // Body JSON : { cautionId, marcheId (partition), piece_type, date (YYYY-MM-DD),
-  //               nom_original, content_type, data_base64 }
-  // Meme ordre strict que le PV : Blob d'abord, puis la caution (statut + ref piece
-  // + date). La transition est refusee si le statut de depart ne correspond pas
-  // (pas de saut d'etat), via MPMainlevee.pieceRecevable.
+  // Cycle de vie d'une caution (regle DG 20/11/2026), definitives, RG ET provisoires (caution_prov d'un AO) :
+  //   piece_type "mainlevee_client" | "original_caution" : active|mainlevee_demandee -> piece_recue
+  //                                   (piece du maitre d'ouvrage, DATE + SCAN obligatoires : elle part a la banque)
+  //   piece_type "accuse_banque"    : demande_deposee -> liberee (aucune liberation sans l'accuse de la banque)
+  //   piece_type "decharge_banque"  : jointe sur demande_deposee, statut inchange
+  //   a_posteriori: true            : justificatif sur une caution deja close, statut inchange
+  // Body JSON : { cautionId, marcheId (partition) | aoId (provisoire), piece_type, date (YYYY-MM-DD),
+  //               nom_original, content_type, data_base64, a_posteriori? }
+  // Meme ordre strict que le PV : recevabilite, puis Blob, puis le document (statut + ref piece + date).
   if (fn === "cautionPiece") {
     try {
       const user = getAuthenticatedUser(req);
@@ -551,18 +599,21 @@ module.exports = async function (context, req) {
       const body = req.body || {};
       const cautionId = String(body.cautionId || "").trim();
       const marcheId = String(body.marcheId || "").trim();
+      const aoId = String(body.aoId || "").trim();
       const pieceType = String(body.piece_type || "").trim();
       const dateReelle = String(body.date || "").trim();
       const nomOriginal = String(body.nom_original || "").trim();
       const contentType = String(body.content_type || "").trim();
       const dataB64 = String(body.data_base64 || "");
+      const estProv = !!aoId;
 
-      if (!cautionId || !marcheId || !pieceType || !dateReelle || !dataB64) {
-        context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId, piece_type, date, data_base64" } };
+      if (!pieceType || !dateReelle || !dataB64 || (!estProv && (!cautionId || !marcheId))) {
+        context.res = { status: 400, body: { error: "Manquant : cautionId + marcheId (ou aoId pour une provisoire), piece_type, date, data_base64" } };
         return;
       }
-      if (!MPMainlevee.transitionPiece(pieceType)) {
-        context.res = { status: 400, body: { error: "piece_type inconnu (mainlevee_client ou accuse_banque)" } };
+      const estReception = !!MPMainlevee.PIECES_LIBERATION[pieceType];
+      if (!estReception && !MPMainlevee.transitionPiece(pieceType) && !MPMainlevee.PIECES_JUSTIF[pieceType]) {
+        context.res = { status: 400, body: { error: "piece_type inconnu (mainlevee_client, original_caution, accuse_banque ou decharge_banque)" } };
         return;
       }
       if (!MPMainlevee.dateReceptionValide(dateReelle)) {
@@ -578,32 +629,36 @@ module.exports = async function (context, req) {
       const conn = process.env.STORAGE_CONNECTION_STRING;
       if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
 
-      // La caution doit exister ET la transition doit etre recevable (pas de saut d'etat).
-      const cautionsC = getDb().container("mp_cautions");
-      let caution = null;
-      try { const r = await cautionsC.item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
-      if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
-      // A POSTERIORI : justificatif (mainlevée/accusé) sur une caution DÉJÀ libérée/
-      // restituée (régularisation rétroactive), SANS changer le statut. Sinon : cycle normal.
-      const aPosteriori = !!(req.body && req.body.a_posteriori);
+      // Cible : la caution (mp_cautions) ou la provisoire portee par l'AO (mp_aos.caution_prov).
+      const cible = await lireCibleCaution({ cautionId, marcheId, aoId });
+      if (!cible) { context.res = { status: 404, body: { error: estProv ? "Caution provisoire introuvable" : "Caution introuvable" } }; return; }
+      const caution = cible.caution;
+
+      // Recevabilite AVANT le blob (pas de saut d'etat, pas d'ecrasement muet).
+      const aPosteriori = !!body.a_posteriori;
       if (aPosteriori) {
         if (!MPMainlevee.pieceJustifRecevable(caution, pieceType)) {
-          context.res = { status: 409, body: { error: "Justificatif a posteriori non recevable (statut « " + caution.statut + " », ou pièce déjà jointe)" } };
+          context.res = { status: 409, body: { error: "Justificatif a posteriori non recevable (statut « " + caution.statut + " », ou piece deja jointe)" } };
+          return;
+        }
+      } else if (estReception) {
+        if (!MPMainlevee.pieceLiberationRecevable(caution, pieceType)) {
+          context.res = { status: 409, body: { error: "Reception non recevable pour le statut actuel (" + caution.statut + ") : la piece du maitre d'ouvrage se recoit sur une caution active ou demandee au client" } };
           return;
         }
       } else if (!MPMainlevee.pieceRecevable(caution, pieceType)) {
-        context.res = { status: 409, body: { error: "Transition non recevable pour le statut actuel (" + caution.statut + ")" } };
+        context.res = { status: 409, body: { error: "Transition non recevable pour le statut actuel (" + caution.statut + ")" + (pieceType === "accuse_banque" ? " : l'accuse de la banque se joint apres le depot de la demande a la banque (regle DG 20/11/2026)" : "") } };
         return;
       }
 
       // (1) BLOB d'abord. Nom deterministe -> un retry reecrase, pas d'orphelin.
-      const blobName = marcheId + "/caution-" + cautionId + "/" + pieceType + "." + ext;
+      const blobName = estProv ? ("ao-" + aoId + "/caution-prov/" + pieceType + "." + ext) : (marcheId + "/caution-" + cautionId + "/" + pieceType + "." + ext);
       const svc = BlobServiceClient.fromConnectionString(conn);
       const cont = svc.getContainerClient(PIECE_CONTAINER);
       await cont.createIfNotExists();
       await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: contentType } });
 
-      // (2) CAUTION : transition pure, puis upsert (doc unique, partition marcheId).
+      // (2) DOCUMENT : transition pure, puis upsert.
       const pieceRef = {
         blob: blobName,
         nom_original: nomOriginal || (pieceType + "." + ext),
@@ -614,19 +669,136 @@ module.exports = async function (context, req) {
       };
       const maj = aPosteriori
         ? MPMainlevee.appliquerPieceJustificative(caution, pieceType, pieceRef, dateReelle, user.userDetails || null)
-        : MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle);
-      await cautionsC.items.upsert(maj);
-      // A posteriori : statut INCHANGÉ (pas de recalcul marché). Sinon l'accusé peut
-      // libérer la caution -> peut terminer le marché (règle Karim).
-      const marcheStatutPiece = aPosteriori ? null : await recomputeMarcheStatut(marcheId, dateReelle);
+        : (estReception
+          ? MPMainlevee.appliquerPieceLiberation(caution, pieceType, pieceRef, dateReelle, user.userDetails || null)
+          : MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle));
+      if (!maj) { context.res = { status: 409, body: { error: "Piece non appliquee (statut " + caution.statut + ")" } }; return; }
+      await ecrireCibleCaution(cible, maj);
+      // A posteriori ou provisoire : pas de recalcul marche. Sinon l'accuse peut liberer la caution
+      // -> peut terminer le marche (regle du 08/10, inchangee).
+      const marcheStatutPiece = (aPosteriori || estProv) ? null : await recomputeMarcheStatut(marcheId, dateReelle);
 
       context.res = {
         status: 200,
-        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle, marche_statut: marcheStatutPiece, a_posteriori: aPosteriori }
+        body: { ok: true, caution: maj.num, nouveau_statut: maj.statut, date: dateReelle, marche_statut: marcheStatutPiece, a_posteriori: aPosteriori, provisoire: estProv }
       };
       return;
     } catch (e) {
       context.log.error("cautionPiece error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route caution-demande-banque : POST /api/caution-demande-banque
+  // Regle DG 20/11/2026. action "lettre" : genere la lettre de demande de mainlevee (PDF, papier a en-tete,
+  // UNE banque, plusieurs cautions possibles), la conserve dans le Blob et la reference sur chaque caution
+  // (statut inchange : la lettre s'imprime, se signe et se depose — jamais envoyee par courriel) ;
+  // action "depot" : enregistre la date de depot a la banque (piece_recue -> demande_deposee), lot entier
+  // ou rien. Gardes (module pur) : pas de demande sans piece jointe au type enregistre ; scan obligatoire.
+  // Body : { action, cibles:[{cautionId, marcheId} | {aoId}], banque?, agence?, adresse_agence?, lieu?, date_depot? }
+  if (fn === "cautionDemandeBanque") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const body = req.body || {};
+      const action = String(body.action || "").trim();
+      const cibles = Array.isArray(body.cibles) ? body.cibles : [];
+      if (action !== "lettre" && action !== "depot") { context.res = { status: 400, body: { error: "action attendue : lettre ou depot" } }; return; }
+      if (!cibles.length) { context.res = { status: 400, body: { error: "Aucune caution ciblee" } }; return; }
+      if (cibles.length > 40) { context.res = { status: 400, body: { error: "40 cautions au plus par demande" } }; return; }
+
+      const charges = [];
+      for (const c of cibles) {
+        const t = await lireCibleCaution({ cautionId: String((c && c.cautionId) || "").trim(), marcheId: String((c && c.marcheId) || "").trim(), aoId: String((c && c.aoId) || "").trim() });
+        if (!t) { context.res = { status: 404, body: { error: "Caution introuvable (cible n° " + (charges.length + 1) + ")" } }; return; }
+        charges.push(t);
+      }
+      const dateISO = new Date().toISOString().slice(0, 10);
+
+      if (action === "lettre") {
+        // Marches des cautions (ref, objet complet, maitre d'ouvrage) — libelles humains seulement.
+        const M = {};
+        for (const t of charges) {
+          const mid = t.ao ? null : String(MPMainlevee.cMarcheId(t.caution) || "");
+          if (mid && !M[mid]) { try { M[mid] = (await getDb().container("mp_marches").item(mid, mid).read()).resource || {}; } catch (e) { M[mid] = {}; } }
+        }
+        const gm = (id) => M[String(id)] || {};
+        const L = MPMainlevee.lignesLettre(charges.map((t) => t.caution), gm, (ty) => TYPE_LABELS_LETTRE[ty] || ty);
+        if (!L.ok) { context.res = { status: 409, body: { error: "Lettre refusee : " + (L.erreurs.map((e) => (e.num ? e.num + " : " : "") + e.motif).join(" ; ") || "aucune caution recevable"), erreurs: L.erreurs } }; return; }
+        const banque = String(body.banque || "").trim() || L.banque;
+        if (banque !== L.banque) { context.res = { status: 409, body: { error: "Banque demandee (" + banque + ") differente de celle des cautions (" + L.banque + ")" } }; return; }
+        let logo = null;
+        try { logo = require("fs").readFileSync(require("path").join(__dirname, "assets", "logo-neurones.png")); } catch (e) { logo = null; }
+        const buf = await require("./lettre-mainlevee.js").genererLettreMainlevee({
+          societe: await lireSocieteEmettrice(), banque, agence: String(body.agence || "").trim(), adresse_agence: String(body.adresse_agence || "").trim(),
+          lieu: String(body.lieu || "").trim(), dateISO, lignes: L.lignes, total: L.total, logo
+        });
+        // Conservation (tracabilite) : un blob par lettre, reference sur chaque caution, statut INCHANGE.
+        const conn = process.env.STORAGE_CONNECTION_STRING;
+        if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+        const slug = banque.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "banque";
+        const empreinte = require("crypto").createHash("sha256").update(buf).digest("hex").slice(0, 8);
+        const blobName = "lettres-mainlevee/" + slug + "-" + dateISO + "-" + empreinte + ".pdf";
+        const nomFichier = "Demande de mainlevee - " + banque + " - " + dateISO + ".pdf";
+        const cont = BlobServiceClient.fromConnectionString(conn).getContainerClient(PIECE_CONTAINER);
+        await cont.createIfNotExists();
+        await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: "application/pdf" } });
+        const lettreRef = { blob: blobName, nom_original: nomFichier, taille: buf.length, content_type: "application/pdf", genere_le: new Date().toISOString(), genere_par: user.userDetails || null, banque, agence: String(body.agence || "").trim(), nb_cautions: L.lignes.length };
+        for (const t of charges) {
+          const maj = {}; Object.keys(t.caution).forEach((k) => { maj[k] = t.caution[k]; });
+          maj.lettre_mainlevee = lettreRef; maj.date_lettre = dateISO;
+          await ecrireCibleCaution(t, maj);
+        }
+        context.res = { status: 200, isRaw: true, headers: { "Content-Type": "application/pdf", "Content-Disposition": 'inline; filename="' + nomFichier.replace(/[\r\n"\\]/g, "_") + '"', "Cache-Control": "private, no-store", "X-MP-Lettre-Cautions": String(L.lignes.length) }, body: buf };
+        return;
+      }
+
+      // action "depot"
+      const dateDepot = String(body.date_depot || "").trim();
+      if (!MPMainlevee.dateReceptionValide(dateDepot)) { context.res = { status: 400, body: { error: "Date de depot a la banque requise (AAAA-MM-JJ) — jamais completee par defaut" } }; return; }
+      const refus = charges.map((t) => ({ num: t.caution.referenceBanque || t.caution.num || "numero non renseigne", g: MPMainlevee.depotBanqueRecevable(t.caution) })).filter((r) => !r.g.ok);
+      if (refus.length) { context.res = { status: 409, body: { error: "Depot refuse : " + refus.map((r) => r.num + " : " + r.g.motif).join(" ; "), refus: refus.map((r) => ({ num: r.num, motif: r.g.motif })) } }; return; }
+      const nums = [];
+      for (const t of charges) {
+        const maj = MPMainlevee.appliquerDepotBanque(t.caution, dateDepot, user.userDetails || null, t.caution.lettre_mainlevee || null);
+        if (!maj) { context.res = { status: 409, body: { error: "Depot non applique (" + (t.caution.num || "") + ")" } }; return; }
+        await ecrireCibleCaution(t, maj);
+        nums.push(maj.referenceBanque || maj.num || "");
+      }
+      context.res = { status: 200, body: { ok: true, nb: nums.length, cautions: nums, statut: "demande_deposee", date_depot: dateDepot } };
+      return;
+    } catch (e) {
+      context.log.error("cautionDemandeBanque error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route parametres-mp : POST /api/parametres-mp — DG seul (meme source de role que RH).
+  // Body : { delai_alerte_banque_jours } (1..120). Lu par GET /api/version (delaiAlerteBanqueJours).
+  if (fn === "parametresMp") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const role = await getRoleFromDb(user.userDetails);
+      if (!MPMainlevee.peutBasculerGarde(role)) { context.res = { status: 403, body: { error: "Reserve au DG" } }; return; }
+      const d = Number((req.body || {}).delai_alerte_banque_jours);
+      if (!Number.isInteger(d) || d < 1 || d > 120) { context.res = { status: 400, body: { error: "delai_alerte_banque_jours : entier de 1 a 120" } }; return; }
+      const cc = (await getDb().containers.createIfNotExists({ id: "mp_config", partitionKey: { paths: ["/id"] } })).container;
+      let doc = null;
+      try { doc = (await cc.item("parametres", "parametres").read()).resource; } catch (e) { doc = null; }
+      if (!doc) doc = { id: "parametres" };
+      doc.delai_alerte_banque_jours = d;
+      doc.delai_alerte_banque_par = user.userDetails || null;
+      doc.delai_alerte_banque_le = new Date().toISOString();
+      await cc.items.upsert(doc);
+      context.res = { status: 200, body: { ok: true, delai_alerte_banque_jours: d } };
+      return;
+    } catch (e) {
+      context.log.error("parametresMp error:", e.message);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }
@@ -650,18 +822,18 @@ module.exports = async function (context, req) {
       const aoId = String((req.query && req.query.aoId) || "").trim();
       // Acte d'une PROVISOIRE : le blob vit sur l'AO (a.caution_prov.acte), lu UNIQUEMENT
       // depuis le doc AO (jamais un chemin fourni). Conteneur mp-preuves.
-      if (type === "acte" && aoId) {
+      if (aoId) {
         let ao = null;
         try { ao = (await getDb().container("mp_aos").item(aoId, aoId).read()).resource || null; } catch (e) { ao = null; }
-        const bnProv = MPMainlevee.resoudreBlobActeProv(ao);
-        if (!bnProv) { context.res = { status: 404, body: { error: "Acte de provisoire introuvable" } }; return; }
+        const bnProv = MPMainlevee.resoudreBlobPieceProv(type, ao);
+        if (!bnProv) { context.res = { status: 404, body: { error: "Piece de provisoire introuvable" } }; return; }
         const connP = process.env.STORAGE_CONNECTION_STRING;
         if (!connP) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
-        const refP = ao.caution_prov.acte || {};
+        const refP = ao.caution_prov[MPMainlevee.PIECE_LECTURE[type].champ] || {};
         const bcP = BlobServiceClient.fromConnectionString(connP).getContainerClient(PIECE_CONTAINER).getBlockBlobClient(bnProv);
         let bufP;
         try { bufP = await bcP.downloadToBuffer(); } catch (e) { context.res = { status: 404, body: { error: "Fichier absent du stockage" } }; return; }
-        const nomP = String(refP.nom_original || "acte.pdf").replace(/[\r\n"\\]/g, "_");
+        const nomP = String(refP.nom_original || (type + ".pdf")).replace(/[\r\n"\\]/g, "_");
         context.res = { status: 200, isRaw: true, headers: { "Content-Type": refP.content_type || "application/pdf", "Content-Disposition": 'inline; filename="' + nomP + '"', "Cache-Control": "private, no-store" }, body: bufP };
         return;
       }
@@ -800,38 +972,12 @@ module.exports = async function (context, req) {
   // Chemin OUVERT pour les cas legitimes anciens (accuse papier, soldee hors systeme)
   // mais TRACE : motif libre OBLIGATOIRE + utilisateur. Body : { cautionId, marcheId, motif }.
   if (fn === "cautionLiberationDirecte") {
-    try {
-      const user = getAuthenticatedUser(req);
-      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
-      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
-
-      const body = req.body || {};
-      const cautionId = String(body.cautionId || "").trim();
-      const marcheId = String(body.marcheId || "").trim();
-      const motif = typeof body.motif === "string" ? body.motif : "";
-
-      if (!cautionId || !marcheId) { context.res = { status: 400, body: { error: "Manquant : cautionId, marcheId" } }; return; }
-      if (!MPMainlevee.motifMainleveeValide(motif)) { context.res = { status: 400, body: { error: "Motif de liberation obligatoire (texte libre)" } }; return; }
-
-      const cautionsC = getDb().container("mp_cautions");
-      let caution = null;
-      try { const r = await cautionsC.item(cautionId, marcheId).read(); caution = r.resource || null; } catch (e) { caution = null; }
-      if (!caution) { context.res = { status: 404, body: { error: "Caution introuvable" } }; return; }
-
-      const dateISO = new Date().toISOString().slice(0, 10);
-      const maj = MPMainlevee.appliquerLiberationDirecte(caution, motif, user.userDetails || null, dateISO);
-      if (!maj) { context.res = { status: 409, body: { error: "Liberation directe impossible : la caution n'est pas active (statut " + caution.statut + ")" } }; return; }
-      await cautionsC.items.upsert(maj);
-      // Liberation directe -> « liberee » -> peut terminer le marche (regle Karim).
-      const marcheStatutLib = await recomputeMarcheStatut(marcheId, dateISO);
-
-      context.res = { status: 200, body: { ok: true, caution: maj.num, statut: maj.statut, liberation_par: maj.liberation_par, motif: maj.liberation_motif, marche_statut: marcheStatutLib } };
-      return;
-    } catch (e) {
-      context.log.error("cautionLiberationDirecte error:", e.message);
-      context.res = { status: 500, body: { error: e.message } };
-      return;
-    }
+    const user = getAuthenticatedUser(req);
+    if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+    // FERMEE (regle DG 20/11/2026) : aucune caution ne passe « liberee » sans l'accuse de la banque. Un accuse
+    // papier se scanne et se depose comme accuse (cycle normal, ou a posteriori sur une caution deja close).
+    context.res = { status: 409, body: { error: "Liberation directe fermee (regle DG 20/11/2026) : aucune liberation sans l'accuse de la banque. Deposer l'accuse (scan) par « Accuse banque »." } };
+    return;
   }
 
   // Route caution-acte-ocr : POST /api/caution-acte-ocr

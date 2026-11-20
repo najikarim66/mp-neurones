@@ -29,13 +29,146 @@
   var TYPES_MAINLEVEE = ['bonne_execution', 'retenue_garantie'];
   var DAY = 86400000;
 
-  /* Cycle a 3 etats (def/RG) : mainlevee_demandee --[mainlevee du client]-->
-   * mainlevee_recue --[accuse de la banque]--> liberee. Chaque piece a un statut
-   * de depart impose (pas de saut d'etat) et pose son propre horodatage. */
-  var PIECE_TRANSITIONS = {
-    mainlevee_client: { de: 'mainlevee_demandee', vers: 'mainlevee_recue', champ: 'mainlevee_client', dateChamp: 'date_mainlevee_recue' },
-    accuse_banque:    { de: 'mainlevee_recue',    vers: 'liberee',        champ: 'accuse_banque',   dateChamp: 'date_liberation' }
+  /* ===== CYCLE DE VIE D'UNE CAUTION (regle DG 20/11/2026 — definitives, RG et provisoires) =====
+   *   active --[(facultatif) mainlevee demandee au maitre d'ouvrage : statut mainlevee_demandee]-->
+   *   piece_recue      : la mainlevee delivree par le client OU l'original de la caution restitue, avec
+   *                      DATE et SCAN (piece_liberation = { type, date, scan }) ;
+   *   demande_deposee  : la demande de mainlevee a ete deposee a la banque (demande_banque.date_depot ;
+   *                      lettre PDF generee par MP, imprimee, signee, deposee — jamais envoyee par courriel) ;
+   *   liberee          : l'accuse de la banque est joint (accuse_banque). Aucune liberation sans accuse.
+   * « mainlevee_demandee » = demandee AU CLIENT (rien recu), argent toujours bloque. L'ancien
+   * « mainlevee_recue » (cycle du 24/09) se lit comme piece_recue de type mainlevee_client (etatCycle).
+   * Chaque piece a un statut de depart impose (pas de saut d'etat) et pose son propre horodatage. */
+  var ETATS_CYCLE = ['active', 'mainlevee_demandee', 'piece_recue', 'demande_deposee', 'liberee'];
+  var ETATS_BLOQUES = ['active', 'mainlevee_demandee', 'piece_recue', 'demande_deposee'];
+  var PIECES_LIBERATION = {
+    mainlevee_client: { label: 'Mainlevee delivree par le maitre d\'ouvrage', champ: 'mainlevee_client', dateChamp: 'date_mainlevee_recue' },
+    original_caution: { label: 'Original de la caution restitue par le maitre d\'ouvrage', champ: 'original_caution', dateChamp: 'date_original_recu' }
   };
+  var PIECE_TRANSITIONS = {
+    accuse_banque:   { de: 'demande_deposee', vers: 'liberee',         champ: 'accuse_banque',   dateChamp: 'date_liberation' },
+    decharge_banque: { de: 'demande_deposee', vers: 'demande_deposee', champ: 'decharge_banque', dateChamp: 'date_decharge' }
+  };
+  /* Justificatifs joignables A POSTERIORI sur une caution deja close (statut inchange). */
+  var PIECES_JUSTIF = {
+    mainlevee_client: PIECES_LIBERATION.mainlevee_client,
+    original_caution: PIECES_LIBERATION.original_caution,
+    accuse_banque:    PIECE_TRANSITIONS.accuse_banque
+  };
+  /* Etat du cycle, l'ancien « mainlevee_recue » normalise en piece_recue. */
+  function etatCycle(c) {
+    var s = c && c.statut;
+    return s === 'mainlevee_recue' ? 'piece_recue' : s;
+  }
+  /* Provisoire (caution_prov portee par un AO) ou definitive/RG : les deux suivent le cycle. */
+  function estProvisoire(c) { return !!c && (c.type === 'provisoire' || c._provisoire === true || c.src === 'ao'); }
+  function suitLeCycle(c) { return !!c && (estProvisoire(c) || TYPES_MAINLEVEE.indexOf(c.type) >= 0); }
+  /* Piece de liberation NORMALISEE : { type, date, scan } ou null. L'ancien mainlevee_recue
+   * (mainlevee_client + date_mainlevee_recue) est lu comme une piece de type mainlevee_client. */
+  function pieceLiberationDe(c) {
+    if (!c) return null;
+    if (c.piece_liberation && c.piece_liberation.type) return c.piece_liberation;
+    if (c.statut === 'mainlevee_recue' && c.mainlevee_client) return { type: 'mainlevee_client', date: c.date_mainlevee_recue || null, scan: c.mainlevee_client };
+    return null;
+  }
+  function libellePieceLiberation(type) { var p = PIECES_LIBERATION[type]; return p ? p.label : ''; }
+  /* Reception de la piece : recevable depuis active ou mainlevee_demandee, type connu, caution du cycle. */
+  function pieceLiberationRecevable(c, type) {
+    if (!c || !PIECES_LIBERATION[type] || !suitLeCycle(c)) return false;
+    var e = etatCycle(c);
+    return e === 'active' || e === 'mainlevee_demandee';
+  }
+  /* active|mainlevee_demandee -> piece_recue. SCAN OBLIGATOIRE (pieceRef.blob) : la piece part a la
+   * banque. Pose piece_liberation + le champ historique du type (mainlevee_client / original_caution)
+   * pour que les liens « voir la piece » restent les memes. Copie, ne mute pas. null si non recevable. */
+  function appliquerPieceLiberation(c, type, pieceRef, dateISO, par) {
+    if (!pieceLiberationRecevable(c, type)) return null;
+    if (!pieceRef || !pieceRef.blob) return null;
+    if (!dateReceptionValide(dateISO)) return null;
+    var p = PIECES_LIBERATION[type], out = {};
+    Object.keys(c).forEach(function (k) { out[k] = c[k]; });
+    out.statut = 'piece_recue';
+    out.piece_liberation = { type: type, date: dateISO, scan: pieceRef, recu_le: new Date().toISOString(), recu_par: par || null };
+    out[p.champ] = pieceRef;
+    out[p.dateChamp] = dateISO;
+    return out;
+  }
+  /* GARDE du depot a la banque : { ok, motif }. Pas de demande sans piece jointe au type enregistre ;
+   * scan obligatoire (original de la caution comme mainlevee du client : la piece part a la banque). */
+  function depotBanqueRecevable(c) {
+    if (!c) return { ok: false, motif: 'caution absente' };
+    if (!suitLeCycle(c)) return { ok: false, motif: 'type de caution hors cycle de mainlevee' };
+    if (etatCycle(c) === 'demande_deposee') return { ok: false, motif: 'demande deja deposee a la banque' };
+    if (etatCycle(c) !== 'piece_recue') return { ok: false, motif: 'aucune piece recue du maitre d\'ouvrage (statut ' + (c.statut || 'inconnu') + ')' };
+    var p = pieceLiberationDe(c);
+    if (!p || !PIECES_LIBERATION[p.type]) return { ok: false, motif: 'type de piece non enregistre (mainlevee du client ou original de la caution)' };
+    if (!p.scan || !p.scan.blob) return { ok: false, motif: p.type === 'original_caution' ? 'scan de l\'original de la caution obligatoire avant le depot' : 'scan de la mainlevee du client obligatoire avant le depot' };
+    if (!p.date) return { ok: false, motif: 'date de la piece non renseignee' };
+    return { ok: true, motif: '' };
+  }
+  /* piece_recue -> demande_deposee (date de depot saisie, jamais completee par defaut). Copie. */
+  function appliquerDepotBanque(c, dateDepotISO, par, lettreRef) {
+    if (!depotBanqueRecevable(c).ok) return null;
+    if (!dateReceptionValide(dateDepotISO)) return null;
+    var out = {};
+    Object.keys(c).forEach(function (k) { out[k] = c[k]; });
+    out.statut = 'demande_deposee';
+    out.demande_banque = { date_depot: dateDepotISO, depose_par: par || null, enregistre_le: new Date().toISOString(), lettre: lettreRef || (c.lettre_mainlevee || null) };
+    return out;
+  }
+  /* GARDE de l'enregistrement GENERIQUE (/api/data, formulaires) : les etats du cycle se posent par les
+   * depots de pieces et la demande a la banque, jamais par un formulaire. Renvoie le motif du refus ou null.
+   * avant = document stocke (null a la creation), apres = document recu. Autorise : creation en active /
+   * expiree / en_attente / mainlevee_demandee, aller-retour active <-> expiree / mainlevee_demandee (demande
+   * au client), retour d'un etat quelconque vers active (correction, tracee par le marche), statut inchange. */
+  var ETATS_PAR_PIECE = ['piece_recue', 'mainlevee_recue', 'demande_deposee', 'liberee', 'restituee'];
+  function refusChangementStatutGenerique(avant, apres) {
+    if (!apres) return null;
+    var sa = avant ? avant.statut : null, sb = apres.statut;
+    if (sa === sb) return null;
+    if (ETATS_PAR_PIECE.indexOf(sb) >= 0) {
+      return 'Le statut « ' + sb + ' » se pose par le depot de la piece correspondante (mainlevee du client ou original restitue, demande a la banque, accuse de la banque — regle DG 20/11/2026), jamais par un formulaire.';
+    }
+    return null;
+  }
+  /* Jours ecoules depuis le depot a la banque (nowMs injecte). 0 si pas de depot. */
+  function joursDepuisDepot(c, nowMs) {
+    var d = c && c.demande_banque && c.demande_banque.date_depot;
+    if (!d) return 0;
+    var t = new Date(d).getTime();
+    return isNaN(t) ? 0 : Math.floor((nowMs - t) / DAY);
+  }
+  var DELAI_ALERTE_BANQUE_DEFAUT = 15; // jours : au-dela, la banque continue a prelever ses commissions
+  /* Lettre de demande de mainlevee : DONNEES PURES (aucun id, intitules ENTIERS). Une lettre = UNE
+   * banque ; toutes les cautions doivent etre en piece_recue et passer la garde du depot.
+   * gm(marche_id) -> { ref, titre, objet, maitre_ouvrage } ; pour une provisoire, l'appelant fournit
+   * ref/objet/maitre_ouvrage de l'AO sur la ligne (c.ref, c.objet, c.maitre_ouvrage). */
+  function lignesLettre(cautions, gm, typeLabel) {
+    gm = gm || function () { return {}; };
+    typeLabel = typeLabel || function (t) { return t; };
+    var erreurs = [], lignes = [], banques = {}, total = 0;
+    (cautions || []).forEach(function (c) {
+      var g = depotBanqueRecevable(c);
+      var num = c.referenceBanque || c.num || 'numero non renseigne';
+      if (!g.ok) { erreurs.push({ num: num, motif: g.motif }); return; }
+      var m = estProvisoire(c) ? { ref: c.ref, objet: c.objet || c.titre, maitre_ouvrage: c.maitre_ouvrage } : (gm(cMarcheId(c)) || {});
+      var p = pieceLiberationDe(c);
+      banques[c.banque || ''] = true;
+      total += (+c.montant || 0);
+      lignes.push({
+        num: num, type: estProvisoire(c) ? 'Caution provisoire' : typeLabel(c.type), montant: +c.montant || 0,
+        date_emission: c.date_emission || null,
+        marche_ref: m.ref || 'reference non renseignee',
+        marche_objet: m.objet || m.titre || 'objet non renseigne',
+        maitre_ouvrage: m.maitre_ouvrage || 'maitre d\'ouvrage non renseigne',
+        piece: libellePieceLiberation(p.type), piece_type: p.type, piece_date: p.date || null
+      });
+    });
+    var nb = Object.keys(banques);
+    if (nb.length > 1) erreurs.push({ num: '', motif: 'une lettre ne s\'adresse qu\'a une banque (' + nb.join(', ') + ')' });
+    if (nb.length === 1 && !nb[0]) erreurs.push({ num: '', motif: 'banque non renseignee sur la caution' });
+    return { ok: erreurs.length === 0 && lignes.length > 0, banque: nb.length === 1 ? nb[0] : '', lignes: lignes, total: total, erreurs: erreurs };
+  }
 
   /* marcheId (Cosmos brut) OU marche_id (cote app apres fromCosmos) : on tolere les deux. */
   function cMarcheId(c) { return c.marcheId != null ? c.marcheId : c.marche_id; }
@@ -94,7 +227,9 @@
   // NB : date_demande_mainlevee EXCLU volontairement — le formulaire caution le
   // possede (champ cdemmain), le preserver ecraserait une edition legitime. On ne
   // preserve que les champs de piece que le formulaire ne connait pas.
-  var CHAMPS_PIECES_CAUTION = ['mainlevee_client', 'accuse_banque', 'date_mainlevee_recue', 'date_liberation'];
+  var CHAMPS_PIECES_CAUTION = ['mainlevee_client', 'accuse_banque', 'date_mainlevee_recue', 'date_liberation',
+    // Cycle du 20/11 : pieces et dates posees par /api/caution-piece et /api/caution-demande-banque.
+    'original_caution', 'date_original_recu', 'piece_liberation', 'demande_banque', 'lettre_mainlevee', 'date_lettre', 'decharge_banque', 'date_decharge'];
   // Dates de transition de la provisoire (posées par provMainlevee/provRestituer/
   // attribuerAO), que la reconstruction de caution_prov dans editAO efface sinon.
   var CHAMPS_PROV_TRANSITION = ['date_demande_mainlevee', 'date_restitution'];
@@ -357,8 +492,9 @@
   function pieceRecevable(caution, pieceType) {
     var t = transitionPiece(pieceType);
     if (!t || !caution) return false;
-    if (TYPES_MAINLEVEE.indexOf(caution.type) < 0) return false;
-    return caution.statut === t.de;
+    if (!suitLeCycle(caution)) return false;
+    if (caution[t.champ] && t.vers === t.de) return false; // decharge deja jointe : pas d'ecrasement muet
+    return etatCycle(caution) === t.de;
   }
 
   /* Applique le depot d'une piece : COPIE de la caution avec nouveau statut,
@@ -381,9 +517,9 @@
    * « sans accusé numérique ». Recevable si : pièce de mainlevée/accusé connue, caution
    * def/RG, statut déjà clos, et la pièce PAS déjà présente (jamais d'écrasement muet). */
   function pieceJustifRecevable(caution, pieceType) {
-    var t = transitionPiece(pieceType);
+    var t = PIECES_JUSTIF[pieceType];
     if (!t || !caution) return false;
-    if (TYPES_MAINLEVEE.indexOf(caution.type) < 0) return false;
+    if (!suitLeCycle(caution)) return false;
     if (STATUTS_CLOS.indexOf(caution.statut) < 0) return false;
     if (caution[t.champ]) return false; // déjà jointe
     return true;
@@ -392,7 +528,7 @@
    * une trace a posteriori {piece, le, par, date_piece}. null si non recevable. */
   function appliquerPieceJustificative(caution, pieceType, pieceRef, dateISO, par) {
     if (!pieceJustifRecevable(caution, pieceType)) return null;
-    var t = transitionPiece(pieceType);
+    var t = PIECES_JUSTIF[pieceType];
     var out = {};
     Object.keys(caution).forEach(function (k) { out[k] = caution[k]; });
     out[t.champ] = pieceRef; // statut INCHANGÉ
@@ -407,10 +543,20 @@
    * n'est jamais servi (defense contre un chemin blob devine). */
   var PIECE_LECTURE = {
     pv:               { sur: 'marche',  champ: 'pv_reception_definitive', dateChamp: 'date_reception_definitive_reelle', conteneur: 'mp-pv-reception', label: 'PV de reception definitive' },
-    mainlevee_client: { sur: 'caution', champ: 'mainlevee_client',        dateChamp: 'date_mainlevee_recue',            conteneur: 'mp-preuves',      label: 'Mainlevee recue' },
+    mainlevee_client: { sur: 'caution', champ: 'mainlevee_client',        dateChamp: 'date_mainlevee_recue',            conteneur: 'mp-preuves',      label: 'Mainlevee du maitre d\'ouvrage' },
+    original_caution: { sur: 'caution', champ: 'original_caution',        dateChamp: 'date_original_recu',              conteneur: 'mp-preuves',      label: 'Original de la caution restitue' },
+    lettre_mainlevee: { sur: 'caution', champ: 'lettre_mainlevee',        dateChamp: 'date_lettre',                     conteneur: 'mp-preuves',      label: 'Lettre de demande a la banque' },
+    decharge_banque:  { sur: 'caution', champ: 'decharge_banque',         dateChamp: 'date_decharge',                   conteneur: 'mp-preuves',      label: 'Decharge de la banque' },
     accuse_banque:    { sur: 'caution', champ: 'accuse_banque',           dateChamp: 'date_liberation',                 conteneur: 'mp-preuves',      label: 'Accuse bancaire' },
     acte:             { sur: 'caution', champ: 'acte',                    dateChamp: 'date_emission',                   conteneur: 'mp-preuves',      label: 'Acte de caution' }
   };
+  /* Piece d'une PROVISOIRE : le blob vit sur l'AO (ao.caution_prov[champ]), lu depuis le doc AO. */
+  function resoudreBlobPieceProv(type, ao) {
+    var s = PIECE_LECTURE[type];
+    if (!s || s.sur !== 'caution' || !ao || !ao.caution_prov) return null;
+    var ref = ao.caution_prov[s.champ];
+    return (ref && ref.blob) || null;
+  }
 
   /* Vrai seulement si un principal Entra est present (userDetails). */
   function principalAutorise(p) { return !!(p && p.userDetails); }
@@ -661,6 +807,24 @@
 
   return {
     TYPES_MAINLEVEE: TYPES_MAINLEVEE,
+    ETATS_CYCLE: ETATS_CYCLE,
+    ETATS_BLOQUES: ETATS_BLOQUES,
+    PIECES_LIBERATION: PIECES_LIBERATION,
+    PIECES_JUSTIF: PIECES_JUSTIF,
+    DELAI_ALERTE_BANQUE_DEFAUT: DELAI_ALERTE_BANQUE_DEFAUT,
+    etatCycle: etatCycle,
+    estProvisoire: estProvisoire,
+    suitLeCycle: suitLeCycle,
+    pieceLiberationDe: pieceLiberationDe,
+    libellePieceLiberation: libellePieceLiberation,
+    pieceLiberationRecevable: pieceLiberationRecevable,
+    appliquerPieceLiberation: appliquerPieceLiberation,
+    depotBanqueRecevable: depotBanqueRecevable,
+    appliquerDepotBanque: appliquerDepotBanque,
+    joursDepuisDepot: joursDepuisDepot,
+    refusChangementStatutGenerique: refusChangementStatutGenerique,
+    lignesLettre: lignesLettre,
+    resoudreBlobPieceProv: resoudreBlobPieceProv,
     PIECE_TRANSITIONS: PIECE_TRANSITIONS,
     PIECE_LECTURE: PIECE_LECTURE,
     cMarcheId: cMarcheId,
