@@ -167,7 +167,7 @@ async function genererLettreMainlevee(d) {
   para("Total : " + montantFR(d.total != null ? d.total : (d.lignes || []).reduce((a, l) => a + (+l.montant || 0), 0)), { gras: true, droite: true, apres: 14 });
 
   para("Nous vous remercions de bien vouloir nous remettre l'accusé de mainlevée correspondant et de cesser, à compter de la date de la présente, le prélèvement des commissions afférentes.", { apres: 8 });
-  place(150);
+  place(190);
   para("Nous vous prions d'agréer, Madame, Monsieur, l'expression de nos salutations distinguées.", { apres: 24 });
   para("Le Directeur Général", { gras: true, apres: 54 });
   para(txt(raison), { apres: 16 });
