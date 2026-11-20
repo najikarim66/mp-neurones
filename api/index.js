@@ -739,10 +739,17 @@ module.exports = async function (context, req) {
         const societe = await lireSocieteEmettrice();
         let logo = null;
         try { logo = require("fs").readFileSync(require("path").join(__dirname, "assets", "logo-neurones.png")); } catch (e) { logo = null; }
-        const buf = await require("./lettre-mainlevee.js").genererLettreMainlevee({
-          societe, banque, agence: dest.agence || "", adresse_agence: dest.adresse || "", ville_agence: dest.ville || "", destinataire: dest.destinataire || "",
-          lieu: societe.ville || "", dateISO, lignes: L.lignes, total: L.total, logo
-        });
+        let buf;
+        try {
+          buf = await require("./lettre-mainlevee.js").genererLettreMainlevee({
+            societe, banque, agence: dest.agence || "", adresse_agence: dest.adresse || "", ville_agence: dest.ville || "", destinataire: dest.destinataire || "",
+            lieu: societe.ville || "", dateISO, lignes: L.lignes, total: L.total, logo
+          });
+        } catch (e) {
+          // UNE page (DG 20/11) : trop de cautions pour une page -> refus nomme, jamais deux pages.
+          if (e && e.code === "LETTRE_TROP_LONGUE") { context.res = { status: 409, body: { error: "Lettre refusee : " + e.message } }; return; }
+          throw e;
+        }
         // Conservation (tracabilite) : un blob par lettre, reference sur chaque caution, statut INCHANGE.
         const conn = process.env.STORAGE_CONNECTION_STRING;
         if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }

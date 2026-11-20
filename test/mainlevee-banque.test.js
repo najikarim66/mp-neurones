@@ -164,7 +164,7 @@ if (genPdf) {
     try { PDFDocument = require('../api/node_modules/pdf-lib').PDFDocument; } catch (e) { PDFDocument = null; }
     var relu = PDFDocument ? PDFDocument.load(buf) : Promise.resolve(null);
     relu.then(function (doc) {
-      check('PDF relisible : au moins une page A4 portrait, titre nomme la banque', !!doc && doc.getPageCount() >= 1 && Math.round(doc.getPage(0).getWidth()) === 595 && /BMCE Bank/.test(doc.getTitle() || ''), doc ? (doc.getPageCount() + ' page(s), titre « ' + doc.getTitle() + ' »') : 'pdf-lib absent');
+      check('PDF relisible : UNE page A4 portrait (regle DG 20/11), titre nomme la banque', !!doc && doc.getPageCount() === 1 && Math.round(doc.getPage(0).getWidth()) === 595 && /BMCE Bank/.test(doc.getTitle() || ''), doc ? (doc.getPageCount() + ' page(s), titre « ' + doc.getTitle() + ' »') : 'pdf-lib absent');
       suite();
     }).catch(function (e) { check('PDF relisible', false, e.message); suite(); });
     return;
@@ -179,7 +179,15 @@ if (genPdf) {
     })(), '');
     var sortie = process.env.LETTRE_MAINLEVEE_OUT;
     if (sortie) { fs.writeFileSync(sortie, buf); console.log('  exemplaire ecrit : ' + sortie); }
-    fin();
+    // UNE page : 6 cautions a intitule long tiennent (police resserree) ; 16 cautions -> refus nomme, jamais 2 pages.
+    var six = []; for (var i = 0; i < 6; i++) { var c = {}; Object.keys(L.lignes[i % 2]).forEach(function (k) { c[k] = L.lignes[i % 2][k]; }); c.num = 'N' + i; six.push(c); }
+    var seize = []; for (var j = 0; j < 16; j++) { var c2 = {}; Object.keys(L.lignes[j % 2]).forEach(function (k) { c2[k] = L.lignes[j % 2][k]; }); c2.num = 'M' + j; seize.push(c2); }
+    var base = { societe: societe, banque: L.banque, agence: L.destinataire.agence, adresse_agence: L.destinataire.adresse, ville_agence: L.destinataire.ville, destinataire: L.destinataire.destinataire, lieu: societe.ville, dateISO: '2026-11-20', logo: logo };
+    genPdf.genererLettreMainlevee(Object.assign({}, base, { lignes: six, total: 6 })).then(function (b6) {
+      return (PDFDocument ? PDFDocument.load(b6) : Promise.resolve(null)).then(function (d6) { check('6 cautions a intitule long -> toujours UNE page (police resserree, jamais moins de 9 pt)', !d6 || d6.getPageCount() === 1, d6 ? d6.getPageCount() + ' pages' : 'pdf-lib absent'); });
+    }).then(function () {
+      return genPdf.genererLettreMainlevee(Object.assign({}, base, { lignes: seize, total: 16 })).then(function () { check('16 cautions -> REFUS nomme (pas de lettre de 2 pages)', false, 'lettre generee'); }, function (e) { check('16 cautions -> REFUS nomme (pas de lettre de 2 pages) : code LETTRE_TROP_LONGUE, message « diviser la demande »', e && e.code === 'LETTRE_TROP_LONGUE' && /diviser la demande/.test(e.message), e && e.message); });
+    }).catch(function (e) { check('generation une page sans erreur', false, e.message); }).then(fin);
     }
   }).catch(function (e) { check('generation PDF sans erreur', false, e.message); fin(); });
 } else { fin(); }
