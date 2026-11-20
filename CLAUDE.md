@@ -16,8 +16,9 @@
   `no-truncated-write.js`.
 - CI : 21 workflows « Gate … » (un par fichier, sur `pull_request` et `main`, filtrés par chemins) + le workflow Azure Static Web Apps, qui
   enchaîne AVANT le build : `node public/charte/outils/verifier-copie.cjs`, `node public/charte/outils/scan-hex.cjs --cliquet
-  test/charte-cliquet-hex.json`, `node test/front-es5.test.js`, `node test/garde-version.test.js`. Son job « Close Pull Request » est rouge
-  sur l'événement pull_request : sans effet, connu.
+  test/charte-cliquet-hex.json`, `node test/front-es5.test.js`, `node test/garde-version.test.js`. Sur l'événement **pull_request**, son job « Build and Deploy » échoue par
+  intermittence à Oryx (« Could not detect the language from repo »), sur toutes les PR depuis le 09/11 : sans effet, seul le run de **main**
+  (push) déploie et doit être vert ; le job « Close Pull Request » est alors ignoré.
 - Tout calcul nouveau extrait sa logique pure dans un module chargé par le navigateur ET par node (`public/echeances.js`,
   `public/cautions-calc.js`) et gagne son fichier de gate + son workflow.
 
