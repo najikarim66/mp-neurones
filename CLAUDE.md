@@ -36,6 +36,16 @@
 - Écran Cautions : blocs `[data-bloc="a-demander-banque"]` (groupé par banque, cases, « Lettre de demande (PDF) », « Enregistrer le dépôt ») et
   `[data-bloc="en-attente-banque"]` (jours écoulés, alerte au-delà du délai, ces cautions restent dans l'engagé par banque) ; gate écran
   `e2e/cautions-banque.spec.js`. Identité de la lettre : `erp-db/gc_config/societe_emettrice` (lecture seule) ; logo `api/assets/logo-neurones.png`.
+- **Référentiel banques et agences** (complément DG 20/11 : la lettre se génère SANS AUCUNE saisie) : `mp_banques` = `{ id, nom, agences:[{ id, nom,
+  adresse, ville, destinataire, par_defaut, statut: confirmee | a_confirmer, sources }] }`, éditable dans Paramètres (DG) via `POST /api/banques-referentiel`
+  (validation `validerFicheBanque`). Une caution porte `agence_id`, à défaut l'agence par défaut de sa banque (`resoudreAgence`). Agence ou adresse
+  manquante, ou agence « à confirmer » → lettre refusée en nommant la fiche (`fiches[]`), bouton « Ouvrir la fiche banque » ; deux agences ne se regroupent
+  jamais. `POST /api/banques-lecture-actes` (DG, par lots de 3, cache OCR `agence-v1`) lit agence/adresse ÉCRITES sur les actes scannés et les propose
+  « à confirmer » (`fusionnerLecturesAgences`, rien d'inventé) ; `caution.agence_lecture` garde la lecture.
+- **Libérations à justifier** (constat DG 20/11) : libérée/restituée sans `accuse_banque` = non prouvée : bloc `[data-bloc="liberations-a-justifier"]`
+  en tête de l'écran, badge « Libérée — accusé de la banque manquant », comptée dans l'engagé par banque (`isBlocked`), ne termine plus un marché
+  (`marcheDoitTerminer` exige l'accusé) ; un marché déjà terminé sur une telle libération est LISTÉ (`marchesTerminesSansPreuve`), jamais rouvert.
+  Aucun chemin vers « libérée » sans accusé : route directe 409, `/api/data` refuse (création, modification, import), seul `accuse_banque` sur `demande_deposee` libère.
 
 ## Charte commune (décision DG 05/11/2026)
 - `public/charte/` est une COPIE CONTRÔLÉE de https://github.com/najikarim66/neurones-charte (`MANIFESTE.json` → `source.commit`) :

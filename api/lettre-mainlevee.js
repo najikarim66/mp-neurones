@@ -7,7 +7,7 @@
  * courriel. Une lettre regroupe plusieurs cautions de la MEME banque.
  *
  * Entree (donnees PURES, deja validees par MPMainlevee.lignesLettre — aucun identifiant technique) :
- *   { societe, banque, agence, adresse_agence, lieu, dateISO, lignes:[{num,type,montant,date_emission,
+ *   { societe, banque, agence, adresse_agence, ville_agence, destinataire, lieu, dateISO, lignes:[{num,type,montant,date_emission,
  *     marche_ref,marche_objet,maitre_ouvrage,piece,piece_date}], total, logo (Buffer PNG, facultatif) }
  * Sortie : Buffer PDF. Texte en 10 pt minimum, intitules ENTIERS replies sur plusieurs lignes
  * (jamais tronques), pagination « Page i / n » avec en-tete et pied repetes.
@@ -117,9 +117,10 @@ async function genererLettreMainlevee(d) {
   const lieu = d.lieu || s.ville || "Casablanca";
   para(txt(lieu) + ", le " + dateFR(d.dateISO), { droite: true, apres: 14 });
   para(txt(d.banque || "Banque non renseignée"), { gras: true, taille: 12, apres: 0 });
-  if (d.agence) para("Agence " + txt(d.agence), { apres: 0 });
+  if (d.agence) para(/^agence/i.test(String(d.agence)) ? txt(d.agence) : "Agence " + txt(d.agence), { apres: 0 });
   if (d.adresse_agence) para(txt(d.adresse_agence), { apres: 0 });
-  para("À l'attention du service des engagements par signature", { apres: 16 });
+  if (d.ville_agence) para(txt(d.ville_agence), { apres: 0 });
+  para("À l'attention " + (d.destinataire ? (/^(du|de|des|de la|de l')s/i.test(String(d.destinataire)) ? txt(d.destinataire) : "de : " + txt(d.destinataire)) : "du service des engagements par signature"), { apres: 16 });
 
   const n = (d.lignes || []).length;
   para("Objet : demande de mainlevée de " + (n > 1 ? n + " cautions bancaires" : "caution bancaire"), { gras: true, taille: 12, apres: 14 });

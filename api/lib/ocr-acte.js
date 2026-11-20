@@ -137,4 +137,36 @@ async function extraireActe(buffer, contentType, referentielBanques, cacheGet, c
   return { configure: true, cache: false, hash: hash, champs: res.champs, confiances: res.confiances, lu_brut: res.lu_brut };
 }
 
-module.exports = { extraireActe, hashActe, _normaliser, lireActeRapprochement };
+/* Prompt « agence » (complement DG 20/11/2026) : l'agence emettrice et son adresse, telles qu'ecrites sur
+ * l'acte (en-tete, cachet, pied). Sert a PROPOSER le referentiel des agences, a l'etat « a confirmer ». */
+const PROMPT_AGENCE = [
+  "Tu lis un acte de caution bancaire marocain. Releve l'AGENCE BANCAIRE EMETTRICE telle qu'ecrite sur le document",
+  "(en-tete, cachet, signature, pied de page) et son adresse.",
+  "Rends UNIQUEMENT un JSON strict :",
+  '{ "banque": <nom de la banque tel qu\'ecrit>, "agence": <nom de l\'agence tel qu\'ecrit, ex "Agence Casablanca Maarif", sinon null>,',
+  '  "adresse": <adresse postale de l\'agence telle qu\'ecrite (rue, numero), sinon null>, "ville": <ville de l\'agence, sinon null>,',
+  '  "confiances": { "banque":0-100, "agence":0-100, "adresse":0-100, "ville":0-100 } }',
+  "N'INVENTE JAMAIS une valeur absente : si un champ n'est pas ecrit sur l'acte, mets null et sa confiance a 0.",
+  "Ne deduis pas l'adresse du siege a partir du nom de la banque : seule l'adresse ECRITE sur l'acte compte."
+].join("\n");
+const VERSION_AGENCE = "agence-v1";
+/* Lecture de l'agence d'un acte. Cache par hash + modele + version du prompt. Renvoie
+ * { configure, cache, hash, banque, agence, adresse, ville, confiances:{...etat} } — champs null si non lus. */
+async function lireAgenceActe(buffer, contentType, cacheGet, cacheSet) {
+  if (!MPMainlevee.ocrConfigure(process.env.ANTHROPIC_API_KEY)) return { configure: false };
+  var hash = hashActe(buffer);
+  var cle = VERSION_AGENCE + ":" + MPMainlevee.cleCacheOcr(hash, MPMainlevee.MODELE_OCR);
+  if (cacheGet) { try { var hit = await cacheGet(cle); if (hit && hit.resultat) return Object.assign({ configure: true, cache: true, hash: hash }, hit.resultat); } catch (e) {} }
+  var brut = await _appelModele(buffer, contentType, PROMPT_AGENCE);
+  brut = brut || {}; var cf = brut.confiances || {};
+  var nettoyer = function (v) { return (v != null && String(v).trim() && String(v).trim().toLowerCase() !== "null") ? String(v).trim() : null; };
+  var res = {
+    banque: nettoyer(brut.banque), agence: nettoyer(brut.agence), adresse: nettoyer(brut.adresse), ville: nettoyer(brut.ville),
+    confiances: { banque: MPMainlevee.etatConfiance(cf.banque), agence: MPMainlevee.etatConfiance(cf.agence), adresse: MPMainlevee.etatConfiance(cf.adresse), ville: MPMainlevee.etatConfiance(cf.ville) }
+  };
+  ["banque", "agence", "adresse", "ville"].forEach(function (k) { if (res[k] == null) res.confiances[k] = "non_lu"; });
+  if (cacheSet) { try { await cacheSet(cle, res); } catch (e) {} }
+  return Object.assign({ configure: true, cache: false, hash: hash }, res);
+}
+
+module.exports = { extraireActe, hashActe, _normaliser, lireActeRapprochement, lireAgenceActe, VERSION_AGENCE };

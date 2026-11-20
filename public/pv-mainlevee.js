@@ -143,17 +143,55 @@
    * banque ; toutes les cautions doivent etre en piece_recue et passer la garde du depot.
    * gm(marche_id) -> { ref, titre, objet, maitre_ouvrage } ; pour une provisoire, l'appelant fournit
    * ref/objet/maitre_ouvrage de l'AO sur la ligne (c.ref, c.objet, c.maitre_ouvrage). */
-  function lignesLettre(cautions, gm, typeLabel) {
+  /* ===== REFERENTIEL DES BANQUES ET AGENCES (complement DG 20/11/2026 : la lettre se genere SANS saisie) =====
+   * Document mp_banques : { id, nom, agences: [ { id, nom, adresse, ville, destinataire, par_defaut, statut:
+   * 'confirmee'|'a_confirmer', source: { caution_num, lu_le } } ] }. Une caution porte agence_id ; a defaut,
+   * l'agence par defaut de sa banque. Rien n'est invente : une agence proposee par lecture d'acte reste
+   * « a confirmer » et ne sert PAS a la lettre tant que le DG ne l'a pas confirmee. */
+  function normaliserNomBanque(n) { return String(n == null ? '' : n).trim().toLowerCase().replace(/\s+/g, ' '); }
+  function trouverBanque(banques, nom) {
+    var k = normaliserNomBanque(nom); if (!k) return null;
+    for (var i = 0; i < (banques || []).length; i++) { if (normaliserNomBanque(banques[i] && banques[i].nom) === k) return banques[i]; }
+    return null;
+  }
+  function agencesDe(bq) { return (bq && Array.isArray(bq.agences)) ? bq.agences : []; }
+  function agenceComplete(a) { return !!(a && String(a.nom || '').trim() && String(a.adresse || '').trim()); }
+  /* Agence d'une caution : agence_id de la caution, sinon l'agence par defaut de la banque, sinon l'unique
+   * agence. Renvoie { ok, banque, agence, motif, fiche } ; fiche = nom de la banque a completer (Parametres). */
+  function resoudreAgence(caution, banques) {
+    var nomB = caution && caution.banque;
+    if (!String(nomB || '').trim()) return { ok: false, banque: null, agence: null, motif: 'banque non renseignee sur la caution', fiche: null };
+    var bq = trouverBanque(banques, nomB);
+    if (!bq) return { ok: false, banque: null, agence: null, motif: 'fiche banque « ' + nomB + ' » absente du referentiel (Parametres > Banques et agences)', fiche: nomB };
+    var ags = agencesDe(bq), a = null, i;
+    if (caution.agence_id) { for (i = 0; i < ags.length; i++) { if (String(ags[i].id) === String(caution.agence_id)) { a = ags[i]; break; } } }
+    if (!a) { for (i = 0; i < ags.length; i++) { if (ags[i].par_defaut === true) { a = ags[i]; break; } } }
+    if (!a && ags.length === 1) a = ags[0];
+    if (!a) return { ok: false, banque: bq, agence: null, motif: 'fiche banque « ' + bq.nom + ' » : aucune agence' + (ags.length ? ' par defaut' : '') + ' (Parametres > Banques et agences)', fiche: bq.nom };
+    if (!agenceComplete(a)) return { ok: false, banque: bq, agence: a, motif: 'fiche banque « ' + bq.nom + ' », agence « ' + (a.nom || 'sans nom') + ' » : ' + (String(a.nom || '').trim() ? 'adresse manquante' : 'nom manquant') + ' (Parametres > Banques et agences)', fiche: bq.nom };
+    if (a.statut !== 'confirmee') return { ok: false, banque: bq, agence: a, motif: 'fiche banque « ' + bq.nom + ' », agence « ' + a.nom + ' » : lue sur un acte, a confirmer (Parametres > Banques et agences)', fiche: bq.nom };
+    return { ok: true, banque: bq, agence: a, motif: '', fiche: null };
+  }
+  function cleAgence(bq, a) { return normaliserNomBanque(bq && bq.nom) + '|' + String(a && a.id || ''); }
+  /* Lettre de demande de mainlevee : DONNEES PURES (aucun id, intitules ENTIERS), SANS AUCUNE SAISIE.
+   * Une lettre = UNE banque et UNE agence (deux agences ne se regroupent jamais) ; toutes les cautions
+   * doivent etre en piece_recue, passer la garde du depot et resoudre une agence confirmee et complete.
+   * gm(marche_id) -> { ref, titre, objet, maitre_ouvrage } ; pour une provisoire, ref/objet/maitre_ouvrage
+   * sont sur la ligne. banques = documents mp_banques (referentiel). */
+  function lignesLettre(cautions, gm, typeLabel, banques) {
     gm = gm || function () { return {}; };
     typeLabel = typeLabel || function (t) { return t; };
-    var erreurs = [], lignes = [], banques = {}, total = 0;
+    var erreurs = [], lignes = [], cles = {}, total = 0, dest = null, fiches = {};
     (cautions || []).forEach(function (c) {
       var g = depotBanqueRecevable(c);
       var num = c.referenceBanque || c.num || 'numero non renseigne';
       if (!g.ok) { erreurs.push({ num: num, motif: g.motif }); return; }
+      var r = resoudreAgence(c, banques);
+      if (!r.ok) { erreurs.push({ num: num, motif: r.motif, fiche: r.fiche }); if (r.fiche) fiches[r.fiche] = true; return; }
       var m = estProvisoire(c) ? { ref: c.ref, objet: c.objet || c.titre, maitre_ouvrage: c.maitre_ouvrage } : (gm(cMarcheId(c)) || {});
       var p = pieceLiberationDe(c);
-      banques[c.banque || ''] = true;
+      cles[cleAgence(r.banque, r.agence)] = { banque: r.banque.nom, agence: r.agence };
+      if (!dest) dest = { banque: r.banque.nom, agence: r.agence.nom, adresse: r.agence.adresse, ville: r.agence.ville || '', destinataire: r.agence.destinataire || '' };
       total += (+c.montant || 0);
       lignes.push({
         num: num, type: estProvisoire(c) ? 'Caution provisoire' : typeLabel(c.type), montant: +c.montant || 0,
@@ -164,10 +202,52 @@
         piece: libellePieceLiberation(p.type), piece_type: p.type, piece_date: p.date || null
       });
     });
-    var nb = Object.keys(banques);
-    if (nb.length > 1) erreurs.push({ num: '', motif: 'une lettre ne s\'adresse qu\'a une banque (' + nb.join(', ') + ')' });
-    if (nb.length === 1 && !nb[0]) erreurs.push({ num: '', motif: 'banque non renseignee sur la caution' });
-    return { ok: erreurs.length === 0 && lignes.length > 0, banque: nb.length === 1 ? nb[0] : '', lignes: lignes, total: total, erreurs: erreurs };
+    var nb = Object.keys(cles);
+    if (nb.length > 1) erreurs.push({ num: '', motif: 'une lettre ne s\'adresse qu\'a une agence (' + nb.map(function (k) { return cles[k].banque + ' — ' + cles[k].agence.nom; }).join(' ; ') + ')' });
+    return { ok: erreurs.length === 0 && lignes.length > 0, banque: dest ? dest.banque : '', destinataire: (erreurs.length === 0 && lignes.length) ? dest : null, lignes: lignes, total: total, erreurs: erreurs, fiches: Object.keys(fiches) };
+  }
+  /* Validation d'une fiche banque avant ecriture (Parametres) : nom, agences a id unique, une seule par
+   * defaut au plus, statuts connus. Renvoie le motif du refus ou null. */
+  function validerFicheBanque(doc) {
+    if (!doc || !String(doc.nom || '').trim()) return 'nom de banque requis';
+    var ags = agencesDe(doc), ids = {}, nbDef = 0, i;
+    for (i = 0; i < ags.length; i++) {
+      var a = ags[i] || {};
+      if (!String(a.id || '').trim()) return 'agence sans identifiant';
+      if (ids[a.id]) return 'identifiant d\'agence en double (' + a.id + ')';
+      ids[a.id] = true;
+      if (a.statut !== 'confirmee' && a.statut !== 'a_confirmer') return 'statut d\'agence inconnu (' + a.statut + ')';
+      if (a.par_defaut === true) nbDef++;
+    }
+    if (nbDef > 1) return 'une seule agence par defaut par banque';
+    return null;
+  }
+  /* FUSION des lectures d'actes dans le referentiel (PUR). lectures = [{ caution_num, banque, agence, adresse,
+   * ville, lu_le }] (champs vides = non lus). Une agence lue qui n'existe pas encore sur la fiche (meme nom
+   * normalise) est AJOUTEE « a_confirmer » avec sa source ; une existante n'est jamais ecrasee (on ajoute la
+   * source). Une banque sans fiche est creee (sans agence si rien n'est lu). Renvoie { banques (copies a
+   * jour), liens: [{ caution_num, banque, agence_id }], ajoutees, deja, sans_lecture }. */
+  function fusionnerLecturesAgences(banquesDocs, lectures, nouvelId) {
+    nouvelId = nouvelId || function (bq, n) { return 'ag_' + normaliserNomBanque(bq.nom).replace(/[^a-z0-9]+/g, '-') + '-' + n; };
+    var docs = (banquesDocs || []).map(function (b) { var o = {}; Object.keys(b).forEach(function (k) { o[k] = b[k]; }); o.agences = agencesDe(b).map(function (a) { var x = {}; Object.keys(a).forEach(function (k) { x[k] = a[k]; }); x.sources = Array.isArray(a.sources) ? a.sources.slice() : (a.source ? [a.source] : []); return x; }); return o; });
+    var liens = [], ajoutees = 0, deja = 0, sansLecture = 0;
+    (lectures || []).forEach(function (l) {
+      var nomB = String(l.banque || '').trim();
+      if (!nomB) { sansLecture++; return; }
+      var bq = trouverBanque(docs, nomB);
+      if (!bq) { bq = { id: 'bk_' + normaliserNomBanque(nomB).replace(/[^a-z0-9]+/g, '-'), nom: nomB, agences: [] }; docs.push(bq); }
+      var nomA = String(l.agence || '').trim();
+      if (!nomA) { sansLecture++; return; }
+      var a = null, i;
+      for (i = 0; i < bq.agences.length; i++) { if (normaliserNomBanque(bq.agences[i].nom) === normaliserNomBanque(nomA)) { a = bq.agences[i]; break; } }
+      var src = { caution_num: l.caution_num || '', lu_le: l.lu_le || null, adresse_lue: l.adresse || '', ville_lue: l.ville || '' };
+      if (!a) {
+        a = { id: nouvelId(bq, bq.agences.length + 1), nom: nomA, adresse: String(l.adresse || '').trim(), ville: String(l.ville || '').trim(), destinataire: '', par_defaut: false, statut: 'a_confirmer', sources: [src] };
+        bq.agences.push(a); ajoutees++;
+      } else { a.sources.push(src); deja++; }
+      liens.push({ caution_num: l.caution_num || '', banque: bq.nom, agence_id: a.id });
+    });
+    return { banques: docs, liens: liens, ajoutees: ajoutees, deja: deja, sans_lecture: sansLecture };
   }
 
   /* marcheId (Cosmos brut) OU marche_id (cote app apres fromCosmos) : on tolere les deux. */
@@ -294,12 +374,27 @@
     var m = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(dateISO || ''));
     return m ? (m[3] + '/' + m[2]) : String(dateISO || '');
   }
+  /* Liberation PROUVEE = statut liberee/restituee ET accuse de la banque joint. Une liberee sans accuse
+   * (constat DG 20/11/2026 : 3 cautions, 135 161 MAD) reste « a justifier » : comptee dans l'engage, et
+   * elle ne termine pas un marche. */
+  function liberationProuvee(c) { return !!c && (c.statut === 'liberee' || c.statut === 'restituee') && !!c.accuse_banque; }
+  function liberationAJustifier(c) { return !!c && (c.statut === 'liberee' || c.statut === 'restituee') && !c.accuse_banque; }
   function marcheDoitTerminer(marche, cautions) {
     if (!marche || !cautions || !cautions.length) return false;
     if (!estRecevable(marche)) return false;
     var terminale = cautions.every(function (c) { return c && (c.statut === 'liberee' || c.statut === 'restituee'); });
     if (!terminale) return false;
+    // Depuis le 20/11 : chaque liberation doit etre PROUVEE par l'accuse (aucune libere sans accuse).
+    if (cautions.some(liberationAJustifier)) return false;
     return cautions.some(function (c) { return c && c.statut === 'liberee'; });
+  }
+  /* Marches « termine » dont au moins une caution est liberee SANS accuse : termines sur la foi d'une
+   * liberation sans preuve. LISTES, jamais rouverts d'ici (appliquerStatutMarche ne les touche pas). */
+  function marchesTerminesSansPreuve(marches, cautions) {
+    var parM = {};
+    (cautions || []).forEach(function (c) { var k = String(cMarcheId(c)); (parM[k] = parM[k] || []).push(c); });
+    return (marches || []).filter(function (m) { return m && m.statut === 'termine' && (parM[String(m.id)] || []).some(liberationAJustifier); })
+      .map(function (m) { return { ref: m.ref || '', titre: m.titre || m.objet || '', termine_le: m.termine_le || null, termine_trace: m.termine_trace || '', cautions: (parM[String(m.id)] || []).filter(liberationAJustifier).map(function (c) { return { num: c.referenceBanque || c.num || '', banque: c.banque || '', montant: +c.montant || 0 }; }) }; });
   }
   /* COPIE du marche avec statut/trace mis a jour, ou null si rien a changer (idempotent)
    * ou si le marche est suspendu/resilie. dateISO = date de l'evenement (AAAA-MM-JJ). */
@@ -314,7 +409,11 @@
       out.termine_trace = 'toutes cautions liberees le ' + _jjmm(dateISO);
       return out;
     }
-    if (!doit && marche.statut === 'termine') {
+    // Retour « en cours » SEULEMENT si une caution a quitte l'etat liberee/restituee (liberation annulee).
+    // Un marche termine sur la foi d'une liberation sans accuse n'est PAS rouvert d'ici : il est liste
+    // (marchesTerminesSansPreuve), decision DG 20/11.
+    var sortieTerminal = (cautions || []).some(function (c) { return c && c.statut !== 'liberee' && c.statut !== 'restituee'; });
+    if (!doit && marche.statut === 'termine' && sortieTerminal) {
       Object.keys(marche).forEach(function (k) { out[k] = marche[k]; });
       out.statut = 'en_cours'; out.termine_le = null;
       out.termine_trace = 'retour en cours le ' + _jjmm(dateISO) + ' (liberation annulee)';
@@ -824,6 +923,14 @@
     joursDepuisDepot: joursDepuisDepot,
     refusChangementStatutGenerique: refusChangementStatutGenerique,
     lignesLettre: lignesLettre,
+    normaliserNomBanque: normaliserNomBanque,
+    trouverBanque: trouverBanque,
+    agencesDe: agencesDe,
+    agenceComplete: agenceComplete,
+    resoudreAgence: resoudreAgence,
+    cleAgence: cleAgence,
+    validerFicheBanque: validerFicheBanque,
+    fusionnerLecturesAgences: fusionnerLecturesAgences,
     resoudreBlobPieceProv: resoudreBlobPieceProv,
     PIECE_TRANSITIONS: PIECE_TRANSITIONS,
     PIECE_LECTURE: PIECE_LECTURE,
@@ -853,6 +960,9 @@
     doitRearmerGarde: doitRearmerGarde,
     pastilleGardeInactive: pastilleGardeInactive,
     marcheDoitTerminer: marcheDoitTerminer,
+    liberationProuvee: liberationProuvee,
+    liberationAJustifier: liberationAJustifier,
+    marchesTerminesSansPreuve: marchesTerminesSansPreuve,
     appliquerStatutMarche: appliquerStatutMarche,
     MODELE_OCR: MODELE_OCR,
     ocrConfigure: ocrConfigure,

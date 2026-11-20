@@ -43,22 +43,27 @@
     var col = (cautions || []).map(function (c) {
       var m = gm(c.marche_id) || {};
       return _copierCycle(c, { src: 'col', id: c.id, num: c.num, referenceBanque: c.referenceBanque || null, type: c.type, banque: c.banque || '',
-        montant: +c.montant || 0, date_emission: c.date_emission || null, statut: c.statut,
+        montant: +c.montant || 0, date_emission: c.date_emission || null, statut: c.statut, agence_id: c.agence_id || null,
+        date_liberation_effective: c.date_liberation_effective || null, liberation_motif: c.liberation_motif || null, liberation_par: c.liberation_par || null,
         ref: m.ref || '', titre: m.titre || '', objet: m.objet || m.titre || '', maitre_ouvrage: m.maitre_ouvrage || '', marche_id: c.marche_id });
     });
     var prov = (aos || []).filter(function (a) { return a.caution_prov; }).map(function (a) {
       var p = a.caution_prov;
       return _copierCycle(p, { src: 'ao', _aoId: a.id, id: 'prov_' + a.id, num: p.num || '', referenceBanque: p.referenceBanque || null, type: 'provisoire',
-        banque: p.banque || '', montant: +p.montant || 0, date_emission: p.date_emission || null,
+        banque: p.banque || '', montant: +p.montant || 0, date_emission: p.date_emission || null, agence_id: p.agence_id || null, date_restitution: p.date_restitution || null,
         statut: p.statut || '', ref: a.ref || '', titre: a.objet || '', objet: a.objet || '', maitre_ouvrage: a.maitre_ouvrage || '', aoStatut: a.statut || '', marche_id: null });
     });
     return col.concat(prov);
   }
 
-  /* Encore bloquée à la banque = argent pas encore revenu : tout état du cycle avant l'accusé. */
+  /* Libérée/restituée SANS accusé de la banque = libération à justifier (constat DG 20/11/2026) : l'argent
+   * n'est pas prouvé revenu, la banque peut encore prélever ses commissions. */
+  function aJustifier(c) { var e = etatCycle(c); return (e === 'liberee' || e === 'restituee') && !(c && c.accuse_banque); }
+  /* Encore bloquée à la banque = argent pas encore prouvé revenu : tout état du cycle avant l'accusé,
+   * ET une libération sans accusé (comptée dans l'engagé par banque tant que l'accusé n'est pas joint). */
   function isBlocked(c) {
     var e = etatCycle(c);
-    return e === 'active' || e === 'mainlevee_demandee' || e === 'piece_recue' || e === 'demande_deposee';
+    return e === 'active' || e === 'mainlevee_demandee' || e === 'piece_recue' || e === 'demande_deposee' || aJustifier(c);
   }
 
   function applyFilters(rows, f) {
@@ -80,10 +85,11 @@
   /* Agrégats de l'ensemble reçu (déjà filtré par l'appelant). kpi.mainlevee = demandée au client,
    * kpi.recue = pièce reçue (à demander à la banque), kpi.banque = demande déposée (en attente). */
   function aggregate(rows) {
-    var engage = 0, byBank = {}, kpi = { active: 0, mainlevee: 0, recue: 0, banque: 0, expiree: 0, liberee: 0 };
+    var engage = 0, byBank = {}, kpi = { active: 0, mainlevee: 0, recue: 0, banque: 0, expiree: 0, liberee: 0, a_justifier: 0 };
     rows.forEach(function (c) {
       var e = etatCycle(c);
-      if (e === 'active') kpi.active++;
+      if (aJustifier(c)) kpi.a_justifier++;
+      else if (e === 'active') kpi.active++;
       else if (e === 'mainlevee_demandee') kpi.mainlevee++;
       else if (e === 'piece_recue') kpi.recue++;
       else if (e === 'demande_deposee') kpi.banque++;
@@ -131,11 +137,22 @@
     return ordre.sort().map(function (b) { return map[b]; });
   }
 
-  /* Bloc « À demander à la banque » : pièce reçue, demande non déposée. Groupé par banque (une lettre
-   * = une banque). Reçoit la liste unifiée. */
-  function aDemanderBanque(rows) {
+  /* Bloc « À demander à la banque » : pièce reçue, demande non déposée. Groupé par banque ET agence (une
+   * lettre = une agence). `resoudre(c)` -> { ok, banque, agence, motif, fiche } (MPMainlevee.resoudreAgence
+   * avec le référentiel) ; sans résolveur, un groupe par banque, marqué incomplet. Un groupe dont l'agence
+   * manque est nommé « agence à compléter » avec le motif : la lettre y est refusée, la fiche à ouvrir est dite. */
+  function aDemanderBanque(rows, resoudre) {
     var items = rows.filter(function (c) { return etatCycle(c) === 'piece_recue'; });
-    return { items: items, total: items.reduce(function (s, c) { return s + c.montant; }, 0), parBanque: _parBanque(items) };
+    var map = {}, ordre = [];
+    items.forEach(function (c) {
+      var r = resoudre ? resoudre(c) : { ok: false, motif: 'référentiel des banques non chargé', fiche: c.banque || null };
+      var b = c.banque || 'banque non renseignée';
+      var k = b + '|' + (r.ok ? r.agence.id : '?');
+      if (!map[k]) { map[k] = { cle: k, banque: b, agence: r.ok ? r.agence : null, complet: !!r.ok, motif: r.ok ? '' : r.motif, fiche: r.ok ? null : (r.fiche || null), items: [], total: 0 }; ordre.push(k); }
+      map[k].items.push(c); map[k].total += c.montant;
+    });
+    var parBanque = ordre.sort().map(function (k) { return map[k]; });
+    return { items: items, total: items.reduce(function (s, c) { return s + c.montant; }, 0), parBanque: parBanque, nbIncomplets: parBanque.filter(function (g) { return !g.complet; }).length };
   }
 
   /* Bloc « En attente de la banque » : demande déposée, accusé absent. Jours écoulés depuis le dépôt
@@ -153,5 +170,21 @@
     return { items: items, total: items.reduce(function (s, c) { return s + c.montant; }, 0), nbAlerte: items.filter(function (c) { return c.alerte; }).length, delai: delai };
   }
 
-  return { DELAI_ALERTE_BANQUE_DEFAUT: DELAI_ALERTE_BANQUE_DEFAUT, etatCycle: etatCycle, unify: unify, isBlocked: isBlocked, applyFilters: applyFilters, aggregate: aggregate, aRestituer: aRestituer, aDemanderBanque: aDemanderBanque, enAttenteBanque: enAttenteBanque };
+  /* Bloc « Libérations à justifier » : libérées/restituées sans accusé, total, et marchés « terminé » qui
+   * reposent sur elles (listés, jamais rouverts). gm(marche_id) -> { ref, statut, termine_le }. */
+  function liberationsAJustifier(rows, gm) {
+    gm = gm || function () { return {}; };
+    var items = rows.filter(aJustifier).map(function (c) {
+      var o = {}; Object.keys(c).forEach(function (k) { o[k] = c[k]; });
+      o.date_passage = c.date_liberation || c.date_liberation_effective || c.date_restitution || null;
+      var m = c.marche_id ? (gm(c.marche_id) || {}) : {};
+      o.marche_termine = m.statut === 'termine'; o.marche_termine_le = m.termine_le || null;
+      return o;
+    });
+    var marches = {};
+    items.forEach(function (c) { if (c.marche_termine) marches[c.ref] = { ref: c.ref, termine_le: c.marche_termine_le, montant: (marches[c.ref] ? marches[c.ref].montant : 0) + c.montant }; });
+    return { items: items, total: items.reduce(function (s, c) { return s + c.montant; }, 0), marchesTermines: Object.keys(marches).sort().map(function (k) { return marches[k]; }) };
+  }
+
+  return { DELAI_ALERTE_BANQUE_DEFAUT: DELAI_ALERTE_BANQUE_DEFAUT, etatCycle: etatCycle, aJustifier: aJustifier, liberationsAJustifier: liberationsAJustifier, unify: unify, isBlocked: isBlocked, applyFilters: applyFilters, aggregate: aggregate, aRestituer: aRestituer, aDemanderBanque: aDemanderBanque, enAttenteBanque: enAttenteBanque };
 });

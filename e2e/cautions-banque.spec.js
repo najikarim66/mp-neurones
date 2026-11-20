@@ -30,7 +30,10 @@ async function monter(page, fixture) {
 const il_y_a = (j) => new Date(Date.now() - j * 86400000).toISOString().slice(0, 10);
 const FIXTURE = {
   marches: [{ id: 'm1', ref: 'MAR201800146/2018', titre: OBJET, objet: OBJET, maitre_ouvrage: 'Province de Settat' }],
-  banques: [{ id: 'bk1', nom: 'BMCE Bank', agence: 'Casablanca Maarif' }],
+  banques: [
+    { id: 'bk1', nom: 'BMCE Bank', agences: [{ id: 'ag1', nom: 'Agence Casablanca Maarif', adresse: '140, boulevard Zerktouni', ville: 'Casablanca', destinataire: 'Service des engagements par signature', par_defaut: true, statut: 'confirmee' }] },
+    { id: 'bk2', nom: 'CIH Bank', agences: [] } // fiche sans agence : lettre refusée, fiche nommée
+  ],
   cautions: [
     { id: 'c_act', num: 'A1', type: 'bonne_execution', banque: 'FINEA', montant: 100000, statut: 'active', marche_id: 'm1', date_emission: '2025-01-10' },
     { id: 'c_dem', num: 'D1', type: 'retenue_garantie', banque: 'FINEA', montant: 20000, statut: 'mainlevee_demandee', marche_id: 'm1', date_emission: '2025-01-10', date_demande_mainlevee: il_y_a(10) },
@@ -56,6 +59,14 @@ test('bloc « À demander à la banque » : pièces reçues groupées par banque
   await expect(bloc.locator('div[data-banque]')).toHaveCount(2);
   await expect(bloc.locator('div[data-banque="BMCE Bank"] [data-action="lettre-banque"]')).toHaveCount(1);
   await expect(bloc.locator('div[data-banque="CIH Bank"] [data-action="lettre-banque"]')).toHaveCount(1);
+  // Référentiel : BMCE complète (agence affichée, lettre active) ; CIH sans agence (lettre désactivée, fiche nommée, bouton « Ouvrir la fiche banque »)
+  await expect(bloc.locator('div[data-banque="BMCE Bank"]')).toHaveAttribute('data-complet', 'oui');
+  await expect(bloc.locator('div[data-banque="BMCE Bank"] [data-agence]')).toContainText('Agence Casablanca Maarif — 140, boulevard Zerktouni, Casablanca');
+  await expect(bloc.locator('div[data-banque="CIH Bank"]')).toHaveAttribute('data-complet', 'non');
+  await expect(bloc.locator('div[data-banque="CIH Bank"] [data-action="lettre-banque"]')).toBeDisabled();
+  await expect(bloc.locator('div[data-banque="CIH Bank"] [data-agence-manquante]')).toContainText('fiche banque « CIH Bank »');
+  await expect(bloc.locator('div[data-banque="CIH Bank"] [data-action="ouvrir-fiche"]')).toHaveCount(1);
+  await expect(bloc).toHaveAttribute('data-nb-incomplets', '1');
   await expect(bloc.locator('div[data-banque="BMCE Bank"] [data-ligne-demande]')).toHaveCount(2);
   await expect(bloc.locator('div[data-banque="CIH Bank"] [data-ligne-demande]')).toHaveCount(2); // R3 + provisoire
   // Cases cochées par défaut ; la nature et la pièce sont dites en mots
@@ -63,17 +74,55 @@ test('bloc « À demander à la banque » : pièces reçues groupées par banque
   await expect(bloc.locator('div[data-banque="BMCE Bank"]')).toContainText('mainlevée du client');
   await expect(bloc.locator('div[data-banque="BMCE Bank"]')).toContainText('original restitué');
   await expect(bloc.locator('div[data-banque="CIH Bank"]')).toContainText('Caution provisoire');
-  // La modale « Lettre » demande l'agence (pré-remplie depuis le référentiel banque) et ne change aucun statut
+  // La modale « Lettre » ne demande RIEN : destinataire résolu du référentiel, aucun champ de saisie
   await bloc.locator('div[data-banque="BMCE Bank"] [data-action="lettre-banque"]').click();
-  await expect(page.locator('#lb_agence')).toHaveValue('Casablanca Maarif');
+  await expect(page.locator('#mod [data-destinataire]')).toContainText('Agence Casablanca Maarif');
+  await expect(page.locator('#mod [data-destinataire]')).toContainText('140, boulevard Zerktouni');
+  await expect(page.locator('#mod [data-destinataire]')).toContainText('Service des engagements par signature');
+  await expect(page.locator('#mod input, #mod textarea, #mod select')).toHaveCount(0);
   await expect(page.locator('#mod')).toContainText('Aucun envoi par courriel');
   await expect(page.locator('[data-action="generer-lettre"]')).toHaveCount(1);
   await page.evaluate(() => closeMod());
+  // Depuis une ligne CIH (fiche sans agence) : la modale refuse, nomme la fiche et propose de l'ouvrir
+  await page.locator('.cauv2 table').first().locator('tr', { hasText: 'R3' }).locator('[data-action="lettre-banque"]').click();
+  await expect(page.locator('#mod [data-lettre-refusee]')).toContainText('fiche banque « CIH Bank »');
+  await expect(page.locator('#mod [data-action="ouvrir-fiche"]')).toHaveCount(1);
+  await page.locator('#mod [data-action="ouvrir-fiche"]').click();
+  await expect(page.locator('[data-param="banques"] [data-fiche-banque="CIH Bank"]')).toHaveCount(1);
+  await expect(page.locator('[data-param="banques"] [data-fiche-banque="CIH Bank"]')).toContainText('fiche à compléter : aucune agence');
+  await page.evaluate(() => nav('cautions'));
   // « Enregistrer le dépôt » : date obligatoire
   await bloc.locator('div[data-banque="BMCE Bank"] [data-action="depot-banque"]').click();
   await expect(page.locator('#db_date')).toHaveCount(1);
   await expect(page.locator('#mod')).toContainText('2 caution(s)');
   await page.evaluate(() => closeMod());
+});
+
+test('bloc « Libérations à justifier » : libérée sans accusé affichée distinctement, comptée dans l\'engagé, marché terminé listé', async ({ page }) => {
+  const fx = JSON.parse(JSON.stringify(FIXTURE));
+  fx.marches.push({ id: 'm40', ref: '40/2024', titre: 'Travaux ONP', objet: 'Travaux ONP', maitre_ouvrage: 'ONP', statut: 'termine', termine_le: '2026-10-09', reception_definitive_prononcee: true });
+  fx.cautions.push({ id: 'c_sa1', num: '186921', type: 'bonne_execution', banque: 'FINEA', montant: 36249, statut: 'liberee', marche_id: 'm40', date_emission: '2024-11-22', date_liberation_effective: '2026-08-03', liberation_motif: 'Regularisation' });
+  fx.cautions.push({ id: 'c_sa2', num: '194056', type: 'retenue_garantie', banque: 'FINEA', montant: 84580, statut: 'liberee', marche_id: 'm40', date_emission: '2025-03-28', date_liberation_effective: '2026-08-03' });
+  await monter(page, fx);
+  const bloc = page.locator('[data-bloc="liberations-a-justifier"]');
+  await expect(bloc).toHaveCount(1);
+  await expect(bloc).toHaveAttribute('data-nb', '2');
+  await expect(bloc).toContainText('Libérations à justifier — 2');
+  await expect(bloc).toContainText('120');  // 120 829 MAD
+  await expect(bloc.locator('[data-etat="liberee-sans-accuse"]')).toHaveCount(2);
+  await expect(bloc.locator('[data-etat="liberee-sans-accuse"]').first()).toContainText('Libérée — accusé de la banque manquant');
+  await expect(bloc.locator('[data-ligne-justifier]').first()).toContainText('passée à cet état le 03/08/2026');
+  await expect(bloc.locator('[data-ligne-justifier]').first()).toContainText('auteur non enregistré');
+  await expect(bloc.locator('[data-marches-termines]')).toContainText('40/2024');
+  await expect(bloc.locator('[data-marches-termines]')).toContainText('sans être rouvert');
+  await expect(bloc.locator('button', { hasText: '+ Accusé' })).toHaveCount(2);
+  // la libérée AVEC accusé (L1) n'y est pas ; l'engagé FINEA inclut les 120 829 : 157 000 + 120 829 = 277 829
+  await expect(bloc).not.toContainText('L1');
+  await expect(page.locator('.cauv2')).toContainText('277');
+  // état vide explicite
+  await monter(page, FIXTURE);
+  await expect(page.locator('[data-bloc="liberations-a-justifier"]')).toHaveAttribute('data-nb', '0');
+  await expect(page.locator('[data-bloc="liberations-a-justifier"] [data-vide]')).toContainText('0 caution');
 });
 
 test('bloc « En attente de la banque » : jours écoulés, alerte au-delà de 15 jours, accusé comme seule sortie', async ({ page }) => {
@@ -139,5 +188,5 @@ test('états vides explicites, plancher 12 px, aucun identifiant technique', asy
   expect(tailles.length).toBeGreaterThan(10);
   expect(Math.min(...tailles)).toBeGreaterThanOrEqual(12);
   const texte = await page.locator('[data-bloc]').allInnerTexts();
-  expect(texte.join(' ')).not.toMatch(/\bc_rec|\bc_dep|\bprov_|\bao1\b|m1\b/);
+  expect(texte.join(' ')).not.toMatch(/\bc_rec|\bc_dep|\bprov_|\bao1\b|m1\b|ag1\b|bk1\b/);
 });

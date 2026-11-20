@@ -120,6 +120,10 @@ async function lireSocieteEmettrice() {
     return o;
   } catch (e) { return {}; }
 }
+// Referentiel des banques (mp_banques : nom + agences), lecture best-effort.
+async function lireBanques() {
+  try { return (await getDb().container("mp_banques").items.readAll().fetchAll()).resources || []; } catch (e) { return []; }
+}
 const TYPE_LABELS_LETTRE = { bonne_execution: "Caution définitive", retenue_garantie: "Caution de retenue de garantie", soumission: "Caution de soumission", avance_demarrage: "Caution d'avance de démarrage", provisoire: "Caution provisoire" };
 
 // Verifie qu'un user est authentifie via Entra ID (en-tete x-ms-client-principal injecte par SWA)
@@ -725,15 +729,19 @@ module.exports = async function (context, req) {
           if (mid && !M[mid]) { try { M[mid] = (await getDb().container("mp_marches").item(mid, mid).read()).resource || {}; } catch (e) { M[mid] = {}; } }
         }
         const gm = (id) => M[String(id)] || {};
-        const L = MPMainlevee.lignesLettre(charges.map((t) => t.caution), gm, (ty) => TYPE_LABELS_LETTRE[ty] || ty);
-        if (!L.ok) { context.res = { status: 409, body: { error: "Lettre refusee : " + (L.erreurs.map((e) => (e.num ? e.num + " : " : "") + e.motif).join(" ; ") || "aucune caution recevable"), erreurs: L.erreurs } }; return; }
-        const banque = String(body.banque || "").trim() || L.banque;
-        if (banque !== L.banque) { context.res = { status: 409, body: { error: "Banque demandee (" + banque + ") differente de celle des cautions (" + L.banque + ")" } }; return; }
+        // Referentiel des banques et agences : la lettre se genere SANS AUCUNE saisie (complement DG 20/11).
+        // Agence ou adresse manquante -> 409 qui NOMME la fiche a completer (Parametres > Banques et agences).
+        const banquesRef = await lireBanques();
+        const L = MPMainlevee.lignesLettre(charges.map((t) => t.caution), gm, (ty) => TYPE_LABELS_LETTRE[ty] || ty, banquesRef);
+        if (!L.ok) { context.res = { status: 409, body: { error: "Lettre refusee : " + (L.erreurs.map((e) => (e.num ? e.num + " : " : "") + e.motif).join(" ; ") || "aucune caution recevable"), erreurs: L.erreurs, fiches: L.fiches || [] } }; return; }
+        const banque = L.banque;
+        const dest = L.destinataire || {};
+        const societe = await lireSocieteEmettrice();
         let logo = null;
         try { logo = require("fs").readFileSync(require("path").join(__dirname, "assets", "logo-neurones.png")); } catch (e) { logo = null; }
         const buf = await require("./lettre-mainlevee.js").genererLettreMainlevee({
-          societe: await lireSocieteEmettrice(), banque, agence: String(body.agence || "").trim(), adresse_agence: String(body.adresse_agence || "").trim(),
-          lieu: String(body.lieu || "").trim(), dateISO, lignes: L.lignes, total: L.total, logo
+          societe, banque, agence: dest.agence || "", adresse_agence: dest.adresse || "", ville_agence: dest.ville || "", destinataire: dest.destinataire || "",
+          lieu: societe.ville || "", dateISO, lignes: L.lignes, total: L.total, logo
         });
         // Conservation (tracabilite) : un blob par lettre, reference sur chaque caution, statut INCHANGE.
         const conn = process.env.STORAGE_CONNECTION_STRING;
@@ -745,7 +753,7 @@ module.exports = async function (context, req) {
         const cont = BlobServiceClient.fromConnectionString(conn).getContainerClient(PIECE_CONTAINER);
         await cont.createIfNotExists();
         await cont.getBlockBlobClient(blobName).uploadData(buf, { blobHTTPHeaders: { blobContentType: "application/pdf" } });
-        const lettreRef = { blob: blobName, nom_original: nomFichier, taille: buf.length, content_type: "application/pdf", genere_le: new Date().toISOString(), genere_par: user.userDetails || null, banque, agence: String(body.agence || "").trim(), nb_cautions: L.lignes.length };
+        const lettreRef = { blob: blobName, nom_original: nomFichier, taille: buf.length, content_type: "application/pdf", genere_le: new Date().toISOString(), genere_par: user.userDetails || null, banque, agence: dest.agence || "", nb_cautions: L.lignes.length };
         for (const t of charges) {
           const maj = {}; Object.keys(t.caution).forEach((k) => { maj[k] = t.caution[k]; });
           maj.lettre_mainlevee = lettreRef; maj.date_lettre = dateISO;
@@ -771,6 +779,101 @@ module.exports = async function (context, req) {
       return;
     } catch (e) {
       context.log.error("cautionDemandeBanque error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route banques-referentiel : POST /api/banques-referentiel — DG seul. Fiche banque complete (nom, agences :
+  // nom, adresse, ville, destinataire, par_defaut, statut confirmee|a_confirmer). Validation pure (validerFicheBanque).
+  // Body : { banque: <doc mp_banques> } ou { confirmer_tout: true, banque_id } (toutes les agences « a confirmer » -> confirmees).
+  if (fn === "banquesReferentiel") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const role = await getRoleFromDb(user.userDetails);
+      if (!MPMainlevee.peutBasculerGarde(role)) { context.res = { status: 403, body: { error: "Reserve au DG" } }; return; }
+      const body = req.body || {};
+      const bC = getDb().container("mp_banques");
+      let doc = null;
+      if (body.confirmer_tout && body.banque_id) {
+        try { doc = (await bC.item(String(body.banque_id), String(body.banque_id)).read()).resource || null; } catch (e) { doc = null; }
+        if (!doc) { context.res = { status: 404, body: { error: "Fiche banque introuvable" } }; return; }
+        doc.agences = MPMainlevee.agencesDe(doc).map((a) => { const x = Object.assign({}, a); if (x.statut === "a_confirmer" && MPMainlevee.agenceComplete(x)) { x.statut = "confirmee"; x.confirmee_le = new Date().toISOString(); x.confirmee_par = user.userDetails || null; } return x; });
+        if (!doc.agences.some((a) => a.par_defaut === true) && doc.agences.filter((a) => a.statut === "confirmee").length === 1) doc.agences.find((a) => a.statut === "confirmee").par_defaut = true;
+      } else {
+        doc = body.banque && typeof body.banque === "object" ? body.banque : null;
+        if (!doc) { context.res = { status: 400, body: { error: "Body : { banque } ou { confirmer_tout, banque_id }" } }; return; }
+        if (!doc.id) doc.id = "bk_" + MPMainlevee.normaliserNomBanque(doc.nom).replace(/[^a-z0-9]+/g, "-");
+      }
+      const refus = MPMainlevee.validerFicheBanque(doc);
+      if (refus) { context.res = { status: 400, body: { error: "Fiche refusee : " + refus } }; return; }
+      doc.maj_le = new Date().toISOString(); doc.maj_par = user.userDetails || null;
+      const saved = (await bC.items.upsert(doc)).resource;
+      context.res = { status: 200, body: { ok: true, banque: saved } };
+      return;
+    } catch (e) {
+      context.log.error("banquesReferentiel error:", e.message);
+      context.res = { status: 500, body: { error: e.message } };
+      return;
+    }
+  }
+
+  // Route banques-lecture-actes : POST /api/banques-lecture-actes — DG seul. Lit l'agence et l'adresse ECRITES sur
+  // les actes de caution scannes (OCR, cache par hash) et les PROPOSE dans le referentiel a l'etat « a confirmer »
+  // (fusionnerLecturesAgences, pur) ; la caution recoit agence_id. Par LOTS (limite SWA 45 s) : body { lot: 3 } ;
+  // renvoie { faits, restant, lectures:[...] }. Une caution deja lue (agence_lecture) n'est pas relue sauf { relire: true }.
+  if (fn === "banquesLectureActes") {
+    try {
+      const user = getAuthenticatedUser(req);
+      if (!MPMainlevee.principalAutorise(user)) { context.res = { status: 401, body: { error: "Authentification requise" } }; return; }
+      if ((req.method || "GET").toUpperCase() !== "POST") { context.res = { status: 405, body: { error: "Method not allowed (use POST)" } }; return; }
+      const role = await getRoleFromDb(user.userDetails);
+      if (!MPMainlevee.peutBasculerGarde(role)) { context.res = { status: 403, body: { error: "Reserve au DG" } }; return; }
+      const body = req.body || {};
+      const lot = Math.max(1, Math.min(5, parseInt(body.lot, 10) || 3));
+      const relire = !!body.relire;
+      const ocr = require("./lib/ocr-acte.js");
+      if (!MPMainlevee.ocrConfigure(process.env.ANTHROPIC_API_KEY)) { context.res = { status: 200, body: { configure: false, message: "OCR non configure (ANTHROPIC_API_KEY absente)" } }; return; }
+      const conn = process.env.STORAGE_CONNECTION_STRING;
+      if (!conn) { context.res = { status: 500, body: { error: "STORAGE_CONNECTION_STRING non configure cote serveur" } }; return; }
+      const cautionsC = getDb().container("mp_cautions");
+      const toutes = (await cautionsC.items.query("SELECT * FROM c WHERE IS_DEFINED(c.acte) AND IS_DEFINED(c.acte.blob)").fetchAll()).resources;
+      const aFaire = toutes.filter((c) => relire || !(c.agence_lecture && c.agence_lecture.version === ocr.VERSION_AGENCE));
+      let cacheC = null;
+      try { const cc = await getDb().containers.createIfNotExists({ id: "mp_ocr_cache", partitionKey: { paths: ["/id"] } }); cacheC = cc.container; } catch (e) { cacheC = null; }
+      const cacheGet = cacheC ? (cle) => cacheC.item(cle, cle).read().then((r) => r.resource).catch(() => null) : null;
+      const cacheSet = cacheC ? (cle, res) => cacheC.items.upsert({ id: cle, resultat: res, le: new Date().toISOString() }) : null;
+      const cont = BlobServiceClient.fromConnectionString(conn).getContainerClient(PIECE_CONTAINER);
+      const lectures = [], erreurs = [];
+      for (const c of aFaire.slice(0, lot)) {
+        const num = c.referenceBanque || c.num || "";
+        try {
+          const buf = await cont.getBlockBlobClient(c.acte.blob).downloadToBuffer();
+          const r = await ocr.lireAgenceActe(buf, c.acte.content_type || "application/pdf", cacheGet, cacheSet);
+          const lecture = { caution_num: num, banque_caution: c.banque || "", banque: r.banque, agence: r.agence, adresse: r.adresse, ville: r.ville, confiances: r.confiances, cache: !!r.cache, lu_le: new Date().toISOString() };
+          lectures.push(Object.assign({ cautionId: c.id, marcheId: c.marcheId }, lecture));
+          c.agence_lecture = { version: ocr.VERSION_AGENCE, le: lecture.lu_le, banque: r.banque, agence: r.agence, adresse: r.adresse, ville: r.ville, confiances: r.confiances };
+          await cautionsC.items.upsert(c);
+        } catch (e) { erreurs.push({ num, motif: e.message }); }
+      }
+      // Fusion dans le referentiel : la banque de la FICHE caution fait foi pour rattacher (la banque lue sur
+      // l'acte est gardee en trace) ; agence/adresse/ville lues -> proposition « a confirmer ».
+      const banquesRef = await lireBanques();
+      const fusion = MPMainlevee.fusionnerLecturesAgences(banquesRef, lectures.map((l) => ({ caution_num: l.caution_num, banque: l.banque_caution || l.banque, agence: l.agence, adresse: l.adresse, ville: l.ville, lu_le: l.lu_le })));
+      const bC = getDb().container("mp_banques");
+      for (const d of fusion.banques) { d.maj_le = new Date().toISOString(); d.maj_par = "lecture des actes (" + (user.userDetails || "") + ")"; await bC.items.upsert(d); }
+      // Lien caution -> agence proposee (agence_id), sans toucher au statut.
+      for (const l of fusion.liens) {
+        const src = lectures.find((x) => x.caution_num === l.caution_num);
+        if (!src) continue;
+        try { const r = await cautionsC.item(src.cautionId, src.marcheId).read(); const doc = r.resource; if (doc && !doc.agence_id) { doc.agence_id = l.agence_id; await cautionsC.items.upsert(doc); } } catch (e) { /* lien best-effort */ }
+      }
+      context.res = { status: 200, body: { configure: true, faits: lectures.length, restant: Math.max(0, aFaire.length - lectures.length), total_actes: toutes.length, lectures: lectures.map((l) => ({ caution_num: l.caution_num, banque_caution: l.banque_caution, banque_lue: l.banque, agence: l.agence, adresse: l.adresse, ville: l.ville, confiances: l.confiances, cache: l.cache })), erreurs, fusion: { ajoutees: fusion.ajoutees, deja: fusion.deja, sans_lecture: fusion.sans_lecture } } };
+      return;
+    } catch (e) {
+      context.log.error("banquesLectureActes error:", e.message);
       context.res = { status: 500, body: { error: e.message } };
       return;
     }

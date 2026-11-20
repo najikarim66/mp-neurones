@@ -318,7 +318,10 @@ var TC={bonne_execution:'Caution definitive',retenue_garantie:'Caution de RG',so
 var SMM={en_cours:{l:'En cours',c:'bi'},termine:{l:'Termine',c:'bs'},suspendu:{l:'Suspendu',c:'bw'},resilie:{l:'Resilie',c:'bd'}};
 var SMC={active:{l:'Active',c:'bs'},mainlevee_demandee:{l:'Mainlevée demandée au client',c:'bp'},piece_recue:{l:'Pièce reçue — à demander à la banque',c:'bi'},demande_deposee:{l:'Demande déposée à la banque',c:'bi'},expiree:{l:'Expirée',c:'bd'},liberee:{l:'Libérée',c:'bn'},restituee:{l:'Restituée',c:'bn'},en_attente:{l:'En attente',c:'bw'}};
 /* Badge d'état d'une caution (cycle DG 20/11/2026) : l'ancien « mainlevee_recue » se lit « pièce reçue » (MPCaution.etatCycle). */
-function bdgEtatCaution(c){return bdg(MPCaution.etatCycle(c),SMC);}
+function bdgEtatCaution(c){if(MPCaution.aJustifier(c))return '<span class="badge bw" data-etat="liberee-sans-accuse">'+((MPCaution.etatCycle(c)==='restituee')?'Restituée':'Libérée')+' — accusé de la banque manquant</span>';return bdg(MPCaution.etatCycle(c),SMC);}
+/* Agence d'une caution d'après le référentiel (S.banques) : { ok, banque, agence, motif, fiche }. */
+function resoudreAgenceCaution(c){return MPMainlevee.resoudreAgence(c,S.banques||[]);}
+function ligneDeCible(cb){var rows=MPCaution.unify(S.cautions,S.aos,gm);return rows.find(function(r){return cb.aoId?(r.src==='ao'&&String(r._aoId)===String(cb.aoId)):(r.src==='col'&&String(r.id)===String(cb.cautionId));})||null;}
 var SMP={paye:{l:'Paye',c:'bs'},en_attente:{l:'En attente',c:'bw'},rejete:{l:'Rejete',c:'bd'},en_cours:{l:'En cours',c:'bi'}};
 var SMAO={en_cours:{l:'En cours',c:'bi'},attribue:{l:'Attribue',c:'bs'},infructueux:{l:'Infructueux',c:'bw'},annule:{l:'Annule',c:'bd'}};
 /* === Phase B : Full Cosmos API === */
@@ -425,7 +428,76 @@ function pgParametres(){
     '<div id="param-garde">Chargement…</div></div>'+
     '<div class="card"><div class="sh"><div class="st">Cautions — alerte « en attente de la banque »</div></div>'+
     '<div style="font-size:12px;color:#7A7369;margin-bottom:8px">Jours écoulés depuis le dépôt de la demande de mainlevée au-delà desquels la caution est signalée (la banque continue à prélever ses commissions). Défaut 15 jours. Modification réservée au DG.</div>'+
-    '<div id="param-delai-banque">Chargement…</div></div>';
+    '<div id="param-delai-banque">Chargement…</div></div>'+
+    renderParamBanquesHTML();
+}
+/* ===== Référentiel des banques et agences (complément DG 20/11) : la lettre se génère sans saisie. =====
+   Une fiche par banque (mp_banques) : agences { nom, adresse, ville, destinataire, par défaut, statut confirmée /
+   à confirmer (lue sur un acte) }. Les banques sans fiche (présentes sur des cautions) sont listées « fiche à créer ». */
+function banquesConnues(){
+  var set={}; (S.banques||[]).forEach(function(b){if(b&&b.nom)set[b.nom]=1;});
+  (S.cautions||[]).forEach(function(c){if(c.banque)set[c.banque]=1;});
+  (S.aos||[]).forEach(function(a){if(a.caution_prov&&a.caution_prov.banque)set[a.caution_prov.banque]=1;});
+  return Object.keys(set).sort();
+}
+function renderParamBanquesHTML(){
+  var dg=!!S._isDg, cautions=S.cautions||[];
+  var cartes=banquesConnues().map(function(nom){
+    var bq=_banqueDoc(nom), ags=MPMainlevee.agencesDe(bq), nbC=cautions.filter(function(c){return MPMainlevee.normaliserNomBanque(c.banque)===MPMainlevee.normaliserNomBanque(nom);}).length;
+    var sansAg=cautions.filter(function(c){return MPMainlevee.normaliserNomBanque(c.banque)===MPMainlevee.normaliserNomBanque(nom)&&!c.agence_id;}).length;
+    var aConf=ags.filter(function(a){return a.statut==='a_confirmer';}).length;
+    var lignes=ags.map(function(a,i){
+      var nbRatt=cautions.filter(function(c){return String(c.agence_id||'')===String(a.id);}).length;
+      var src=(a.sources||[]).length?('lue sur '+(a.sources||[]).length+' acte(s) : '+(a.sources||[]).map(function(x){return x.caution_num;}).filter(Boolean).slice(0,6).join(', ')):'saisie';
+      var champ=function(k,ph){return dg?'<input class="fc" data-ag="'+i+'" data-k="'+k+'" value="'+esc(a[k]||'')+'" placeholder="'+ph+'" style="min-width:120px">':'<span>'+(a[k]?esc(a[k]):'<i style="color:var(--terra)">manquant</i>')+'</span>';};
+      return '<tr data-agence-id="'+esc(a.id)+'"><td>'+champ('nom','Nom de l\'agence')+'</td><td>'+champ('adresse','Adresse complète')+'</td><td>'+champ('ville','Ville')+'</td><td>'+champ('destinataire','Service ou fonction')+'</td><td style="text-align:center">'+(dg?'<input type="radio" name="defaut-'+slugBanque(nom)+'" data-ag="'+i+'" data-k="par_defaut"'+(a.par_defaut?' checked':'')+'>':(a.par_defaut?'oui':'non'))+'</td><td><span class="charte-statut'+(a.statut==='a_confirmer'?' charte-statut--alerte':'')+'" data-statut-agence="'+esc(a.statut)+'">'+(a.statut==='a_confirmer'?'! à confirmer':'confirmée')+'</span><div style="font-size:12px;color:var(--ink-muted)">'+esc(src)+' · '+nbRatt+' caution(s) rattachée(s)</div></td><td>'+(dg&&a.statut==='a_confirmer'?'<button class="btn btn-sm" onclick="confirmerAgence(\''+esc(nom)+'\','+i+')">Confirmer</button>':'')+(dg?' <button class="act red" title="Retirer" onclick="retirerAgence(\''+esc(nom)+'\','+i+')">Retirer</button>':'')+'</td></tr>';
+    }).join('');
+    return '<div id="banque-'+slugBanque(nom)+'" data-fiche-banque="'+esc(nom)+'" style="border:1px solid var(--line);border-radius:5px;padding:10px 12px;margin-top:10px;background:var(--cream)"><div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:15px;font-weight:600">'+esc(nom)+'</span><span style="font-size:12px;color:var(--ink-muted)">'+nbC+' caution(s) · '+(ags.length?ags.length+' agence(s)':'<b style="color:var(--terra)">fiche à compléter : aucune agence</b>')+(sansAg&&ags.length?' · '+sansAg+' caution(s) sur l\'agence par défaut':'')+'</span>'+(aConf?'<span class="charte-statut charte-statut--alerte">! '+aConf+' à confirmer</span>':'')+'</div>'+
+      (ags.length?'<div class="tw"><table style="margin-top:6px"><thead><tr><th>Agence</th><th>Adresse</th><th>Ville</th><th>Destinataire</th><th>Par défaut</th><th>État</th><th></th></tr></thead><tbody>'+lignes+'</tbody></table></div>':'<div style="font-size:12px;color:var(--ink-muted);margin-top:6px">Aucune agence : la lettre de mainlevée est refusée pour cette banque tant que la fiche n\'est pas complétée.</div>')+
+      (dg?'<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="ajouterAgence(\''+esc(nom)+'\')">+ Agence</button><button class="btn btn-sm btn-prim" data-action="enregistrer-fiche" onclick="enregistrerFicheBanque(\''+esc(nom)+'\')">Enregistrer la fiche</button>'+(aConf?'<button class="btn btn-sm" onclick="confirmerToutesAgences(\''+esc(nom)+'\')">Confirmer les '+aConf+' agence(s) lue(s)</button>':'')+'</div>':'')+'</div>';
+  }).join('');
+  var nbActes=(S.cautions||[]).filter(function(c){return c.acte&&c.acte.blob;}).length, nbLus=(S.cautions||[]).filter(function(c){return c.agence_lecture;}).length;
+  return '<div class="card" data-param="banques"><div class="sh"><div class="st">Banques et agences (lettre de mainlevée)</div></div>'+
+    '<div style="font-size:12px;color:#7A7369;margin-bottom:8px">La lettre à la banque se génère sans aucune saisie : nom, agence, adresse, ville et destinataire viennent d\'ici. Chaque caution est rattachée à son agence (formulaire caution) ; à défaut, l\'agence par défaut de sa banque. Une agence lue sur un acte reste « à confirmer » et ne sert pas à la lettre avant confirmation. Modification réservée au DG.</div>'+
+    (dg?'<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px"><button class="btn btn-sm" data-action="lire-actes" onclick="lireActesAgences(false)">Lire les actes scannés (agence et adresse)</button><span id="lecture-actes-etat" style="font-size:12px;color:var(--ink-muted)">'+nbLus+' / '+nbActes+' acte(s) déjà lu(s)</span></div>':'')+
+    '<div id="lecture-actes-resultat"></div>'+cartes+'</div>';
+}
+function _ficheDepuisDom(nom){
+  var bq=_banqueDoc(nom)||{id:'bk_'+slugBanque(nom),nom:nom,agences:[]};
+  var doc={}; Object.keys(bq).forEach(function(k){doc[k]=bq[k];});
+  var ags=MPMainlevee.agencesDe(bq).map(function(a){var x={};Object.keys(a).forEach(function(k){x[k]=a[k];});return x;});
+  var card=document.getElementById('banque-'+slugBanque(nom));
+  if(card){
+    var els=card.querySelectorAll('[data-ag]'), i;
+    for(i=0;i<els.length;i++){var idx=parseInt(els[i].getAttribute('data-ag'),10), k=els[i].getAttribute('data-k'); if(!ags[idx])continue; if(k==='par_defaut')ags[idx].par_defaut=!!els[i].checked; else ags[idx][k]=els[i].value.trim();}
+  }
+  doc.agences=ags; return doc;
+}
+function _enregistrerFiche(doc,msg){
+  return apiFetch('/api/banques-referentiel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({banque:doc})})
+    .then(function(){return apiList('banques');}).then(function(bs){S.banques=bs;render();toast(msg||'Fiche banque enregistrée');})
+    .catch(function(e){toast('Refusé : '+e.message,false);});
+}
+function enregistrerFicheBanque(nom){_enregistrerFiche(_ficheDepuisDom(nom));}
+function ajouterAgence(nom){var doc=_ficheDepuisDom(nom);doc.agences.push({id:'ag_'+slugBanque(nom)+'-'+Date.now(),nom:'',adresse:'',ville:'',destinataire:'',par_defaut:doc.agences.length===0,statut:'confirmee',sources:[]});S.banques=(S.banques||[]).filter(function(b){return MPMainlevee.normaliserNomBanque(b.nom)!==MPMainlevee.normaliserNomBanque(nom);}).concat([doc]);render();setTimeout(function(){ouvrirFicheBanque(nom);},50);}
+function retirerAgence(nom,i){var doc=_ficheDepuisDom(nom);var a=doc.agences[i];if(!a)return;if(!confirm('Retirer l\'agence « '+(a.nom||'sans nom')+' » de la fiche '+nom+' ?'))return;doc.agences.splice(i,1);_enregistrerFiche(doc,'Agence retirée');}
+function confirmerAgence(nom,i){var doc=_ficheDepuisDom(nom);var a=doc.agences[i];if(!a)return;if(!MPMainlevee.agenceComplete(a)){toast('Nom et adresse requis avant confirmation',false);return;}a.statut='confirmee';if(!doc.agences.some(function(x){return x.par_defaut;}))a.par_defaut=true;_enregistrerFiche(doc,'Agence confirmée');}
+function confirmerToutesAgences(nom){var bq=_banqueDoc(nom);if(!bq)return;apiFetch('/api/banques-referentiel',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({confirmer_tout:true,banque_id:bq.id})}).then(function(){return apiList('banques');}).then(function(bs){S.banques=bs;render();toast('Agences confirmées');}).catch(function(e){toast('Refusé : '+e.message,false);});}
+/* Lecture des actes scannés par lots (limite serveur) : propose agence et adresse « à confirmer ». */
+function lireActesAgences(relire){
+  var etat=document.getElementById('lecture-actes-etat'), res=document.getElementById('lecture-actes-resultat'); var total=0, lus=[];
+  function tour(){
+    return apiFetch('/api/banques-lecture-actes',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({lot:3,relire:!!relire})}).then(function(r){
+      r=r||{}; if(r.configure===false){toast(r.message||'OCR non configuré',false);return;}
+      lus=lus.concat(r.lectures||[]); total+=r.faits||0;
+      if(etat)etat.textContent='Lecture : '+total+' acte(s) lu(s), '+(r.restant||0)+' restant(s)'+(r.erreurs&&r.erreurs.length?' — '+r.erreurs.length+' erreur(s)':'');
+      if(res)res.innerHTML='<div class="tw"><table><thead><tr><th>Caution</th><th>Banque (fiche)</th><th>Banque lue</th><th>Agence lue</th><th>Adresse lue</th><th>Ville</th></tr></thead><tbody>'+lus.map(function(l){return '<tr><td style="font-family:var(--FM)">'+esc(l.caution_num)+'</td><td>'+esc(l.banque_caution)+'</td><td>'+(l.banque_lue?esc(l.banque_lue):'<i>non lue</i>')+'</td><td>'+(l.agence?esc(l.agence):'<i>non lue</i>')+'</td><td>'+(l.adresse?esc(l.adresse):'<i>non lue</i>')+'</td><td>'+(l.ville?esc(l.ville):'<i>non lue</i>')+'</td></tr>';}).join('')+'</tbody></table></div>';
+      if((r.restant||0)>0&&(r.faits||0)>0) return tour();
+      return Promise.all([apiList('banques'),apiList('cautions')]).then(function(rr){S.banques=rr[0];S.cautions=rr[1];toast('Lecture terminée : '+total+' acte(s)');var r2=res?res.innerHTML:'';render();var res2=document.getElementById('lecture-actes-resultat');if(res2)res2.innerHTML=r2;});
+    });
+  }
+  if(etat)etat.textContent='Lecture en cours…';
+  tour().catch(function(e){toast('Lecture interrompue : '+e.message,false);});
 }
 function chargerParamDelaiBanque(v){
   var el=document.getElementById('param-delai-banque'); if(!el)return;
@@ -1425,7 +1497,7 @@ function actionsCycleHTML(c){
     if(e==='active') a.push(prov?'<button class="act" title="Marquer la mainlevée demandée au maître d\'ouvrage" onclick="provMainlevee(\''+aid+'\')">Demander au client</button>':'<button class="act" onclick="demanderMainleveeManuelle(\''+cid+'\',\''+mid+'\')" title="Demander la mainlevée au maître d\'ouvrage (motif obligatoire, tracé)">Demander au client</button>');
     a.push('<button class="act" data-action="piece-recue" style="color:var(--green-soft);font-weight:600" title="Enregistrer la mainlevée délivrée par le maître d\'ouvrage ou l\'original de la caution restitué (date + scan)" onclick="openPieceLiberation(\''+cid+'\',\''+mid+'\',\''+aid+'\')">Pièce reçue</button>');
   } else if(e==='piece_recue'){
-    a.push('<button class="act" data-action="lettre-banque" style="color:var(--green-soft);font-weight:600" title="Lettre de demande de mainlevée à la banque (PDF à signer)" onclick="ouvrirLettreBanque(\''+esc(c.banque||'')+'\','+_ciblesAttr([cibleDe(c)])+')">Lettre banque</button>');
+    a.push('<button class="act" data-action="lettre-banque" style="color:var(--green-soft);font-weight:600" title="Lettre de demande de mainlevée à la banque (PDF à signer, sans saisie)" onclick="ouvrirLettreBanque(\''+esc(c.banque||'')+'\','+_ciblesAttr([cibleDe(c)])+')">Lettre banque</button>');
     a.push('<button class="act" data-action="depot-banque" title="Enregistrer la date de dépôt de la demande à la banque" onclick="ouvrirDepotBanque('+_ciblesAttr([cibleDe(c)])+')">Dépôt enregistré</button>');
   } else if(e==='demande_deposee'){
     a.push('<button class="act" data-action="accuse-banque" style="color:var(--green-soft);font-weight:600" title="Déposer l\'accusé de la banque (libère la caution)" onclick="openPieceDepot(\''+cid+'\',\''+mid+'\',\'accuse_banque\',false,\''+aid+'\')">Accusé banque</button>');
@@ -1444,11 +1516,27 @@ function blocADemanderBanqueHTML(adb){
     var lignes=g.items.map(function(c){
       var p=c.piece_liberation||{};
       var pieceTxt=p.type==='original_caution'?'original restitué':(p.type==='mainlevee_client'?'mainlevée du client':'pièce non typée');
-      return '<label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--charte-bord);font-size:13px;cursor:pointer" data-ligne-demande><input type="checkbox" class="cible-banque" data-banque="'+esc(g.banque)+'" value="'+esc(JSON.stringify(cibleDe(c)))+'" checked><span style="font-weight:600;min-width:120px">'+esc(_natureCaution(c))+'</span><span style="font-family:var(--FM)">'+esc(_libCaution(c))+'</span><span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span><span style="color:var(--ink-muted)">'+esc(c.ref||'')+'</span><span style="font-size:12px">'+pieceTxt+(p.date?' du '+fdat(p.date):'')+(p.scan?'':' — <b>scan absent</b>')+'</span>'+(c.lettre_mainlevee?'<span style="font-size:12px">lettre du '+fdat(c.date_lettre)+'</span>':'')+'</label>';
+      return '<label style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--charte-bord);font-size:13px;cursor:pointer" data-ligne-demande><input type="checkbox" class="cible-banque" data-groupe="'+esc(g.cle)+'" value="'+esc(JSON.stringify(cibleDe(c)))+'" checked><span style="font-weight:600;min-width:120px">'+esc(_natureCaution(c))+'</span><span style="font-family:var(--FM)">'+esc(_libCaution(c))+'</span><span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span><span style="color:var(--ink-muted)">'+esc(c.ref||'')+'</span><span style="font-size:12px">'+pieceTxt+(p.date?' du '+fdat(p.date):'')+(p.scan?'':' — <b>scan absent</b>')+'</span>'+(c.lettre_mainlevee?'<span style="font-size:12px">lettre du '+fdat(c.date_lettre)+'</span>':'')+'</label>';
     }).join('');
-    return '<div data-banque="'+esc(g.banque)+'" style="margin-top:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:15px;font-weight:600">'+esc(g.banque)+'</span><span style="font-size:12px;color:var(--ink-muted)">'+g.items.length+' caution(s) · '+fmad(g.total)+'</span><span style="margin-left:auto;display:flex;gap:6px"><button class="btn btn-sm btn-prim" data-action="lettre-banque" onclick="lettreBanqueCochees(\''+esc(g.banque)+'\')">Lettre de demande (PDF)</button><button class="btn btn-sm" data-action="depot-banque" onclick="depotBanqueCochees(\''+esc(g.banque)+'\')">Enregistrer le dépôt</button></span></div>'+lignes+'</div>';
+    var agenceTxt=g.complet?('<span style="font-size:12px" data-agence>'+esc(g.agence.nom)+' — '+esc(g.agence.adresse)+(g.agence.ville?', '+esc(g.agence.ville):'')+'</span>')
+      :('<span class="charte-statut charte-statut--alerte" data-agence-manquante>! '+esc(g.motif)+'</span><button class="btn btn-sm" data-action="ouvrir-fiche" onclick="ouvrirFicheBanque(\''+esc(g.fiche||g.banque)+'\')">Ouvrir la fiche banque</button>');
+    var boutons=g.complet?('<button class="btn btn-sm btn-prim" data-action="lettre-banque" onclick="lettreBanqueCochees(\''+esc(g.cle)+'\')">Lettre de demande (PDF)</button>')
+      :('<button class="btn btn-sm btn-prim" data-action="lettre-banque" disabled title="'+esc(g.motif)+'">Lettre de demande (PDF)</button>');
+    boutons+='<button class="btn btn-sm" data-action="depot-banque" onclick="depotBanqueCochees(\''+esc(g.cle)+'\')">Enregistrer le dépôt</button>';
+    return '<div data-banque="'+esc(g.banque)+'" data-groupe="'+esc(g.cle)+'" data-complet="'+(g.complet?'oui':'non')+'" style="margin-top:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:15px;font-weight:600">'+esc(g.banque)+'</span>'+agenceTxt+'<span style="font-size:12px;color:var(--ink-muted)">'+g.items.length+' caution(s) · '+fmad(g.total)+'</span><span style="margin-left:auto;display:flex;gap:6px">'+boutons+'</span></div>'+lignes+'</div>';
   }).join('');
-  return '<div class="card" data-bloc="a-demander-banque" data-nb="'+adb.items.length+'" style="border-color:var(--charte-marque-bord);background:var(--charte-marque-fond)"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:17px;font-weight:600;color:var(--charte-marque)">À demander à la banque — '+adb.items.length+'</span><span style="font-family:var(--FM);font-size:16px;font-weight:600">'+fmad(adb.total)+'</span><span style="font-size:12px;color:var(--ink-soft)">pièce du maître d\'ouvrage reçue, demande de mainlevée non déposée. Cocher, générer la lettre (une par banque), la signer, la déposer, puis enregistrer la date de dépôt.</span></div>'+corps+'</div>';
+  return '<div class="card" data-bloc="a-demander-banque" data-nb="'+adb.items.length+'" data-nb-incomplets="'+(adb.nbIncomplets||0)+'" style="border-color:var(--charte-marque-bord);background:var(--charte-marque-fond)"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:17px;font-weight:600;color:var(--charte-marque)">À demander à la banque — '+adb.items.length+'</span><span style="font-family:var(--FM);font-size:16px;font-weight:600">'+fmad(adb.total)+'</span><span style="font-size:12px;color:var(--ink-soft)">pièce du maître d\'ouvrage reçue, demande de mainlevée non déposée. La lettre se génère sans saisie depuis le référentiel des banques (une lettre par agence) ; la signer, la déposer, puis enregistrer la date de dépôt.</span></div>'+corps+'</div>';
+}
+/* Bloc « Libérations à justifier » (constat DG 20/11) : libérées/restituées sans accusé de la banque. Elles restent
+   dans l'engagé par banque ; les marchés terminés sur la foi de ces libérations sont listés, jamais rouverts d'ici. */
+function blocLiberationsAJustifierHTML(aj){
+  var corps;
+  if(!aj.items.length) corps='<div style="font-size:12px;color:var(--ink-muted);margin-top:6px" data-vide>0 caution — toute libération enregistrée porte l\'accusé de la banque.</div>';
+  else corps=aj.items.map(function(c){
+    return '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 0;border-top:1px solid var(--charte-bord);font-size:13px" data-ligne-justifier><span style="font-weight:600;min-width:120px">'+esc(_natureCaution(c))+'</span><span>'+esc(c.banque||'banque non renseignée')+'</span><span style="font-family:var(--FM)">'+esc(_libCaution(c))+'</span><span style="font-family:var(--FM);font-weight:600">'+fmad(c.montant)+'</span><span style="color:var(--ink-muted)">'+esc(c.ref||'')+(c.marche_termine?' (marché terminé'+(c.marche_termine_le?' le '+fdat(c.marche_termine_le):'')+')':'')+'</span>'+bdgEtatCaution(c)+'<span style="font-size:12px">passée à cet état le '+(c.date_passage?fdat(c.date_passage):'date non renseignée')+(c.liberation_par?' — par '+esc(c.liberation_par):' — auteur non enregistré')+'</span><span style="margin-left:auto;display:flex;gap:4px">'+actionsCycleHTML(c)+'</span></div>';
+  }).join('');
+  var marches=aj.marchesTermines.length?'<div style="font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--charte-bord)" data-marches-termines>Marché(s) passé(s) « terminé » sur la foi de ces libérations, listé(s) sans être rouvert(s) : '+aj.marchesTermines.map(function(m){return '<b>'+esc(m.ref)+'</b>'+(m.termine_le?' (terminé le '+fdat(m.termine_le)+', '+fmad(m.montant)+')':' ('+fmad(m.montant)+')');}).join(' ; ')+'.</div>':'';
+  return '<div class="card" data-bloc="liberations-a-justifier" data-nb="'+aj.items.length+'" style="border-color:var(--charte-statut-refus-bord);background:var(--charte-statut-refus-fond)"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:17px;font-weight:600;color:var(--charte-statut-refus-texte)">Libérations à justifier — '+aj.items.length+'</span><span style="font-family:var(--FM);font-size:16px;font-weight:600">'+fmad(aj.total)+'</span><span style="font-size:12px;color:var(--ink-soft)">libérée ou restituée sans accusé de la banque : la libération n\'est pas prouvée, la caution reste comptée dans l\'engagé par banque tant que l\'accusé n\'est pas joint (« + Accusé »).</span></div>'+corps+marches+'</div>';
 }
 /* Bloc « En attente de la banque » : demande déposée, accusé absent ; alerte au-delà du délai paramétrable. */
 function blocEnAttenteBanqueHTML(eab){
@@ -1460,39 +1548,49 @@ function blocEnAttenteBanqueHTML(eab){
   }).join('');
   return '<div class="card" data-bloc="en-attente-banque" data-nb="'+eab.items.length+'" data-nb-alerte="'+eab.nbAlerte+'" style="border-color:var(--charte-statut-alerte-bord);background:var(--charte-statut-alerte-fond)"><div style="display:flex;align-items:baseline;gap:12px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:17px;font-weight:600;color:var(--charte-statut-alerte-texte)">En attente de la banque — '+eab.items.length+'</span><span style="font-family:var(--FM);font-size:16px;font-weight:600">'+fmad(eab.total)+'</span><span style="font-size:12px;color:var(--ink-soft)">demande déposée, accusé non reçu : ces cautions restent comptées dans l\'engagé par banque. Alerte au-delà de '+eab.delai+' jours (Paramètres) : '+eab.nbAlerte+' en alerte.</span></div>'+corps+'</div>';
 }
-function ciblesCochees(banque){
+function ciblesCochees(groupe){
   var out=[], els=document.querySelectorAll('input.cible-banque:checked'), i;
-  for(i=0;i<els.length;i++){ if(els[i].getAttribute('data-banque')!==banque)continue; try{ out.push(JSON.parse(els[i].value)); }catch(e){} }
+  for(i=0;i<els.length;i++){ if(els[i].getAttribute('data-groupe')!==groupe)continue; try{ out.push(JSON.parse(els[i].value)); }catch(e){} }
   return out;
 }
-function lettreBanqueCochees(banque){var cibles=ciblesCochees(banque);if(!cibles.length){toast('Cocher au moins une caution',false);return;}ouvrirLettreBanque(banque,cibles);}
-function depotBanqueCochees(banque){var cibles=ciblesCochees(banque);if(!cibles.length){toast('Cocher au moins une caution',false);return;}ouvrirDepotBanque(cibles);}
-function _banqueDoc(nom){return (S.banques||[]).find(function(b){return b&&b.nom===nom;})||null;}
+function lettreBanqueCochees(groupe){var cibles=ciblesCochees(groupe);if(!cibles.length){toast('Cocher au moins une caution',false);return;}ouvrirLettreBanque(groupe.split('|')[0],cibles);}
+function depotBanqueCochees(groupe){var cibles=ciblesCochees(groupe);if(!cibles.length){toast('Cocher au moins une caution',false);return;}ouvrirDepotBanque(cibles);}
+function _banqueDoc(nom){return MPMainlevee.trouverBanque(S.banques||[],nom);}
+/* Ouvre Paramètres sur la fiche de la banque nommée (la lettre ne se complète jamais à la main : on complète le référentiel). */
+function ouvrirFicheBanque(nom){
+  S._ficheBanqueCible=nom; nav('parametres');
+  setTimeout(function(){var el=document.getElementById('banque-'+slugBanque(nom));if(el){el.scrollIntoView({behavior:'smooth',block:'start'});el.style.outline='2px solid var(--charte-statut-alerte-texte)';}},150);
+}
+function slugBanque(nom){return MPMainlevee.normaliserNomBanque(nom).replace(/[^a-z0-9]+/g,'-');}
 /* Lettre de demande de mainlevée : PDF sur papier à en-tête, prête à signer ; imprimée, signée, déposée. Aucun envoi par courriel. */
 function ouvrirLettreBanque(banque, cibles){
-  var bk=_banqueDoc(banque)||{};
-  var html='<div class="info-box info-blue">La lettre est générée en PDF sur papier à en-tête, prête à signer par le DG ; elle s\'imprime et se dépose à l\'agence. Aucun envoi par courriel. Le statut ne change pas tant que le dépôt n\'est pas enregistré.</div>'+
-    '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">'+cibles.length+' caution(s) de '+esc(banque)+'</div>'+
-    '<div class="fr2"><div class="fg"><label>Agence *</label><input class="fc" id="lb_agence" value="'+esc(bk.agence||'')+'" placeholder="ex. Casablanca Maarif"></div><div class="fg"><label>Lieu (date de la lettre)</label><input class="fc" id="lb_lieu" value="'+esc(bk.lieu||'')+'" placeholder="Casablanca"></div></div>'+
-    '<div class="fg"><label>Adresse de l\'agence</label><input class="fc" id="lb_adresse" value="'+esc(bk.adresse_agence||'')+'"></div>'+
-    '<div id="lb_status" style="font-size:12px;color:var(--ink-muted);margin:6px 0"></div>'+
-    '<button class="btn btn-sm btn-prim" id="lb_btn" data-action="generer-lettre" onclick="genererLettreBanque(\''+esc(banque)+'\','+_ciblesAttr(cibles)+')">Générer la lettre (PDF)</button>';
+  var lignes=cibles.map(ligneDeCible).filter(Boolean);
+  var L=MPMainlevee.lignesLettre(lignes,gm,function(t){return TC[t]||t;},S.banques||[]);
+  var html='<div class="info-box info-blue">La lettre est générée en PDF sur papier à en-tête, prête à signer par le DG ; elle s\'imprime et se dépose à l\'agence. Aucun envoi par courriel, aucune saisie : banque, agence, adresse et destinataire viennent du référentiel (Paramètres > Banques et agences).</div>';
+  if(L.ok){
+    var d=L.destinataire;
+    html+='<div style="font-size:13px;margin-bottom:8px" data-destinataire><b>'+esc(d.banque)+'</b><br>'+esc(d.agence)+'<br>'+esc(d.adresse)+(d.ville?'<br>'+esc(d.ville):'')+'<br>À l\'attention '+(d.destinataire?esc(d.destinataire):'du service des engagements par signature')+'</div>'+
+      '<div style="font-size:12px;color:var(--ink-muted);margin-bottom:8px">'+L.lignes.length+' caution(s) · '+fmad(L.total)+' : '+L.lignes.map(function(l){return esc(l.num)+' ('+esc(l.type)+')';}).join(', ')+'</div>'+
+      '<div id="lb_status" style="font-size:12px;color:var(--ink-muted);margin:6px 0"></div>'+
+      '<button class="btn btn-sm btn-prim" id="lb_btn" data-action="generer-lettre" onclick="genererLettreBanque('+_ciblesAttr(cibles)+')">Générer la lettre (PDF)</button>';
+  } else {
+    html+='<div class="info-box info-amber" data-lettre-refusee>Lettre refusée : '+L.erreurs.map(function(e){return (e.num?esc(e.num)+' : ':'')+esc(e.motif);}).join('<br>')+'</div>'+
+      (L.fiches&&L.fiches.length?L.fiches.map(function(f){return '<button class="btn btn-sm btn-prim" data-action="ouvrir-fiche" onclick="closeMod();ouvrirFicheBanque(\''+esc(f)+'\')">Ouvrir la fiche banque « '+esc(f)+' »</button> ';}).join(''):'');
+  }
   openMod('Lettre de demande de mainlevée — '+esc(banque),html,null);
 }
-function genererLettreBanque(banque, cibles){
-  var agence=v('lb_agence'), lieu=v('lb_lieu'), adresse=v('lb_adresse');
-  if(!agence){toast('Agence requise',false);return;}
+function genererLettreBanque(cibles){
   if(S._versionBloquant){toast(S._versionMessage||'Enregistrement suspendu (version)',false);return;}
   var btn=document.getElementById('lb_btn'), st=document.getElementById('lb_status');
   if(btn)btn.disabled=true; if(st)st.textContent='Génération en cours...';
-  fetch('/api/caution-demande-banque',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'lettre',cibles:cibles,banque:banque,agence:agence,adresse_agence:adresse,lieu:lieu})}).then(function(r){
+  var nomFichier='';
+  fetch('/api/caution-demande-banque',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({action:'lettre',cibles:cibles})}).then(function(r){
     if(!r.ok) return r.text().then(function(t){throw new Error('HTTP '+r.status+': '+t);});
+    var cd=r.headers.get('Content-Disposition')||''; var m=/filename="([^"]+)"/.exec(cd); nomFichier=m?m[1]:('Demande de mainlevee - '+new Date().toISOString().slice(0,10)+'.pdf');
     return r.blob();
   }).then(function(blob){
-    var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download='Demande de mainlevee - '+banque+' - '+new Date().toISOString().slice(0,10)+'.pdf'; a.click(); window.open(url,'_blank');
-    /* L'agence est mémorisée sur le référentiel banque (pas un statut, pas un secret). */
-    var bk=_banqueDoc(banque)||{id:nidStr('bk'),nom:banque}; bk.agence=agence; bk.adresse_agence=adresse; bk.lieu=lieu;
-    return saveItem('banques',bk).catch(function(){}).then(function(){return Promise.all([apiList('cautions'),apiList('aos')]);}).then(function(rr){S.cautions=rr[0];S.aos=rr[1];sbStats();render();closeMod();toast('Lettre générée — à imprimer, signer et déposer ; puis « Enregistrer le dépôt »');});
+    var url=URL.createObjectURL(blob); var a=document.createElement('a'); a.href=url; a.download=nomFichier; a.click(); window.open(url,'_blank');
+    return Promise.all([apiList('cautions'),apiList('aos')]).then(function(rr){S.cautions=rr[0];S.aos=rr[1];sbStats();render();closeMod();toast('Lettre générée — à imprimer, signer et déposer ; puis « Enregistrer le dépôt »');});
   }).catch(function(e){if(btn)btn.disabled=false;if(st)st.textContent='';toast('Lettre refusée : '+e.message,false);});
 }
 function ouvrirDepotBanque(cibles){
@@ -1654,7 +1752,8 @@ function pgCautions(){
   var agg=MPCaution.aggregate(cs);
   var aggAll=MPCaution.aggregate(allC);
   var restit=MPCaution.aRestituer(allC);
-  var adb=MPCaution.aDemanderBanque(allC);
+  var adb=MPCaution.aDemanderBanque(allC,resoudreAgenceCaution);
+  var ajust=MPCaution.liberationsAJustifier(allC,gm);
   var eab=MPCaution.enAttenteBanque(allC,Date.now(),delaiAlerteBanque());
 
   // Contexte de filtre : un total partiel ne se lit jamais comme un total global.
@@ -1686,7 +1785,7 @@ function pgCautions(){
     }).join('')+'</div>';
 
   // KPI (suivent le filtre).
-  var kpis='<div class="krow" style="grid-template-columns:repeat(6,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+agg.kpi.active+'</div></div><div class="kpi k1"><div class="kl">Demandées au client</div><div class="kv">'+agg.kpi.mainlevee+'</div></div><div class="kpi k1"><div class="kl">Pièce reçue — à demander à la banque</div><div class="kv">'+agg.kpi.recue+'</div></div><div class="kpi k1"><div class="kl">En attente de la banque</div><div class="kv">'+agg.kpi.banque+'</div></div><div class="kpi k4"><div class="kl">Expirées</div><div class="kv">'+agg.kpi.expiree+'</div></div><div class="kpi k3"><div class="kl">Libérées / restituées</div><div class="kv">'+agg.kpi.liberee+'</div></div></div>';
+  var kpis='<div class="krow" style="grid-template-columns:repeat(7,1fr)"><div class="kpi k2"><div class="kl">Actives</div><div class="kv">'+agg.kpi.active+'</div></div><div class="kpi k1"><div class="kl">Demandées au client</div><div class="kv">'+agg.kpi.mainlevee+'</div></div><div class="kpi k1"><div class="kl">Pièce reçue — à demander à la banque</div><div class="kv">'+agg.kpi.recue+'</div></div><div class="kpi k1"><div class="kl">En attente de la banque</div><div class="kv">'+agg.kpi.banque+'</div></div><div class="kpi k4"><div class="kl">Expirées</div><div class="kv">'+agg.kpi.expiree+'</div></div><div class="kpi k3"><div class="kl">Libérées / restituées</div><div class="kv">'+agg.kpi.liberee+'</div></div><div class="kpi k4"><div class="kl">Libérations à justifier</div><div class="kv">'+agg.kpi.a_justifier+'</div></div></div>';
 
   var toolbar='<div class="tb" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px"><input class="si" placeholder="Rechercher (n°, banque, réf)…" value="'+esc(S.search)+'" oninput="S.search=this.value.toLowerCase();render()"><select class="fl" onchange="S.sf=this.value;render()"><option value="">Tous statuts</option>'+objEnts(SMC).map(function(e){return '<option value="'+e[0]+'"'+(S.sf===e[0]?' selected':'')+'>'+e[1].l+'</option>';}).join('')+'</select><select class="fl" onchange="S.tf=this.value;render()"><option value="">Tous types</option>'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(S.tf===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'<option value="provisoire"'+(S.tf==='provisoire'?' selected':'')+'>Caution provisoire</option></select><select class="fl" onchange="S.bf=this.value;render()"><option value="">Toutes banques</option>'+aggAll.banksSorted.map(function(e){return '<option value="'+esc(e[0])+'"'+(S.bf===e[0]?' selected':'')+'>'+esc(e[0])+'</option>';}).join('')+'</select><span style="margin-left:auto;font-size:12px;color:var(--ink-muted)">'+cs.length+' / '+allC.length+' cautions</span><button class="btn btn-sm btn-prim" onclick="ouvrirRapprochement()" title="Déposer et rapprocher les actes de caution en lot (PDF)">Rapprochement des actes</button><button class="btn btn-sm" onclick="exportCSV(\'cautions\')">Export CSV</button><button class="btn btn-sm" onclick="printEtat(\'cautions\')">Imprimer</button></div>';
 
@@ -1712,7 +1811,7 @@ function pgCautions(){
 
   // Plancher 12px scope a l'ecran (sans toucher aux tokens globaux des autres ecrans).
   var floor12='<style>.cauv2 th{font-size:12px}.cauv2 .kl{font-size:12px}.cauv2 .kf{font-size:12px}.cauv2 .badge{font-size:12px}.cauv2 .act{font-size:12px}.cauv2 .charte-statut{display:inline-block;padding:2px 8px;border-radius:9999px;font-size:12px;font-weight:600;border:1px solid var(--charte-bord);background:var(--charte-carte);color:var(--charte-encre)}.cauv2 .charte-statut--alerte{background:var(--charte-statut-alerte-fond);border-color:var(--charte-statut-alerte-bord);color:var(--charte-statut-alerte-texte)}</style>';
-  return floor12+'<div class="cauv2">'+blocADemanderBanqueHTML(adb)+blocEnAttenteBanqueHTML(eab)+restBand+hero+tiles+kpis+toolbar+table+details+'</div>';
+  return floor12+'<div class="cauv2">'+blocLiberationsAJustifierHTML(ajust)+blocADemanderBanqueHTML(adb)+blocEnAttenteBanqueHTML(eab)+restBand+hero+tiles+kpis+toolbar+table+details+'</div>';
 }
 
 /* ===== OCR acte de caution (incrément A) — lecture assistée, validation humaine
@@ -2103,8 +2202,14 @@ function numCautionHTML(c){
   if(MPMainlevee.normaliserNumCaution(ref)===MPMainlevee.normaliserNumCaution(alias)) return esc(ref);
   return esc(ref)+'<div style="font-size:12px;font-weight:400;color:var(--ink-muted)" title="Ancien numéro abrégé, conservé en alias">alias '+esc(alias||'non renseigné')+'</div>';
 }
+/* Agence de la caution : agences du référentiel de SA banque ; vide = agence par défaut de la banque. */
+function agenceSelectHTML(c){
+  var bq=c?_banqueDoc(c.banque):null, ags=MPMainlevee.agencesDe(bq);
+  var opts='<option value="">'+(ags.length?'Agence par défaut de la banque':'Aucune agence dans le référentiel (Paramètres > Banques et agences)')+'</option>'+ags.map(function(a){return '<option value="'+esc(a.id)+'"'+(c&&String(c.agence_id||'')===String(a.id)?' selected':'')+'>'+esc(a.nom)+(a.statut==='a_confirmer'?' (à confirmer)':'')+(a.par_defaut?' — par défaut':'')+'</option>';}).join('');
+  return '<div class="fg"><label>Agence (lettre de mainlevée)</label><select class="fc" id="cagence" data-champ="agence">'+opts+'</select></div>';
+}
 function cautionFormHTML(c){
-  return ocrSectionHTML()+(c&&c.acte?('<div style="font-size:12px;margin-bottom:6px">'+lienPiece('acte',c.marche_id,c.id,c.date_emission)+'</div>'):'')+'<div class="fg"><label>Marche *</label><select class="fc" id="cmar" onchange="mfull(\'cmar\')">'+S.marches.map(function(m){return mopt(m,c&&c.marche_id===m.id);}).join('')+'</select><div id="cmar-full" style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc((gm((c&&c.marche_id)||(S.marches[0]&&S.marches[0].id))||{}).titre||'')+'</div></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div><div class="fr2"><div class="fg"><label>N° caution (alias court) *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fg"><label>Référence banque complète (telle qu\'écrite par la banque sur ses relevés)</label><input class="fc" id="cref" data-champ="reference-banque" value="'+esc(c&&c.referenceBanque?c.referenceBanque:'')+'" placeholder="ex. 810012624000694066 — laisser vide si identique au n° court"></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Echeance</label><input class="fc" id="cech" type="date" value="'+(c&&c.date_echeance?c.date_echeance:'')+'"></div></div>'+statutSelectHTML(c)+
+  return ocrSectionHTML()+(c&&c.acte?('<div style="font-size:12px;margin-bottom:6px">'+lienPiece('acte',c.marche_id,c.id,c.date_emission)+'</div>'):'')+'<div class="fg"><label>Marche *</label><select class="fc" id="cmar" onchange="mfull(\'cmar\')">'+S.marches.map(function(m){return mopt(m,c&&c.marche_id===m.id);}).join('')+'</select><div id="cmar-full" style="font-size:12px;color:var(--ink-muted);margin-top:3px">'+esc((gm((c&&c.marche_id)||(S.marches[0]&&S.marches[0].id))||{}).titre||'')+'</div></div><div class="fr2"><div class="fg"><label>Type *</label><select class="fc" id="ctype">'+objEnts(TC).map(function(e){return '<option value="'+e[0]+'"'+(c&&c.type===e[0]?' selected':'')+'>'+e[1]+'</option>';}).join('')+'</select></div><div class="fg"><label>Banque *</label>'+banqueSelectHTML('c', c?c.banque:'')+'</div></div>'+agenceSelectHTML(c)+'<div class="fr2"><div class="fg"><label>N° caution (alias court) *</label><input class="fc" id="cnum" value="'+esc(c?c.num:'')+'"></div><div class="fg"><label>Montant (MAD) *</label><input class="fc" id="cmnt" type="number" value="'+(c?c.montant:'')+'"></div></div><div class="fg"><label>Référence banque complète (telle qu\'écrite par la banque sur ses relevés)</label><input class="fc" id="cref" data-champ="reference-banque" value="'+esc(c&&c.referenceBanque?c.referenceBanque:'')+'" placeholder="ex. 810012624000694066 — laisser vide si identique au n° court"></div><div class="fr2"><div class="fg"><label>Emission</label><input class="fc" id="cdem" type="date" value="'+(c&&c.date_emission?c.date_emission:'')+'"></div><div class="fg"><label>Echeance</label><input class="fc" id="cech" type="date" value="'+(c&&c.date_echeance?c.date_echeance:'')+'"></div></div>'+statutSelectHTML(c)+
   '<div class="sec" style="margin-top:8px;padding:10px;background:#F6F2EA;border-radius:4px"><div class="sec-t" style="font-size:12px;margin-bottom:6px">Suivi mainlevee (optionnel)</div><div class="fr2"><div class="fg"><label style="font-size:12px">Date demande mainlevee</label><input class="fc" id="cdemmain" type="date" value="'+(c&&c.date_demande_mainlevee?c.date_demande_mainlevee:'')+'" title="Date ou vous avez demande au MO de liberer la caution"></div><div class="fg"><label style="font-size:12px">Date liberation effective</label><input class="fc" id="cliber" type="date" value="'+(c&&c.date_liberation_effective?c.date_liberation_effective:'')+'" title="Date ou la banque a confirme le deblocage de l\'argent"></div></div><div class="fg"><label style="font-size:12px">Notes (relances, contacts MO)</label><input class="fc" id="cnotesmain" value="'+esc(c&&c.notes_mainlevee?c.notes_mainlevee:'')+'" placeholder="Ex: Relance envoyee le 15/04, interlocuteur M. Bennani"></div></div>'+
   banquesDatalistHTML();
 }
@@ -2115,7 +2220,7 @@ function newCaution(){
     var mid=v('cmar'),montant=vn('cmnt'),num=v('cnum');
     if(!mid||!montant||!num){alert('Champs obligatoires manquants');return;}
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,num:num,referenceBanque:v('cref')||null,date_emission:v('cdem')||null,date_echeance:v('cech')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
+    var newC={id:nidStr('c'),marche_id:mid,type:v('ctype'),montant:montant,banque:banque,agence_id:v('cagence')||null,num:num,referenceBanque:v('cref')||null,date_emission:v('cdem')||null,date_echeance:v('cech')||null,statut:v('cstat'),date_demande_mainlevee:v('cdemmain')||null,date_liberation_effective:v('cliber')||null,notes_mainlevee:v('cnotesmain')||''};
     /* On rattache l'acte (reference blob) ; la valeur LUE sur l'acte ne va PAS sur la
        caution — elle ne vit que dans le journal mp_ocr_comparaisons. */
     if(S._ocrActe&&S._ocrActe.acte){ newC.acte=S._ocrActe.acte; }
@@ -2129,7 +2234,7 @@ function editCaution(id){
   openMod('Modifier caution - '+c.num,cautionFormHTML(c),function(){
     if(!ocrValidationOK())return;
     var banque=getBanqueValue('c'); ensureBanqueExists(banque);
-    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.num=v('cnum');c.referenceBanque=v('cref')||null;c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_echeance=v('cech')||null;c.statut=v('cstat');
+    c.marche_id=v('cmar');c.type=v('ctype');c.banque=banque;c.agence_id=v('cagence')||null;c.num=v('cnum');c.referenceBanque=v('cref')||null;c.montant=vn('cmnt')||c.montant;c.date_emission=v('cdem')||null;c.date_echeance=v('cech')||null;c.statut=v('cstat');
     c.date_demande_mainlevee=v('cdemmain')||null;
     c.date_liberation_effective=v('cliber')||null;
     c.notes_mainlevee=v('cnotesmain')||'';
@@ -3499,7 +3604,7 @@ function _mlBlock(titre, sous, list, champDate, actLabel, actPieceType){
 function mainleveeAlertsHTML(){
   var rows=MPCaution.unify(S.cautions,S.aos,gm);
   var demandee=rows.filter(function(c){return MPCaution.etatCycle(c)==='mainlevee_demandee';});
-  var adb=MPCaution.aDemanderBanque(rows), eab=MPCaution.enAttenteBanque(rows,Date.now(),delaiAlerteBanque());
+  var adb=MPCaution.aDemanderBanque(rows,resoudreAgenceCaution), eab=MPCaution.enAttenteBanque(rows,Date.now(),delaiAlerteBanque());
   var recues=adb.items.map(function(c){var o={};Object.keys(c).forEach(function(k){o[k]=c[k];});o._date_piece=(c.piece_liberation||{}).date||null;return o;});
   var attente=eab.items.map(function(c){var o={};Object.keys(c).forEach(function(k){o[k]=c[k];});o._date_depot=(c.demande_banque||{}).date_depot||null;return o;});
   return _mlBlock('Mainlevées demandées au maître d\'ouvrage','En attente de la pièce du client — file de relance du lundi.',demandee,'date_demande_mainlevee','Pièce reçue','piece_recue')+

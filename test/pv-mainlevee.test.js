@@ -256,9 +256,10 @@ check('confiance : >=80 lu, <80 douteux, absent non_lu (pas de %)', MPM.etatConf
 
 console.log('\n=== 18. Marche termine auto : derniere caution liberee -> termine, trace, reversible ===');
 var mT = { id: 'mT', ref: 'M/1', statut: 'en_cours', reception_definitive_prononcee: true };
-var cLib = { marche_id: 'mT', statut: 'liberee', type: 'bonne_execution' };
+var ACC = { blob: 'acc.pdf' };
+var cLib = { marche_id: 'mT', statut: 'liberee', type: 'bonne_execution', accuse_banque: ACC };
 var cAct = { marche_id: 'mT', statut: 'active', type: 'retenue_garantie' };
-var cLib2 = { marche_id: 'mT', statut: 'liberee', type: 'retenue_garantie' };
+var cLib2 = { marche_id: 'mT', statut: 'liberee', type: 'retenue_garantie', accuse_banque: ACC };
 check('2 cautions, une seule liberee -> ne termine pas', MPM.marcheDoitTerminer(mT, [cLib, cAct]) === false, '');
 check('2 cautions, la SECONDE liberee -> doit terminer (gate rouge)', MPM.marcheDoitTerminer(mT, [cLib, cLib2]) === true, '');
 var majT = MPM.appliquerStatutMarche(mT, [cLib, cLib2], '2026-10-08');
@@ -266,7 +267,7 @@ check('applique -> termine + avancement 100 + trace "toutes cautions liberees le
 check('ne mute pas l\'entree marche', mT.statut === 'en_cours', mT.statut);
 check('PV reception def ABSENT -> ne termine pas (meme toutes liberees)', MPM.marcheDoitTerminer({ id: 'x', statut: 'en_cours', reception_definitive_prononcee: false }, [cLib, cLib2]) === false, '');
 check('marche SANS caution -> ne termine jamais par ce chemin', MPM.marcheDoitTerminer(mT, []) === false, '');
-check('restituee compte comme terminale (>=1 liberee)', MPM.marcheDoitTerminer(mT, [cLib, { statut: 'restituee', type: 'soumission' }]) === true, '');
+check('restituee compte comme terminale (>=1 liberee)', MPM.marcheDoitTerminer(mT, [cLib, { statut: 'restituee', accuse_banque: ACC, type: 'soumission' }]) === true, '');
 check('toutes restituees, aucune liberee -> ne termine pas (>=1 liberee exigee)', MPM.marcheDoitTerminer(mT, [{ statut: 'restituee' }, { statut: 'restituee' }]) === false, '');
 var mDone = { id: 'mD', statut: 'termine', reception_definitive_prononcee: true, avancement: 100 };
 var majR = MPM.appliquerStatutMarche(mDone, [cLib, cAct], '2026-10-08');
@@ -278,7 +279,7 @@ console.log('\n=== 19. Depot du PV = declencheur de terminaison (cas 40/2024, or
 var _fs = require('fs'), _path = require('path');
 var m40abs = { id: 'm40', ref: '40/2024', statut: 'en_cours', reception_definitive_prononcee: false };
 var m40pv = { id: 'm40', ref: '40/2024', statut: 'en_cours', reception_definitive_prononcee: true };
-var c40 = [{ statut: 'liberee', type: 'bonne_execution' }, { statut: 'liberee', type: 'retenue_garantie' }];
+var c40 = [{ statut: 'liberee', type: 'bonne_execution', accuse_banque: ACC }, { statut: 'liberee', type: 'retenue_garantie', accuse_banque: ACC }];
 check('40/2024 : cautions deja liberees MAIS PV absent -> ne termine pas', MPM.marcheDoitTerminer(m40abs, c40) === false, '');
 check('40/2024 : depot du PV (reception_definitive_prononcee=true) -> termine', MPM.marcheDoitTerminer(m40pv, c40) === true, '');
 var maj40 = MPM.appliquerStatutMarche(m40pv, c40, '2026-10-09');
