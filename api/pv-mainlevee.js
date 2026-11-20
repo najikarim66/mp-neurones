@@ -131,6 +131,13 @@
     }
     return null;
   }
+  /* ACCUSE RECU alors que le depot n'est pas encore enregistre (constat DG 20/11 13h05 : la lettre a ete deposee
+   * mais la date de depot n'a pas ete saisie) : l'accuse reste joignable depuis piece_recue A CONDITION de donner
+   * la date de depot dans le meme geste — le depot est alors enregistre puis l'accuse applique (deux transitions,
+   * aucune sautee). Recevable = piece_recue ET garde du depot satisfaite. */
+  function accuseAvecDepotRecevable(c) {
+    return !!c && etatCycle(c) === 'piece_recue' && depotBanqueRecevable(c).ok;
+  }
   /* Jours ecoules depuis le depot a la banque (nowMs injecte). 0 si pas de depot. */
   function joursDepuisDepot(c, nowMs) {
     var d = c && c.demande_banque && c.demande_banque.date_depot;
@@ -920,6 +927,7 @@
     appliquerPieceLiberation: appliquerPieceLiberation,
     depotBanqueRecevable: depotBanqueRecevable,
     appliquerDepotBanque: appliquerDepotBanque,
+    accuseAvecDepotRecevable: accuseAvecDepotRecevable,
     joursDepuisDepot: joursDepuisDepot,
     refusChangementStatutGenerique: refusChangementStatutGenerique,
     lignesLettre: lignesLettre,

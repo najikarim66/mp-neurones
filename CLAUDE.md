@@ -47,6 +47,10 @@
   en tête de l'écran, badge « Libérée — accusé de la banque manquant », comptée dans l'engagé par banque (`isBlocked`), ne termine plus un marché
   (`marcheDoitTerminer` exige l'accusé) ; un marché déjà terminé sur une telle libération est LISTÉ (`marchesTerminesSansPreuve`), jamais rouvert.
   Aucun chemin vers « libérée » sans accusé : route directe 409, `/api/data` refuse (création, modification, import), seul `accuse_banque` sur `demande_deposee` libère.
+- **« + Accusé de la banque » partout** (constat DG 20/11 13h05) : visible en `demande_deposee` ET en `piece_recue` (l'accusé peut arriver avant la saisie du
+  dépôt : la modale demande alors la date de dépôt, le serveur enchaîne dépôt puis accusé, `accuseAvecDepotRecevable`), sur la liste, le bloc « En attente »
+  et la fiche du marché. Gate de parcours complet sur l'écran monté avec le serveur simulé par le module pur : `e2e/cautions-parcours.spec.js`
+  (définitive, accusé avant dépôt, provisoire, lettre à deux cautions, marché terminé).
 
 ## Charte commune (décision DG 05/11/2026)
 - `public/charte/` est une COPIE CONTRÔLÉE de https://github.com/najikarim66/neurones-charte (`MANIFESTE.json` → `source.commit`) :

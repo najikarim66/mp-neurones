@@ -150,7 +150,7 @@ test('actions du cycle sur la liste : Pièce reçue / Lettre banque / Accusé ba
   const table = page.locator('.cauv2 table').first();
   await expect(table.locator('[data-action="piece-recue"]')).toHaveCount(2); // c_act + c_dem
   await expect(table.locator('[data-action="lettre-banque"]')).toHaveCount(4); // 3 définitives + provisoire
-  await expect(table.locator('[data-action="accuse-banque"]')).toHaveCount(2);
+  await expect(table.locator('[data-action="accuse-banque"]')).toHaveCount(6); // 2 déposées + 4 pièces reçues (l'accusé peut arriver avant la saisie du dépôt)
   await expect(page.locator('.cauv2 button', { hasText: /^Libérer$/ })).toHaveCount(0);
   await expect(page.locator('.cauv2 button', { hasText: /Restituer$/ })).toHaveCount(0);
   // États en mots (badges) : plus jamais « Mainlevee recue »

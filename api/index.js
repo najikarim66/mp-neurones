@@ -650,6 +650,14 @@ module.exports = async function (context, req) {
           context.res = { status: 409, body: { error: "Reception non recevable pour le statut actuel (" + caution.statut + ") : la piece du maitre d'ouvrage se recoit sur une caution active ou demandee au client" } };
           return;
         }
+      } else if (pieceType === "accuse_banque" && MPMainlevee.etatCycle(caution) === "piece_recue") {
+        // Accuse recu alors que le depot n'a pas ete enregistre (constat DG 20/11 13h05) : la date de depot est
+        // exigee dans le meme geste ; le depot est enregistre PUIS l'accuse applique (aucune transition sautee).
+        const dateDepot = String(body.date_depot || "").trim();
+        if (!MPMainlevee.dateReceptionValide(dateDepot)) { context.res = { status: 409, body: { error: "Le depot de la demande a la banque n'est pas enregistre : indiquer sa date (AAAA-MM-JJ) avec l'accuse" } }; return; }
+        if (!MPMainlevee.accuseAvecDepotRecevable(caution)) { context.res = { status: 409, body: { error: "Depot refuse : " + MPMainlevee.depotBanqueRecevable(caution).motif } }; return; }
+        cible.caution = MPMainlevee.appliquerDepotBanque(caution, dateDepot, user.userDetails || null, caution.lettre_mainlevee || null);
+        if (!cible.caution || !MPMainlevee.pieceRecevable(cible.caution, pieceType)) { context.res = { status: 409, body: { error: "Depot non applique" } }; return; }
       } else if (!MPMainlevee.pieceRecevable(caution, pieceType)) {
         context.res = { status: 409, body: { error: "Transition non recevable pour le statut actuel (" + caution.statut + ")" + (pieceType === "accuse_banque" ? " : l'accuse de la banque se joint apres le depot de la demande a la banque (regle DG 20/11/2026)" : "") } };
         return;
@@ -675,7 +683,7 @@ module.exports = async function (context, req) {
         ? MPMainlevee.appliquerPieceJustificative(caution, pieceType, pieceRef, dateReelle, user.userDetails || null)
         : (estReception
           ? MPMainlevee.appliquerPieceLiberation(caution, pieceType, pieceRef, dateReelle, user.userDetails || null)
-          : MPMainlevee.appliquerPiece(caution, pieceType, pieceRef, dateReelle));
+          : MPMainlevee.appliquerPiece(cible.caution, pieceType, pieceRef, dateReelle));
       if (!maj) { context.res = { status: 409, body: { error: "Piece non appliquee (statut " + caution.statut + ")" } }; return; }
       await ecrireCibleCaution(cible, maj);
       // A posteriori ou provisoire : pas de recalcul marche. Sinon l'accuse peut liberer la caution
