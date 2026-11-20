@@ -134,11 +134,11 @@ async function genererLettreMainlevee(d) {
 
   /* Tableau : intitules ENTIERS, replies ; hauteur de ligne = la plus haute des cellules. */
   const cols = [
-    { t: "N° de caution", w: 100, f: (l) => l.num },
+    { t: "N° de caution", w: 112, f: (l) => l.num },
     { t: "Type", w: 56, f: (l) => l.type },
     { t: "Montant", w: 82, f: (l) => montantFR(l.montant), droite: true },
     { t: "Émission", w: 62, f: (l) => dateFR(l.date_emission) },
-    { t: "Marché (référence, objet) et maître d'ouvrage", w: 130, f: (l) => l.marche_ref + " - " + l.marche_objet + " - " + l.maitre_ouvrage },
+    { t: "Marché (référence, objet) et maître d'ouvrage", w: 118, f: (l) => l.marche_ref + " - " + l.marche_objet + " - " + l.maitre_ouvrage },
     { t: "Pièce jointe", w: 65, f: (l) => PIECES_FR[l.piece_type] || l.piece, sous: (l) => (l.piece_date ? "du " + dateFR(l.piece_date) : "") }
   ];
   const T = 10, INTER = 12, PAD = 4;
