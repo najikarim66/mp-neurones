@@ -1521,7 +1521,7 @@ function blocADemanderBanqueHTML(adb){
     var agenceTxt=g.complet?('<span style="font-size:12px" data-agence>'+esc(g.agence.nom)+' — '+esc(g.agence.adresse)+(g.agence.ville?', '+esc(g.agence.ville):'')+'</span>')
       :('<span class="charte-statut charte-statut--alerte" data-agence-manquante>! '+esc(g.motif)+'</span><button class="btn btn-sm" data-action="ouvrir-fiche" onclick="ouvrirFicheBanque(\''+esc(g.fiche||g.banque)+'\')">Ouvrir la fiche banque</button>');
     var boutons=g.complet?('<button class="btn btn-sm btn-prim" data-action="lettre-banque" onclick="lettreBanqueCochees(\''+esc(g.cle)+'\')">Lettre de demande (PDF)</button>')
-      :('<button class="btn btn-sm btn-prim" data-action="lettre-banque" disabled title="'+esc(g.motif)+'">Lettre de demande (PDF)</button>');
+      :('<button class="btn btn-sm btn-prim" data-action="lettre-banque" disabled style="opacity:.45;cursor:not-allowed" title="'+esc(g.motif)+'">Lettre de demande (PDF)</button>');
     boutons+='<button class="btn btn-sm" data-action="depot-banque" onclick="depotBanqueCochees(\''+esc(g.cle)+'\')">Enregistrer le dépôt</button>';
     return '<div data-banque="'+esc(g.banque)+'" data-groupe="'+esc(g.cle)+'" data-complet="'+(g.complet?'oui':'non')+'" style="margin-top:10px"><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span style="font-family:var(--FT);font-size:15px;font-weight:600">'+esc(g.banque)+'</span>'+agenceTxt+'<span style="font-size:12px;color:var(--ink-muted)">'+g.items.length+' caution(s) · '+fmad(g.total)+'</span><span style="margin-left:auto;display:flex;gap:6px">'+boutons+'</span></div>'+lignes+'</div>';
   }).join('');
